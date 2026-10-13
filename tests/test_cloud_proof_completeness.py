@@ -49,6 +49,20 @@ class CloudReportProofTests(unittest.TestCase):
             self.assertEqual(len(Document(words[0]).inline_shapes), 2)
             self.assertEqual(len(list(Path(tmp).glob("*.pdf"))), 1)
 
+    def test_degraded_source_coverage_holds_final_report(self):
+        def one_feed(url, limit):
+            if "almasryalyoum" in url:
+                raise TimeoutError("offline simulated publisher feed outage")
+            return fetch(url, limit)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            result = build_proof_report(Path("sources.json"), output,
+                                        fetch=one_feed, capture=capture, now=NOW)
+            self.assertEqual(result["coverage"], "DEGRADED")
+            self.assertEqual(result["screenshots_missing"], 0)
+            self.assertEqual(result["status"], "HOLD")
+            self.assertFalse(list(output.glob("*.pdf")))
+
     def test_blocked_one_holds_all_final_documents(self):
         def selective(url, publisher, dest):
             if "almasryalyoum" in url:
