@@ -18,6 +18,7 @@ from delivery_bridge import PrivateGitHubLedger, deliver_reserved
 from monitor import article_id, canonical_url, inspect
 
 ENABLE_PHRASE = "YES_I_APPROVE_GMAIL_DELIVERY"
+RUN_CONFIRMATION_PHRASE = "CONFIRM_ONE_MANUAL_RASD_GMAIL_RUN"
 
 
 def candidate_from_feed(article: dict, config: dict, now: datetime) -> dict | None:
@@ -65,8 +66,17 @@ def eligible_candidates(inspection: dict, config: dict, now: datetime, limit: in
 def credentials(*, require_send_approval: bool = True) -> dict:
     # Preflight deliberately cannot send; it validates auth without needing
     # the separate consent flag required by the real dispatch path.
-    if require_send_approval and os.environ.get("RASD_GATE11_SEND_APPROVED") != ENABLE_PHRASE:
-        raise RuntimeError("gmail_delivery_not_authorized")
+    if require_send_approval:
+        if os.environ.get("RASD_GATE11_SEND_APPROVED") != ENABLE_PHRASE:
+            raise RuntimeError("gmail_delivery_not_authorized")
+        # Defense in depth: an accidentally retained static environment secret
+        # must NEVER authorize unattended email from cron, push, or another ref.
+        if (os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+                or os.environ.get("GITHUB_REF") != "refs/heads/main"):
+            raise RuntimeError("gmail_delivery_requires_manual_main_dispatch")
+        # A new human-entered confirmation for EACH manual workflow run.
+        if os.environ.get("RASD_GATE11_RUN_CONFIRMATION") != RUN_CONFIRMATION_PHRASE:
+            raise RuntimeError("gmail_delivery_requires_per_run_confirmation")
     names = ("RASD_GMAIL_USER", "RASD_APPROVED_RECIPIENT",
              "RASD_GMAIL_APP_PASSWORD", "RASD_PRIVATE_LEDGER_TOKEN")
     env = {name: os.environ.get(name, "") for name in names}
