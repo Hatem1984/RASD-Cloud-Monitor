@@ -25,6 +25,7 @@ RASD tracks **public Ministry of Planning-related headlines** from reviewed Egyp
 4. [Gate 11 branch CI](.github/workflows/gate11-ci.yml) — offline security regressions, live RSS read-only scan, and document-generation QA. Push-triggered on **named QA branches only**, NOT scheduled mail.
 5. [Gate 11 Gmail protected bridge](.github/workflows/gate11-manual.yml) — defaults to `dry_run`; optional protected `preflight`; `send` is blocked until account-level environment secrets, fresh manual confirmation and reviewer approval exist.
 6. [Arabic Word + PDF manual digest](.github/workflows/report-manual.yml) — creates DOCX/PDF and a **1-day** GitHub artifact from one RSS observation, no mail or private ledger access.
+7. [Protected daily Word/PDF Gmail delivery](.github/workflows/digest-mail-manual.yml) — manual-only; code and private-ledger anti-replay fully simulated, but **no real SMTP or inbox delivery performed**. See [Gate 13](GATE13_DAILY_EMAIL.md).
 
 ## Manual Word/PDF download
 
@@ -48,5 +49,7 @@ An empty report means **no qualifying RSS headline was found in the sources and 
 **Gate 11 — real protected Gmail:** The owner must configure `rasd-gmail-manual-approval` and the four eligible protected credentials in GitHub directly, then approve preflight. A later separately authorized live-mail test must prove SMTP, private acceptance receipt, Gmail Sent/Inbox image attachment, and safe re-run. Details: [Gate 11 secure setup](GATE11_SECURE_SETUP.md).
 
 **Gate 12 — manual downloadable artifact:** cloud construction and real document QA are verified. A dedicated `report-manual.yml` GitHub `workflow_dispatch` download still requires owner initiation. Daily scheduled production and Gmail report delivery are **not** enabled.
+
+**Gate 13 — manual daily report to Gmail:** DOCX+PDF attachment builder, private SHA state reservation, Cairo-day deduplication and per-run consent are implemented and offline-tested. Actual live protected job still awaits the same Gate 11 credential/reviewer setup and separate live-send authorization; no real message has been sent.
 
 Use [Acceptance log](ACCEPTANCE_LOG.md) as the dated, audited source of verified results. Avoid interpreting passing unit tests as real Gmail delivery.
