@@ -87,7 +87,7 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
             "coverage": report["coverage"],
             "entries": rows,
             "email_sent": False, "scheduler_enabled": False,
-            "owner_pc_required": False,
+            "private_state_used": False, "owner_pc_required": False,
         }
         if ready:
             # Only an evidence-complete Word document may become final.
