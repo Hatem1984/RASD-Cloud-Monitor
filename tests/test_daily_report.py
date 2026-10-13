@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from daily_report import gather, generate, render_docx, render_html
+from daily_report import cairo_display_time, gather, generate, render_docx, render_html
 
 NOW = datetime(2026, 10, 13, 3, 10, tzinfo=timezone.utc)
 HAPI = "https://hapijournal.com/feed/"
@@ -38,6 +38,16 @@ def fetch_both(url, limit):
 
 
 class DailyReportTests(unittest.TestCase):
+    def test_cairo_dates_render_as_readable_arabic_without_rtl_iso_mixing(self):
+        report = gather(CONFIG, fetch=fetch_both, now=NOW)
+        self.assertIn("١٣ أكتوبر ٢٠٢٦", report["display_window_end"])
+        self.assertIn("بتوقيت القاهرة", report["display_window_start"])
+        self.assertNotIn("EEST", report["display_window_end"])
+        self.assertIn(report["display_window_end"][:10], "2026-10-13")
+        self.assertIn(report["display_window_end"], report["window_end_cairo"])
+        self.assertIn(report["display_window_start"], render_html(report))
+        self.assertIn(report["display_window_end"], render_html(report))
+
     def test_two_real_domain_mock_headlines_are_selected_and_ordered(self):
         report = gather(CONFIG, fetch=fetch_both, now=NOW)
         self.assertEqual(report["coverage"], "HEALTHY")
