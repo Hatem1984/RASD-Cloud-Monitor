@@ -44,6 +44,46 @@ class CloudReportProofTests(unittest.TestCase):
             self.assertEqual(len(doc.inline_shapes), 2)
             self.assertFalse(list(Path(tmp).glob("*.pdf")))
 
+    def test_private_archive_receipt_is_verified_before_success(self):
+        class Publisher:
+            def __init__(self):
+                self.calls = 0
+            def publish_ready(self, *, report, word, evidence):
+                self.calls += 1
+                assert report["status"] == "READY"
+                assert Document(word).inline_shapes
+                assert len(evidence) == 2
+                for article_id, path, digest in evidence:
+                    assert path.is_file()
+                    assert len(digest) == 64
+                return {"status": "PRIVATE_VERIFIED",
+                        "screenshots_archived": 2, "word_archived": True,
+                        "manifest_sha256": "a" * 64}
+        writer = Publisher()
+        with tempfile.TemporaryDirectory() as tmp:
+            report = build_proof_report(Path("sources.json"), Path(tmp),
+                                        fetch=fetch, capture=capture, now=NOW,
+                                        archive_writer=writer)
+            self.assertEqual(writer.calls, 1)
+            self.assertEqual(report["status"], "READY")
+            self.assertEqual(report["archive_status"], "PRIVATE_VERIFIED")
+            self.assertEqual(report["archive_manifest_sha256"], "a" * 64)
+            self.assertEqual(len(list(Path(tmp).glob("*.docx"))), 1)
+
+    def test_private_archive_failure_leaves_hold_not_public_final_document(self):
+        class FailedArchive:
+            def publish_ready(self, **kwargs):
+                raise TimeoutError("sensitive endpoint detail must not appear")
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            result = build_proof_report(Path("sources.json"), output,
+                                        fetch=fetch, capture=capture, now=NOW,
+                                        archive_writer=FailedArchive())
+            self.assertEqual(result["status"], "HOLD")
+            self.assertEqual(result["archive_status"], "FAILED")
+            self.assertFalse(list(output.glob("*.docx")))
+            self.assertNotIn("sensitive endpoint", next(output.glob("*manifest.json")).read_text())
+
     def test_degraded_source_coverage_holds_final_report(self):
         def one_feed(url, limit):
             if "almasryalyoum" in url:

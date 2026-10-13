@@ -1,0 +1,46 @@
+name: RASD Gate 20 — private original-publisher evidence archive (manual only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      archive_confirmation:
+        description: "Type CONFIRM_ONE_PRIVATE_RASD_ARCHIVE_RUN to authorize ONE storage test"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-private-evidence-owner-approved
+  cancel-in-progress: false
+
+jobs:
+  archive-verified-word:
+    if: github.ref == 'refs/heads/main' && github.actor == 'Hatem1984' && github.run_attempt == 1
+    environment: rasd-evidence-private-manual-approval
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install read-only tests, Chromium and private R2 SDK
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2" "boto3>=1.35,<2"
+          python -m playwright install --with-deps chromium
+      - name: Run all offline acceptance checks before any source or storage access
+        run: python -m unittest discover -s tests -v
+      - name: Capture approved publisher pages and archive ONLY complete Word evidence privately
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+          RASD_ARCHIVE_RUN_CONFIRMATION: ${{ inputs.archive_confirmation }}
+          RASD_PRIVATE_ARCHIVE_ENABLED: ${{ secrets.RASD_PRIVATE_ARCHIVE_ENABLED }}
+          RASD_R2_ACCOUNT_ID: ${{ secrets.RASD_R2_ACCOUNT_ID }}
+          RASD_R2_BUCKET: ${{ secrets.RASD_R2_BUCKET }}
+          RASD_R2_ACCESS_KEY_ID: ${{ secrets.RASD_R2_ACCESS_KEY_ID }}
+          RASD_R2_SECRET_ACCESS_KEY: ${{ secrets.RASD_R2_SECRET_ACCESS_KEY }}
+        run: python private_proof_worker.py
+      # No public screenshot/Word artifact: only the PRIVATE R2 bucket
+      # receives verified content; the console shows sanitized counts.

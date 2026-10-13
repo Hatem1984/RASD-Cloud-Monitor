@@ -18,6 +18,7 @@ WORKFLOWS = (
     "report-manual.yml",
     "digest-mail-manual.yml",
     "proof-report-manual.yml",
+    "private-proof-manual.yml",
 )
 TEST_REQUIREMENTS = "python -m pip install -r requirements-test.txt"
 
@@ -48,7 +49,7 @@ class WorkflowDependenciesContractTests(unittest.TestCase):
                         before_send.index("python gate11_preflight.py"))
 
     def test_gate11_approval_and_scheduled_send_remain_inactive(self):
-        for name in ("gate11-manual.yml", "digest-mail-manual.yml", "report-manual.yml", "proof-report-manual.yml"):
+        for name in ("gate11-manual.yml", "digest-mail-manual.yml", "report-manual.yml", "proof-report-manual.yml", "private-proof-manual.yml"):
             source = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
                 self.assertIn("workflow_dispatch:", source)
@@ -56,6 +57,18 @@ class WorkflowDependenciesContractTests(unittest.TestCase):
         gate11 = (ROOT / ".github/workflows/gate11-manual.yml").read_text(encoding="utf-8")
         self.assertIn("environment: rasd-gmail-manual-approval", gate11)
         self.assertIn("default: dry_run", gate11)
+
+    def test_private_archive_cannot_run_without_fresh_protected_owner_approval(self):
+        content = (ROOT / ".github/workflows/private-proof-manual.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", content)
+        self.assertIn("environment: rasd-evidence-private-manual-approval", content)
+        self.assertIn("github.actor == 'Hatem1984'", content)
+        self.assertIn("github.run_attempt == 1", content)
+        self.assertIn("archive_confirmation:", content)
+        self.assertIn("RASD_PRIVATE_ARCHIVE_ENABLED:", content)
+        self.assertNotIn("RASD_GMAIL_APP_PASSWORD", content)
+        self.assertNotIn("RASD_PRIVATE_LEDGER_TOKEN", content)
+        self.assertNotRegex(content, r"(?m)^\\s*schedule\\s*:")
 
     def test_main_branch_ci_is_non_privileged_and_without_scheduled_mail(self):
         source = (ROOT / ".github/workflows/gate11-ci.yml").read_text(encoding="utf-8")
