@@ -4,6 +4,7 @@ This is a visual-content heuristic, not proof that a page's claims are true.
 """
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from urllib.parse import urlsplit
 from PIL import Image, ImageStat, UnidentifiedImageError
@@ -99,7 +100,6 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                     destination.unlink(missing_ok=True)
                     return {"ok": False, "reason": "visual_qa_" + quality["reason"],
                             "quality": quality}
-                import hashlib
                 raw = destination.read_bytes()
                 if not raw.startswith(bytes((0xFF, 0xD8))):
                     destination.unlink(missing_ok=True)

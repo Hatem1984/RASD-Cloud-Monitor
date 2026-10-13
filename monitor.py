@@ -61,7 +61,10 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
     root = ET.fromstring(data)
     if root.tag.rsplit("}", 1)[-1] != "rss":
         raise ValueError("not_rss")
-    now = now or datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc) if now is None else now
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("naive_monitor_clock_forbidden")
+    now = now.astimezone(timezone.utc)
     keywords = [x.casefold() for x in keywords if x.strip()]
     eligible, matched, ids = 0, [], set()
     for node in root.findall("./channel/item"):
@@ -113,6 +116,9 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
     if not isinstance(article_limit, int) or not 1 <= article_limit <= 200:
         raise ValueError("invalid_rss_article_limit")
     checked = datetime.now(timezone.utc) if now is None else now
+    if checked.tzinfo is None or checked.utcoffset() is None:
+        raise ValueError("naive_monitor_clock_forbidden")
+    checked = checked.astimezone(timezone.utc)
     sources = []
     discovered = []
     ids = set()

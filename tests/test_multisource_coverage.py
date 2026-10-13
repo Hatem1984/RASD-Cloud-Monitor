@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from capture_public import allowed_url
-from gate11_runner import candidate_from_feed, run
+from gate11_runner import candidate_from_feed, eligible_candidates, run
 from monitor import (APPROVED_FEED_URLS, article_id, inspect,
                      parse_rss, read_feed)
 
@@ -135,6 +135,38 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
         result = inspect(CONFIG, fetch=fetch_once_slow, now=CURRENT)
         self.assertEqual(calls["masry"], 2)
         self.assertEqual(result["planning_headline_matches"], 2)
+
+    def test_newest_article_is_selected_across_feeds_after_large_first_source(self):
+        """News from the second publisher must not be hidden by RSS order."""
+        old_items = "".join(
+            f"<item><title>{HEADLINE} {index}</title>"
+            f"<link>https://hapijournal.com/older-{index}</link>"
+            "<pubDate>Tue, 13 Oct 2026 07:00:00 GMT</pubDate></item>"
+            for index in range(18)
+        )
+        newest = (
+            f"<item><title>{HEADLINE}</title><link>{MASRY_URL}</link>"
+            "<pubDate>Tue, 13 Oct 2026 11:00:00 GMT</pubDate></item>"
+        )
+        def fetch(url, limit):
+            if url == "https://hapijournal.com/feed/":
+                return ("<rss><channel>" + old_items + "</channel></rss>").encode()
+            return ("<rss><channel>" + newest + "</channel></rss>").encode()
+
+        observed = inspect(CONFIG, fetch=fetch, now=CURRENT, article_limit=200)
+        chosen = eligible_candidates(observed, CONFIG, CURRENT, limit=2)
+        self.assertEqual(observed["planning_headline_matches"], 19)
+        self.assertEqual(chosen[0]["url"], MASRY_URL)
+
+        captured = []
+        def capture(url, publisher, destination):
+            captured.append(url)
+            return {"ok": True, "actual_url": url, "title": HEADLINE}
+        with patch.dict(os.environ, {}, clear=True):
+            result = run("dry_run", fetch=fetch, capture=capture, clock=CURRENT)
+        self.assertEqual(result["eligible"], 2)
+        self.assertEqual(captured[0], MASRY_URL)
+        self.assertEqual(result["smtp_accepted"], 0)
 
     def test_no_automatic_capture_of_expired_native_publisher_story(self):
         feed = next(f for f in CONFIG["feeds"] if f["id"] == "almasryalyoum")

@@ -4,18 +4,13 @@ on:
   push:
     branches:
       - main
-      - gate11-secure-gmail-bridge
-      - gate11-recipient-lock-and-ledger-qa
-      - gate11-receipt-readback-hardening
-      - gate11-protected-preflight
-      - gate11-publisher-coverage-hardening
-      - gate11-explicit-manual-consent
-      - gate11-full-pipeline-acceptance
-      - gate12-daily-word-pdf-reports
-      - gate12-ci-downloadable-artifact-qa
-      - gate13-protected-daily-report-email
-      - gate14-workflow-dependency-hardening
-      - gate15-digest-fast-replay
+      - 'gate*'
+
+# Repeated housekeeping pushes need only the newest read-only CI result.
+# This concurrency key never applies to manual send or protected workflows.
+concurrency:
+  group: rasd-readonly-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

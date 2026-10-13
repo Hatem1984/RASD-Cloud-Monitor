@@ -70,6 +70,16 @@ class PublicMonitoringTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "DTD_or_entity_forbidden"):
             parse_rss(b'<!DOCTYPE foo><rss></rss>', FEED, CONFIG["keywords"], now=NOW)
 
+    def test_naive_clock_fails_before_any_feed_fetch(self):
+        from datetime import datetime
+        naive = datetime(2026, 10, 13, 12, 0, 0)
+        def never_fetch(*args):
+            self.fail("naive clock must never trigger a publisher request")
+        with self.assertRaisesRegex(ValueError, "naive_monitor_clock_forbidden"):
+            inspect(CONFIG, fetch=never_fetch, now=naive)
+        with self.assertRaisesRegex(ValueError, "naive_monitor_clock_forbidden"):
+            parse_rss(rss(), FEED, CONFIG["keywords"], now=naive)
+
     def test_partial_outage_does_not_hide_healthy_source(self):
         cfg = {**CONFIG, "feeds": [{**FEED, "id": "fail"}, FEED]}
         def fetch(url, max_size):
