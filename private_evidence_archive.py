@@ -12,7 +12,8 @@ import re
 from datetime import date
 from pathlib import Path
 
-MAX_FILE_BYTES = 8_000_000
+MAX_FILE_BYTES = 50_000_000
+MAX_SCREENSHOT_BYTES = 8_000_000
 _HEX_ID = re.compile(r"^[0-9a-f]{24}$")
 _HEX_SHA = re.compile(r"^[0-9a-f]{64}$")
 
@@ -94,6 +95,8 @@ class PrivateEvidenceArchive:
                 raise ValueError("invalid_archive_article_proof")
             unique.add(article_id)
             payload = _bytes_from_file(image)
+            if len(payload) > MAX_SCREENSHOT_BYTES:
+                raise ValueError("private_screenshot_too_large")
             if not payload.startswith(b"\xff\xd8") or _sha(payload) != declared_sha:
                 raise RuntimeError("private_archive_screenshot_mismatch")
             key = f"{self.prefix}/{day}/screenshots/{article_id}-{declared_sha}.jpg"
