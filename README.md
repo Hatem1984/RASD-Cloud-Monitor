@@ -50,6 +50,13 @@ When RSS contains **zero matching headlines**, it photographs a separately label
 - [View persisted public state](https://github.com/Hatem1984/RASD-Cloud-Monitor/blob/rasd-public-state/public-state.json)
 - Offline fixture tests prove the same relevant URL is observed **once across two simulated runs**; live RSS happened to return zero matching headlines, so a real-world repeated relevant URL has not yet been observed twice.
 
+## Gate 11: code implemented, real Gmail integration NOT activated
+
+- [Gate 11 delivery security model and live acceptance checklist](GATE11_STATUS.md).
+- [Hosted Gate 11 security CI and real RSS no-mail dry-run](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38333307545): 44/44 offline tests passed; live feed produced 0 eligible articles, 0 screenshots, 0 emails.
+- The separate private ledger was initialized within the existing PRIVATE RASD-Pilot repository on branch `rasd-private-delivery-state`; no identifying receipt data is in this PUBLIC repository.
+- `gate11-manual.yml` defaults to no-mail dry-run and requires a separate protected environment with explicit approval and credentials for its send job. No secrets were supplied; no live autonomous Gmail sending or cron has been tested/activated.
+
 ## Next acceptance gates
 
 1. Expand tested direct publisher coverage without accepting malformed RSS or Google News links as original publisher URLs.
