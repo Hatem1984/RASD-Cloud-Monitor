@@ -4,7 +4,8 @@ import unittest
 from pathlib import Path
 from PIL import Image, ImageDraw
 
-from capture_public import allowed_url, image_quality, capture_publisher
+from capture_public import (allowed_url, image_quality, capture_publisher,
+                            classify_publisher_http_status)
 from screenshot_probe import choose_targets, REFERENCE
 
 
@@ -81,6 +82,22 @@ class BrowserSafetyTests(unittest.TestCase):
                 "headline": "وزير التخطيط خبر غير معتمد"}
         targets = choose_targets({"matched_public_articles": [item]})
         self.assertEqual(targets, [REFERENCE])
+
+    def test_http_failures_are_fixed_codes_not_untrusted_server_text(self):
+        cases = {
+            None: "publisher_no_http_response",
+            401: "publisher_access_refused",
+            403: "publisher_access_refused",
+            404: "publisher_article_unavailable",
+            410: "publisher_article_unavailable",
+            429: "publisher_rate_limited",
+            500: "publisher_server_error",
+            503: "publisher_server_error",
+            418: "publisher_http_failure",
+        }
+        for status, expected in cases.items():
+            with self.subTest(status=status):
+                self.assertEqual(classify_publisher_http_status(status), expected)
 
     def test_bad_publisher_denied_before_playwright(self):
         with tempfile.TemporaryDirectory() as td:
