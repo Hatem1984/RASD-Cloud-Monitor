@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from zipfile import ZipFile, BadZipFile
+from docx import Document
 from datetime import date
 from pathlib import Path
 
@@ -105,6 +107,17 @@ class PrivateEvidenceArchive:
         word_bytes = _bytes_from_file(word)
         if not word_bytes.startswith(b"PK"):
             raise RuntimeError("private_archive_word_format_invalid")
+        try:
+            with ZipFile(word) as package:
+                media_digests = {
+                    _sha(package.read(name)) for name in package.namelist()
+                    if name.startswith("word/media/") and not name.endswith("/")
+                }
+            if (not {entry[2] for entry in evidence}.issubset(media_digests) or
+                    len(Document(word).inline_shapes) < count):
+                raise RuntimeError("private_archive_embedded_screenshot_mismatch")
+        except (BadZipFile, ValueError):
+            raise RuntimeError("private_archive_word_format_invalid") from None
         word_hash = _sha(word_bytes)
         word_key = f"{self.prefix}/{day}/reports/{word_hash}.docx"
         word_ref = self.put_verified(
