@@ -86,6 +86,7 @@ class DailyReportTests(unittest.TestCase):
         self.assertNotIn("<script>", html)
         self.assertIn("&lt;script&gt;", html)
         self.assertIn("وزارة التخطيط", html)
+        self.assertIn('href="' + PLANNING_URL + '"', html)
 
     def test_partial_feed_failure_is_explicitly_degraded(self):
         def unstable(url, limit):
