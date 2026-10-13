@@ -77,3 +77,13 @@ These are **three distinct GitHub workflows** and all currently have *manual-onl
 - Still needed for Gate 11 close: verify availability of safe Google account authentication; configure GitHub protected environment and narrowly scoped private-repo write token without revealing values; obtain separate owner authorization for an actual email; prove real eligible article -> visual capture -> SMTP accepted -> private receipt persisted -> Gmail Sent/Inbox read-back -> repeat-run duplicate suppression. Avoid claiming email delivered merely on SMTP acceptance.
 - Source and step-by-step safeguards: [GATE11_STATUS.md](GATE11_STATUS.md).
 
+
+## Gate 11 hardening checkpoint — 13 October 2026
+
+- [PR #2](https://github.com/Hatem1984/RASD-Cloud-Monitor/pull/2) merged at commit `5d38e2f9709076f2e7bda130586011d19386f00d`.
+- Private RASD-Pilot delivery branch now has an empty schema-v2 ledger with a fingerprint of the one approved recipient. Never store the recipient value or a Gmail token in this public repository.
+- The worker refuses a recipient mismatch even when SMTP sender and recipient secrets match each other; private GitHub API bearer-token redirects are rejected.
+- [Hosted real cloud CI](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38335095480): **50/50 offline tests passed**, including mocked Github Contents API receipt persistence, compare-and-swap rejection, and exactly one fake SMTP attempt across repeated runs. The real feed dry-run passed with 0 qualifying articles, 0 captures, 0 SMTP, 0 fixtures and schedule off.
+- No private Github credential or Gmail app password has been provisioned via this connector. The Github connector does not support deployment-environment and Actions secret APIs, so these are an explicit operational access blocker rather than a failing Python test.
+- **Gate 11 remains OPEN** until a protected environment and approved account credential are provisioned, followed by genuine new-article capture, SMTP acceptance receipt, Gmail Sent/Inbox read-back and second-run no-resend proof.
+
