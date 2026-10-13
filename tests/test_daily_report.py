@@ -46,7 +46,7 @@ class DailyReportTests(unittest.TestCase):
         self.assertFalse(report["email_sent"])
         self.assertFalse(report["scheduler_enabled"])
         self.assertFalse(report["private_state_used"])
-        self.assertIn("Africa", str(report))
+        self.assertIn("2026-10-13", report["window_end_cairo"])
 
     def test_no_matches_still_creates_valid_word_and_html_without_inventing_news(self):
         report = gather(CONFIG,
