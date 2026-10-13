@@ -111,8 +111,16 @@ class DailyProtectedEmailTests(unittest.TestCase):
         key = report_identity(CLOCK)[1]
         self.assertEqual(self.api.state["entries"][key]["status"], "smtp_accepted")
         self.assertEqual(self.api.writes, 2)
-        second = self.execute()
+        def forbidden_rss(*args):
+            raise AssertionError("Same-day replay must not scan publishers")
+        def forbidden_pdf(*args):
+            raise AssertionError("Same-day replay must not generate PDF")
+        second = self.execute(pdf=forbidden_pdf, fetch=forbidden_rss)
         self.assertEqual(second["status"], "already_accepted")
+        self.assertTrue(second["source_scan_skipped"])
+        self.assertIsNone(second["articles"])
+        self.assertEqual(second["coverage"], "NOT_RESCANNED")
+        self.assertEqual(len(self.feed_calls), 2)
         self.assertEqual(len(FakeSMTPSender.sent), 1)
         self.assertEqual(self.api.writes, 2)
 
@@ -120,6 +128,26 @@ class DailyProtectedEmailTests(unittest.TestCase):
         outcome = self.execute(fetch=lambda url, limit: rss())
         self.assertEqual(outcome["articles"], 0)
         self.assertTrue(outcome["smtp_accepted"])
+        self.assertEqual(len(FakeSMTPSender.sent), 1)
+
+    def test_wrong_private_ledger_recipient_fails_before_public_news_scan(self):
+        self.api.state["approved_recipient_sha256"] = "0" * 64
+        def forbidden_fetch(*args):
+            raise AssertionError("wrong private recipient must stop before RSS")
+        with self.assertRaisesRegex(RuntimeError, "digest_private_recipient_mismatch"):
+            self.execute(fetch=forbidden_fetch)
+        self.assertEqual(self.api.writes, 0)
+        self.assertEqual(FakeSMTPSender.sent, [])
+
+    def test_replayed_report_can_be_checked_during_total_public_source_outage(self):
+        self.execute()
+        self.assertEqual(len(FakeSMTPSender.sent), 1)
+        def both_sources_down(*args):
+            raise TimeoutError("site down: must not get called on replay")
+        result = self.execute(fetch=both_sources_down)
+        self.assertEqual(result["status"], "already_accepted")
+        self.assertTrue(result["source_scan_skipped"])
+        self.assertIsNone(result["articles"])
         self.assertEqual(len(FakeSMTPSender.sent), 1)
 
     def test_missing_consent_prevents_any_source_or_ledger_access(self):
@@ -157,7 +185,11 @@ class DailyProtectedEmailTests(unittest.TestCase):
         self.assertEqual(len(FakeSMTPSender.sent), 1)
         key = report_identity(CLOCK)[1]
         self.assertEqual(self.api.state["entries"][key]["status"], "reserved")
-        self.assertEqual(self.execute()["status"], "manual_review_hold")
+        def forbidden_rss(*args):
+            raise AssertionError("HOLD must be read before publishers")
+        held = self.execute(fetch=forbidden_rss)
+        self.assertEqual(held["status"], "manual_review_hold")
+        self.assertTrue(held["source_scan_skipped"])
         self.assertEqual(len(FakeSMTPSender.sent), 1)
 
     def test_one_feed_outage_reports_degraded_but_all_down_fails_before_reservation(self):

@@ -15,6 +15,7 @@ on:
       - gate12-ci-downloadable-artifact-qa
       - gate13-protected-daily-report-email
       - gate14-workflow-dependency-hardening
+      - gate15-digest-fast-replay
 
 permissions:
   contents: read

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import json
 import re
 import smtplib
@@ -133,6 +134,33 @@ def run(*, config_path: Path = Path("sources.json"),
         raise RuntimeError("digest_requires_dedicated_manual_workflow")
     now = datetime.now(timezone.utc) if clock is None else clock
     date, key = report_identity(now)
+
+    # Read-only replay gate: check the PRIVATE receipt BEFORE fetching RSS,
+    # launching Chromium, or generating attachments. Uncertain reservations
+    # are not retried. The actual new-send path still uses the existing
+    # atomic reserve + SHA readback inside deliver_digest (race safe).
+    ledger = ledger_factory(approved["RASD_PRIVATE_LEDGER_TOKEN"])
+    private_state, _ = ledger.read()
+    account_digest = hashlib.sha256(
+        approved["RASD_GMAIL_USER"].strip().casefold().encode("utf-8")
+    ).hexdigest()
+    if not hmac.compare_digest(account_digest, private_state["approved_recipient_sha256"]):
+        raise RuntimeError("digest_private_recipient_mismatch")
+    existing = private_state["entries"].get(key)
+    if existing:
+        status = ("already_accepted" if existing["status"] == "smtp_accepted"
+                  else "manual_review_hold")
+        return {
+            "mode": "manual_daily_digest_send",
+            "date_cairo": date,
+            "articles": None,
+            "coverage": "NOT_RESCANNED",
+            "status": status,
+            "smtp_accepted": False,
+            "inbox_delivery_verified": False,
+            "source_scan_skipped": True,
+            "scheduler_enabled": False,
+        }
     with tempfile.TemporaryDirectory(prefix="rasd-digest-") as temp:
         folder = Path(temp)
         options = {"now": now}
@@ -141,7 +169,6 @@ def run(*, config_path: Path = Path("sources.json"),
         report = generator(config_path, folder, **options)
         if not report.get("word_created") or not report.get("pdf_created"):
             raise RuntimeError("digest_report_not_generated")
-        ledger = ledger_factory(approved["RASD_PRIVATE_LEDGER_TOKEN"])
         status = mailer(
             report, date=date, key=key,
             word=folder / f"RASD-Daily-{date}.docx",
@@ -161,6 +188,7 @@ def run(*, config_path: Path = Path("sources.json"),
         "status": status,
         "smtp_accepted": status == "smtp_accepted",
         "inbox_delivery_verified": False,
+        "source_scan_skipped": False,
         "scheduler_enabled": False,
     }
 
