@@ -13,6 +13,7 @@ import json
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from capture_public import APPROVED_PUBLISHERS, allowed_url, capture_publisher, image_quality
 from daily_report import gather, render_docx, render_pdf
@@ -34,6 +35,7 @@ def proof_capture(article: dict, feeds: list[dict], destination: Path,
         None,
     )
     if (not feed or not publisher or
+            urlsplit(article["url"]).hostname not in feed["allowed_article_hosts"] or
             not allowed_url(article["url"], publisher) or
             article_id(article["url"]) != article["id"]):
         return {"status": "hold", "reason": "source_identity_mismatch"}
@@ -90,14 +92,21 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
             "email_sent": False, "scheduler_enabled": False,
             "owner_pc_required": False,
         }
+        if ready:
+            # Both files must render before either becomes a final artifact.
+            # A blocked publisher produces only the HOLD manifest.
+            prefix = f"RASD-Proof-{day}"
+            with tempfile.TemporaryDirectory(prefix=".rasd-docs-", dir=output_dir) as work:
+                word = Path(work) / (prefix + ".docx")
+                pdf = Path(work) / (prefix + ".pdf")
+                render_docx(report, word)
+                render_pdf(report, pdf)
+                if not word.is_file() or not pdf.is_file():
+                    raise RuntimeError("publisher_proof_document_missing")
+                word.replace(output_dir / word.name)
+                pdf.replace(output_dir / pdf.name)
         manifest_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n",
                                  encoding="utf-8")
-        if ready:
-            # The original screenshot appears inside BOTH Word and PDF.
-            # Never create a final document with missing screenshots.
-            prefix = f"RASD-Proof-{day}"
-            render_docx(report, output_dir / (prefix + ".docx"))
-            render_pdf(report, output_dir / (prefix + ".pdf"))
         return result
 
 
