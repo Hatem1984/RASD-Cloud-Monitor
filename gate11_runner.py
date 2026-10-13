@@ -74,6 +74,13 @@ def credentials(*, require_send_approval: bool = True) -> dict:
         if (os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
                 or os.environ.get("GITHUB_REF") != "refs/heads/main"):
             raise RuntimeError("gmail_delivery_requires_manual_main_dispatch")
+        if (os.environ.get("GITHUB_REPOSITORY") != "Hatem1984/RASD-Cloud-Monitor"
+                or os.environ.get("GITHUB_ACTOR", "").casefold() != "hatem1984"):
+            raise RuntimeError("gmail_delivery_requires_approved_repo_owner")
+        # Never let GitHub's rerun action reuse a previous manual approval.
+        if (os.environ.get("GITHUB_RUN_ATTEMPT") != "1"
+                or not os.environ.get("GITHUB_RUN_ID", "").isdigit()):
+            raise RuntimeError("gmail_delivery_requires_new_workflow_run")
         # A new human-entered confirmation for EACH manual workflow run.
         if os.environ.get("RASD_GATE11_RUN_CONFIRMATION") != RUN_CONFIRMATION_PHRASE:
             raise RuntimeError("gmail_delivery_requires_per_run_confirmation")
