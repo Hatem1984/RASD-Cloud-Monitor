@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "Dry run has NO Gmail/private-ledger access. Send requires separate explicit approval and protected environment."
+        description: "Dry-run uses no secrets; preflight checks protected Gmail login and private state without email; send needs explicit approval."
         required: true
         type: choice
         options:
           - dry_run
+          - preflight
           - send
         default: dry_run
 
@@ -40,6 +41,31 @@ jobs:
         env:
           RASD_GATE11_SEND_APPROVED: ""
         run: python gate11_runner.py --mode dry_run
+
+  preflight:
+    # Auth verification only. Requires the same protected GitHub environment
+    # and reviewer as live send, but has NO SMTP send code or ledger writes.
+    if: github.ref == 'refs/heads/main' && inputs.mode == 'preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: rasd-gmail-manual-approval
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install existing image dependency for safe imports only
+        run: python -m pip install "Pillow>=10,<13"
+      - name: Offline test suite; no credentials exposed
+        run: python -m unittest discover -s tests -v
+      - name: Read private receipt ledger and authenticate Gmail only; never email
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+          RASD_GMAIL_USER: ${{ secrets.RASD_GMAIL_USER }}
+          RASD_APPROVED_RECIPIENT: ${{ secrets.RASD_APPROVED_RECIPIENT }}
+          RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
+          RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+        run: python gate11_preflight.py
 
   send:
     # Disabled until approval AND protected environment secrets are provisioned.
