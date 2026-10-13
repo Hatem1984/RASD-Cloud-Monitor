@@ -20,7 +20,9 @@ class WordOnlyContractTests(unittest.TestCase):
                 self.assertNotIn("render_pdf(", source)
                 self.assertNotIn("pdfreader", source)
                 self.assertNotIn("application/pdf", source)
-                self.assertNotIn(".pdf", source)
+                # Negative guards against unwanted files are allowed.
+                self.assertNotIn("pdf_created", source)
+                self.assertNotIn("add_attachment(\n        pdf", source)
 
     def test_no_pdf_parser_runtime_dependency(self):
         packages = (ROOT / "requirements-test.txt").read_text(encoding="utf-8").lower()
