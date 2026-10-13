@@ -65,3 +65,15 @@ Following the addition of Pillow-backed image quality tests, both older manual w
 These are **three distinct GitHub workflows** and all currently have *manual-only* triggers. The state and capture outputs are deliberately separate. No live relevant new article has been auto-captured, no email delivery has occurred from this repo and no recurring schedule is enabled.
 
 **Gate 10 status: PASS for cloud photo QA + backward compatibility with manual public discovery and durable public fingerprint state. NOT production-ready.**
+
+
+## Gate 11 — secure Gmail bridge staged, not activated (13 October 2026)
+
+- Created a distinct private delivery branch `rasd-private-delivery-state` and empty `delivery-state.json` in existing PRIVATE `RASD-Pilot`; independently read back `entries={}`. Existing PUBLIC `rasd-public-state` remained separate and unchanged.
+- Added `delivery_bridge.py`, `gate11_runner.py`, `tests/test_gate11_delivery.py`, manual default-`dry_run` workflow, and isolated CI. The Gmail send path requires an unconfigured protected environment and five separate secrets/approval fields. **No real Gmail dispatch**.
+- Branch cloud security test [run 38333395107](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38333395107): **44/44 offline tests PASSED** and independent real current-feed dry-run **SUCCESS**; `eligible=0`, `captured=0`, `smtp_accepted=0`, `test_fixture_used=false`, `scheduler_enabled=false`. The zero-match behavior is verified, but no newly found relevant article has traversed the production delivery chain.
+- Reviewed [PR #1](https://github.com/Hatem1984/RASD-Cloud-Monitor/pull/1), merged using squash at `041ab72d650b79c7c05166f4f802a90fd3a87fa6`. This is a **partial implementation**, not Gate 11 closure.
+- No billing changes, no Windows/OneDrive writes, no passwords or approved recipient value in public code, no cron, no SMTP credentials installed, no screenshot attachments published by the new workflow.
+- Still needed for Gate 11 close: verify availability of safe Google account authentication; configure GitHub protected environment and narrowly scoped private-repo write token without revealing values; obtain separate owner authorization for an actual email; prove real eligible article -> visual capture -> SMTP accepted -> private receipt persisted -> Gmail Sent/Inbox read-back -> repeat-run duplicate suppression. Avoid claiming email delivered merely on SMTP acceptance.
+- Source and step-by-step safeguards: [GATE11_STATUS.md](GATE11_STATUS.md).
+
