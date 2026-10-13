@@ -105,7 +105,12 @@ def read_feed(url: str, size_limit: int) -> bytes:
         return data
 
 
-def inspect(config: dict, fetch=read_feed, now=None) -> dict:
+def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15) -> dict:
+    # The default preserves the original compact public monitoring response.
+    # Reporting can explicitly request a larger validated pool before it sorts
+    # by publisher publication time and selects the 15 newest headlines.
+    if not isinstance(article_limit, int) or not 1 <= article_limit <= 200:
+        raise ValueError("invalid_rss_article_limit")
     checked = datetime.now(timezone.utc) if now is None else now
     sources = []
     discovered = []
@@ -133,7 +138,7 @@ def inspect(config: dict, fetch=read_feed, now=None) -> dict:
         "public_verified_publisher_links": sum(s["verified_links"] for s in sources),
         "planning_headline_matches": len(discovered),
         "sources": sources,
-        "matched_public_articles": discovered[:15],
+        "matched_public_articles": discovered[:article_limit],
         "email_sent": False,
         "scheduler_enabled": False,
         "state_persistence_enabled": False,
