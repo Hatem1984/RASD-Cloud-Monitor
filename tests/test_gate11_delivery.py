@@ -209,6 +209,8 @@ class FakePrivateContentsAPI:
         self.state = empty_private_ledger()
         self.sha = "initial-sha"
         self.conflict_next_put = False
+        self.ack_without_write = False
+        self.bad_receipt_next_put = False
         self.writes = 0
 
     def open(self, request, timeout):
@@ -226,10 +228,16 @@ class FakePrivateContentsAPI:
         if self.conflict_next_put or change["sha"] != self.sha:
             self.conflict_next_put = False
             raise HTTPError(request.full_url, 409, "version conflict", {}, None)
+        if self.ack_without_write:
+            self.ack_without_write = False
+            return io.BytesIO(json.dumps({"commit": {"sha": "fake-unpersisted-sha"}}).encode())
         new = json.loads(base64.b64decode(change["content"]))
         self.state = new
         self.sha = hashlib.sha1(change["content"].encode()).hexdigest()
         self.writes += 1
+        if self.bad_receipt_next_put:
+            self.bad_receipt_next_put = False
+            return io.BytesIO(json.dumps({"commit": {}}).encode())
         return io.BytesIO(json.dumps({"commit": {"sha": self.sha}}).encode())
 
 
@@ -249,6 +257,70 @@ class GitHubPrivateLedgerTransportTests(unittest.TestCase):
             self.assertEqual(ledger.reserve(KEY, "sender@gmail.com"), "already_accepted")
             self.assertEqual(api.writes, 2)
             self.assertEqual(restored["approved_recipient_sha256"], APPROVED_HASH)
+
+
+    def test_false_success_without_durable_reservation_never_sends(self):
+        api = FakePrivateContentsAPI()
+        api.ack_without_write = True
+        with tempfile.TemporaryDirectory() as root, patch("delivery_bridge.build_opener", return_value=api):
+            image = Path(root) / "capture.jpg"
+            image.write_bytes(JPEG)
+            ledger = PrivateGitHubLedger("mock_token_nonsecret_123456")
+            FakeSMTP.sent = 0
+            with self.assertRaisesRegex(RuntimeError, "private_ledger_commit_not_visible"):
+                deliver_reserved({**ARTICLE, "publisher": "hapijournal.com",
+                                  "selection": "live_feed_discovery"},
+                                image, sender="sender@gmail.com",
+                                approved_recipient="sender@gmail.com",
+                                app_password="fake-test-only-value",
+                                ledger=ledger, smtp_factory=FakeSMTP)
+            self.assertEqual(FakeSMTP.sent, 0)
+            self.assertEqual(api.state["entries"], {})
+
+    def test_bad_github_commit_receipt_never_sends(self):
+        api = FakePrivateContentsAPI()
+        api.bad_receipt_next_put = True
+        with tempfile.TemporaryDirectory() as root, patch("delivery_bridge.build_opener", return_value=api):
+            image = Path(root) / "capture.jpg"
+            image.write_bytes(JPEG)
+            ledger = PrivateGitHubLedger("mock_token_nonsecret_123456")
+            FakeSMTP.sent = 0
+            with self.assertRaisesRegex(RuntimeError, "private_ledger_commit_receipt_invalid"):
+                deliver_reserved({**ARTICLE, "publisher": "hapijournal.com",
+                                  "selection": "live_feed_discovery"},
+                                image, sender="sender@gmail.com",
+                                approved_recipient="sender@gmail.com",
+                                app_password="fake-test-only-value",
+                                ledger=ledger, smtp_factory=FakeSMTP)
+            self.assertEqual(FakeSMTP.sent, 0)
+            self.assertEqual(api.state["entries"][KEY]["status"], "reserved")
+
+    def test_smtp_accept_but_receipt_write_unverified_holds_without_resend(self):
+        api = FakePrivateContentsAPI()
+        with tempfile.TemporaryDirectory() as root, patch("delivery_bridge.build_opener", return_value=api):
+            image = Path(root) / "capture.jpg"
+            image.write_bytes(JPEG)
+            ledger = PrivateGitHubLedger("mock_token_nonsecret_123456")
+            FakeSMTP.sent = 0
+            article = {**ARTICLE, "publisher": "hapijournal.com",
+                       "selection": "live_feed_discovery"}
+            params = dict(sender="sender@gmail.com",
+                          approved_recipient="sender@gmail.com",
+                          app_password="fake-test-only-value",
+                          ledger=ledger, smtp_factory=FakeSMTP)
+            # First persist a reservation, then fake a server success without a
+            # durable acceptance receipt during the SMTP-completion stage.
+            original_mark = ledger.mark_smtp_accepted
+            def delayed_mark(key, receipt):
+                api.ack_without_write = True
+                return original_mark(key, receipt)
+            with patch.object(ledger, "mark_smtp_accepted", side_effect=delayed_mark):
+                with self.assertRaisesRegex(RuntimeError, "private_ledger_commit_not_visible"):
+                    deliver_reserved(article, image, **params)
+            self.assertEqual(FakeSMTP.sent, 1)
+            self.assertEqual(api.state["entries"][KEY]["status"], "reserved")
+            self.assertEqual(deliver_reserved(article, image, **params), "manual_review_hold")
+            self.assertEqual(FakeSMTP.sent, 1)
 
     def test_private_ledger_token_rejects_wrong_mailbox_before_write(self):
         api = FakePrivateContentsAPI()

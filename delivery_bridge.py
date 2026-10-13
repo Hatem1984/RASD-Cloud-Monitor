@@ -127,8 +127,18 @@ class PrivateGitHubLedger:
     def write(self, state: dict, sha: str) -> None:
         validate_ledger(state)
         content = base64.b64encode((json.dumps(state, ensure_ascii=False, indent=2) + "\n").encode()).decode()
-        self._request("PUT", {"message": "gate11: update private mail acceptance ledger",
-                              "branch": PRIVATE_BRANCH, "sha": sha, "content": content})
+        response = self._request("PUT", {"message": "gate11: update private mail acceptance ledger",
+                                         "branch": PRIVATE_BRANCH, "sha": sha, "content": content})
+        # A successful HTTP return alone is not evidence that the intended
+        # reservation/receipt is now durable. Read it back BEFORE Gmail SMTP.
+        if (not isinstance(response, dict)
+                or not isinstance(response.get("commit"), dict)
+                or not isinstance(response["commit"].get("sha"), str)
+                or not response["commit"]["sha"]):
+            raise RuntimeError("private_ledger_commit_receipt_invalid")
+        actual, actual_sha = self.read()
+        if actual != state or not actual_sha or actual_sha == sha:
+            raise RuntimeError("private_ledger_commit_not_visible")
 
     def reserve(self, article_key: str, sender: str) -> str:
         state, sha = self.read()
