@@ -108,7 +108,18 @@ def run(mode: str, *, config_path: Path = Path("sources.json"),
     candidates = eligible_candidates(inspected, config, now)
     ledger = ledger_factory(auth["RASD_PRIVATE_LEDGER_TOKEN"]) if auth and candidates else None
     source_records = inspected.get("sources", [])
+    # Only already-public source IDs and exception CLASS names are logged.
+    # No feed response body, URL, secrets or email identifiers enter logs.
+    source_health = [
+        {"feed_id": record["feed_id"], "status": record["status"],
+         "error_type": record.get("error") if record["status"] != "ok" else None}
+        for record in source_records
+    ]
     results = {"mode": mode, "eligible": len(candidates), "captured": 0,
+               "coverage_status": ("degraded" if any(x["status"] != "ok"
+                                                      for x in source_records)
+                                   else "healthy"),
+               "source_health": source_health,
                "healthy_sources": sum(x["status"] == "ok" for x in source_records),
                "failed_sources": sum(x["status"] != "ok" for x in source_records),
                "verified_publisher_links": inspected["public_verified_publisher_links"],
@@ -152,6 +163,11 @@ def main():
         result = run(opts.mode)
         # Public Actions log: only counts, no recipient, secret, URL or article data.
         print(json.dumps(result, ensure_ascii=False), flush=True)
+        if result["coverage_status"] == "degraded":
+            # This is a GitHub Actions annotation, not a failure of safe
+            # partial operation; operator can see which publisher failed.
+            print("::warning::RASD news source coverage degraded; inspect source_health counts",
+                  flush=True)
     except Exception:
         # An error could mean SMTP accepted the mail before a network failure.
         # Never retry automatically; keep the private reservation on HOLD.
