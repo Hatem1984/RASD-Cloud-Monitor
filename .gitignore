@@ -19,6 +19,7 @@ venv/
 # Generated ephemeral artifacts (not repository source)
 evidence/
 report-output/
+proof-output/
 *.tmp
 *.log
 
