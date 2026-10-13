@@ -52,3 +52,16 @@ The current test is a **working cloud dry-run**, not an autonomous production ne
 - The new browser workflow retains `workflow_dispatch` only, read-only permissions, no emails, no secrets, no scheduled trigger and no state writes. Asset requests are restricted to the approved publisher domain and its subdomains.
 - The two existing workflow suites were upgraded to install Pillow before running the expanded offline test discovery; they require regression cloud validation on their updated commits.
 - **Acceptance:** real public publisher screenshot + visual content validation inside the RASD Cloud Monitor worker **PASS**. Automatic new-story capture is NOT confirmed until a real RSS match occurs. Gmail delivery and 30-minute cron remain OFF. No paid services were enabled.
+
+
+### Gate 10 regression close — all three public worker workflows passed
+
+Following the addition of Pillow-backed image quality tests, both older manual workflows were updated to install Python 3.11 and Pillow before running the complete suite:
+
+- [Public RSS read-only regression run #2 — SUCCESS](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38331957801), **29/29 GitHub-hosted tests passed**; Hapi RSS returned 10 verified publisher links, zero matching ministry headlines, no mail.
+- [Public stateful regression run #3 — SUCCESS](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38332020683), **29/29 GitHub-hosted tests passed**; state branch read-and-write completed. Verified `public-state.json` now has **`run_count=3`**, `last_successful_scan_utc=2026-10-13T01:25:05+00:00` and `seen_ids={}` (because no matching live ministry stories were found).
+- [Public publisher browser capture run — SUCCESS](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38331637986), **29/29 tests passed**, and 1 visually accepted, real historic El Watan page screenshot in a one-day artifact.
+
+These are **three distinct GitHub workflows** and all currently have *manual-only* triggers. The state and capture outputs are deliberately separate. No live relevant new article has been auto-captured, no email delivery has occurred from this repo and no recurring schedule is enabled.
+
+**Gate 10 status: PASS for cloud photo QA + backward compatibility with manual public discovery and durable public fingerprint state. NOT production-ready.**
