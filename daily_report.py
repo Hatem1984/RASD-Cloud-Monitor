@@ -26,7 +26,10 @@ def gather(config: dict, *, fetch=read_feed, now: datetime | None = None) -> dic
     if checked.tzinfo is None:
         raise ValueError("naive_report_clock_forbidden")
     checked = checked.astimezone(timezone.utc)
-    observed = inspect(config, fetch=fetch, now=checked)
+    # Collect enough validated candidates from BOTH sources before sorting.
+    # monitor.inspect defaults to 15 for lightweight probes, which may
+    # otherwise hide fresh stories from the second publisher.
+    observed = inspect(config, fetch=fetch, now=checked, article_limit=200)
     since = checked - timedelta(hours=WINDOW_HOURS)
     articles = []
     for original in observed["matched_public_articles"]:
