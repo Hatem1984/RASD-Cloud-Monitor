@@ -1,5 +1,7 @@
 """Gate 11 offline tests: never access Gmail, GitHub network or real credentials."""
+import base64
 import hashlib
+import io
 import json
 import os
 import tempfile
@@ -7,9 +9,10 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from delivery_bridge import (
-    NoGitHubRedirect, build_email, complete_entry, deliver_reserved, gmail_submit,
+    NoGitHubRedirect, PrivateGitHubLedger, build_email, complete_entry, deliver_reserved, gmail_submit,
     reserve_entry, validate_ledger,
 )
 from gate11_runner import candidate_from_feed, eligible_candidates, credentials, run
@@ -197,6 +200,98 @@ class EmailSafetyTests(unittest.TestCase):
             gmail_submit(msg, self.email, "fake-test-only-value",
                          smtp_factory=FakeSMTP)
         self.assertEqual(FakeSMTP.sent, 0)
+
+
+
+class FakePrivateContentsAPI:
+    """No-network simulation of GitHub Contents API including SHA CAS."""
+    def __init__(self):
+        self.state = empty_private_ledger()
+        self.sha = "initial-sha"
+        self.conflict_next_put = False
+        self.writes = 0
+
+    def open(self, request, timeout):
+        assert timeout == 20
+        assert request.get_header("Authorization", "").startswith("Bearer ")
+        assert "/repos/Hatem1984/RASD-Pilot/contents/delivery-state.json" in request.full_url
+        if request.get_method() == "GET":
+            assert request.full_url.endswith("?ref=rasd-private-delivery-state")
+            body = {"sha": self.sha, "encoding": "base64",
+                    "content": base64.b64encode(json.dumps(self.state).encode()).decode()}
+            return io.BytesIO(json.dumps(body).encode())
+        assert request.get_method() == "PUT"
+        change = json.loads(request.data.decode())
+        assert change["branch"] == "rasd-private-delivery-state"
+        if self.conflict_next_put or change["sha"] != self.sha:
+            self.conflict_next_put = False
+            raise HTTPError(request.full_url, 409, "version conflict", {}, None)
+        new = json.loads(base64.b64decode(change["content"]))
+        self.state = new
+        self.sha = hashlib.sha1(change["content"].encode()).hexdigest()
+        self.writes += 1
+        return io.BytesIO(json.dumps({"commit": {"sha": self.sha}}).encode())
+
+
+class GitHubPrivateLedgerTransportTests(unittest.TestCase):
+    def test_real_read_reserve_commit_accept_and_readback_without_network(self):
+        api = FakePrivateContentsAPI()
+        with patch("delivery_bridge.build_opener", return_value=api):
+            ledger = PrivateGitHubLedger("mock_token_nonsecret_123456")
+            self.assertEqual(ledger.reserve(KEY, "sender@gmail.com"), "reserved")
+            self.assertEqual(api.state["entries"][KEY]["status"], "reserved")
+            self.assertEqual(ledger.reserve(KEY, "sender@gmail.com"), "manual_review_hold")
+            receipt = "<rasd-" + KEY + "@gmail.com>"
+            ledger.mark_smtp_accepted(KEY, receipt)
+            restored, sha = ledger.read()
+            self.assertEqual(restored["entries"][KEY]["status"], "smtp_accepted")
+            self.assertEqual(restored["entries"][KEY]["message_id"], receipt)
+            self.assertEqual(ledger.reserve(KEY, "sender@gmail.com"), "already_accepted")
+            self.assertEqual(api.writes, 2)
+            self.assertEqual(restored["approved_recipient_sha256"], APPROVED_HASH)
+
+    def test_private_ledger_token_rejects_wrong_mailbox_before_write(self):
+        api = FakePrivateContentsAPI()
+        with patch("delivery_bridge.build_opener", return_value=api):
+            ledger = PrivateGitHubLedger("mock_token_nonsecret_123456")
+            with self.assertRaisesRegex(ValueError, "recipient_not_approved"):
+                ledger.reserve(KEY, "notapproved@gmail.com")
+            self.assertEqual(api.writes, 0)
+
+    def test_github_compare_and_swap_failure_blocks_smtp(self):
+        api = FakePrivateContentsAPI()
+        api.conflict_next_put = True
+        with tempfile.TemporaryDirectory() as root, patch("delivery_bridge.build_opener", return_value=api):
+            image = Path(root) / "capture.jpg"
+            image.write_bytes(JPEG)
+            ledger = PrivateGitHubLedger("mock_token_nonsecret_123456")
+            FakeSMTP.sent = 0
+            with self.assertRaisesRegex(RuntimeError, "private_ledger_request_failed"):
+                deliver_reserved({**ARTICLE, "publisher": "hapijournal.com",
+                                  "selection": "live_feed_discovery"},
+                                 image, sender="sender@gmail.com",
+                                 approved_recipient="sender@gmail.com",
+                                 app_password="fake-test-only-value",
+                                 ledger=ledger, smtp_factory=FakeSMTP)
+            self.assertEqual(FakeSMTP.sent, 0)
+            self.assertEqual(api.writes, 0)
+
+    def test_full_mock_github_and_mock_smtp_only_once(self):
+        api = FakePrivateContentsAPI()
+        with tempfile.TemporaryDirectory() as root, patch("delivery_bridge.build_opener", return_value=api):
+            image = Path(root) / "capture.jpg"
+            image.write_bytes(JPEG)
+            ledger = PrivateGitHubLedger("mock_token_nonsecret_123456")
+            FakeSMTP.sent = 0
+            article = {**ARTICLE, "publisher": "hapijournal.com", "selection": "live_feed_discovery"}
+            options = {"sender": "sender@gmail.com", "approved_recipient": "sender@gmail.com",
+                       "app_password": "fake-test-only-value", "ledger": ledger,
+                       "smtp_factory": FakeSMTP}
+            self.assertEqual(deliver_reserved(article, image, **options), "smtp_accepted")
+            self.assertEqual(deliver_reserved(article, image, **options), "already_accepted")
+            self.assertEqual(FakeSMTP.sent, 1)
+            self.assertEqual(api.writes, 2)
+            self.assertEqual(api.state["entries"][KEY]["status"], "smtp_accepted")
 
 
 class CandidateAndDryRunTests(unittest.TestCase):
