@@ -1,3 +1,5 @@
+> **Superseding decision — 14 October 2026, Gate 19:** RASD outputs **Word (.docx) only**. PDF generation, PDF attachments and PDF uploads are retired. RSS-only Word files are explicitly named `RASD-Preview-YYYY-MM-DD.docx` and are NOT final reports. A final `RASD-Daily-YYYY-MM-DD.docx` is produced only after all included news items have validated screenshots of their original publisher webpages and coverage is healthy; otherwise the report is `HOLD`. The protected email workflow is manual-only and must not send incomplete reports. Content below includes historical pre-Gate19 acceptance notes for audit continuity.
+
 # RASD — Cloud-first publisher evidence architecture
 
 **Decision (14 October 2026):** RASD is a cloud service, not a Windows-PC automation. The later Android APK and Windows EXE are authenticated clients for the SAME central API.
