@@ -185,8 +185,9 @@ def render_html(report: dict) -> str:
         return (
             '<section class="article"><h2>' + str(i) + ". " + esc(article["headline"]) +
             '</h2><p class="meta">' + esc(article["source"]) + " | " +
-            esc(article["published_at_cairo"]) + "</p><p class='url'>" +
-            esc(article["url"]) + "</p></section>"
+            esc(article["published_at_cairo"]) +
+            '</p><p class="url"><a rel="noopener noreferrer" href="' +
+            esc(article["url"]) + '">' + esc(article["url"]) + "</a></p></section>"
         )
     articles = "".join(article_html(article, i)
                        for i, article in enumerate(report["articles"], 1))
@@ -210,6 +211,7 @@ def render_html(report: dict) -> str:
         'h2{font-size:15px;color:#243445;line-height:1.6;margin:0 0 6px;}'
         '.meta{color:#536c7d;margin:0 0 4px;}'
         '.url{color:#086a80;font-size:9px;direction:ltr;text-align:left;overflow-wrap:anywhere;}'
+        '.url a{color:inherit;text-decoration:underline;}'
         '.article{padding:10px 0;border-bottom:1px solid #dae7ec;break-inside:avoid;}'
         '.badge{font-size:11px;color:#495f6b;}'
         '.empty{border:1px solid #cbdde3;border-radius:6px;padding:14px;}'
