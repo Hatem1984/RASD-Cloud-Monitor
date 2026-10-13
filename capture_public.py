@@ -25,8 +25,10 @@ def classify_publisher_http_status(status: int | None) -> str:
     """A fixed diagnostic code only: no raw response bodies or website text."""
     if status is None:
         return "publisher_no_http_response"
-    if status in (401, 403):
-        return "publisher_access_refused"
+    if status == 401:
+        return "publisher_auth_required"
+    if status == 403:
+        return "publisher_access_forbidden"
     if status == 404 or status == 410:
         return "publisher_article_unavailable"
     if status == 429:
