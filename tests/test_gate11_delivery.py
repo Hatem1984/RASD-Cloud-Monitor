@@ -96,7 +96,8 @@ class EmailSafetyTests(unittest.TestCase):
         FakeSMTP.sent = 0
         FakeSMTP.recipients = []
         self.email = "sender@gmail.com"
-        self.article = {**ARTICLE, "publisher": "hapijournal.com"}
+        self.article = {**ARTICLE, "publisher": "hapijournal.com",
+                        "selection": "live_feed_discovery"}
 
     def test_exactly_one_explicit_recipient(self):
         msg = build_email(self.article, JPEG, self.email)
@@ -151,6 +152,14 @@ class EmailSafetyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_email({**self.article, "headline": "bad\r\nBcc: victim@example.com"},
                         JPEG, self.email)
+
+    def test_historical_reference_cannot_reach_email_builder(self):
+        with self.assertRaisesRegex(ValueError, "historical_or_undated"):
+            build_email({**self.article,
+                         "selection": "historic_publisher_reference_not_new_discovery"},
+                        JPEG, self.email)
+        with self.assertRaisesRegex(ValueError, "historical_or_undated"):
+            build_email({**self.article, "published": None}, JPEG, self.email)
 
     def test_wrong_recipient_in_mail_is_never_smtp_submitted(self):
         msg = build_email(self.article, JPEG, self.email)
