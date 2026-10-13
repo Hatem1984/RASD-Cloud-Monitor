@@ -18,6 +18,7 @@ from delivery_bridge import PrivateGitHubLedger, deliver_reserved
 from monitor import article_id, canonical_url, inspect
 
 ENABLE_PHRASE = "YES_I_APPROVE_GMAIL_DELIVERY"
+RUN_CONFIRMATION_PHRASE = "CONFIRM_ONE_MANUAL_RASD_GMAIL_RUN"
 
 
 def candidate_from_feed(article: dict, config: dict, now: datetime) -> dict | None:
@@ -65,8 +66,24 @@ def eligible_candidates(inspection: dict, config: dict, now: datetime, limit: in
 def credentials(*, require_send_approval: bool = True) -> dict:
     # Preflight deliberately cannot send; it validates auth without needing
     # the separate consent flag required by the real dispatch path.
-    if require_send_approval and os.environ.get("RASD_GATE11_SEND_APPROVED") != ENABLE_PHRASE:
-        raise RuntimeError("gmail_delivery_not_authorized")
+    if require_send_approval:
+        if os.environ.get("RASD_GATE11_SEND_APPROVED") != ENABLE_PHRASE:
+            raise RuntimeError("gmail_delivery_not_authorized")
+        # Defense in depth: an accidentally retained static environment secret
+        # must NEVER authorize unattended email from cron, push, or another ref.
+        if (os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+                or os.environ.get("GITHUB_REF") != "refs/heads/main"):
+            raise RuntimeError("gmail_delivery_requires_manual_main_dispatch")
+        if (os.environ.get("GITHUB_REPOSITORY") != "Hatem1984/RASD-Cloud-Monitor"
+                or os.environ.get("GITHUB_ACTOR", "").casefold() != "hatem1984"):
+            raise RuntimeError("gmail_delivery_requires_approved_repo_owner")
+        # Never let GitHub's rerun action reuse a previous manual approval.
+        if (os.environ.get("GITHUB_RUN_ATTEMPT") != "1"
+                or not os.environ.get("GITHUB_RUN_ID", "").isdigit()):
+            raise RuntimeError("gmail_delivery_requires_new_workflow_run")
+        # A new human-entered confirmation for EACH manual workflow run.
+        if os.environ.get("RASD_GATE11_RUN_CONFIRMATION") != RUN_CONFIRMATION_PHRASE:
+            raise RuntimeError("gmail_delivery_requires_per_run_confirmation")
     names = ("RASD_GMAIL_USER", "RASD_APPROVED_RECIPIENT",
              "RASD_GMAIL_APP_PASSWORD", "RASD_PRIVATE_LEDGER_TOKEN")
     env = {name: os.environ.get(name, "") for name in names}
@@ -91,7 +108,18 @@ def run(mode: str, *, config_path: Path = Path("sources.json"),
     candidates = eligible_candidates(inspected, config, now)
     ledger = ledger_factory(auth["RASD_PRIVATE_LEDGER_TOKEN"]) if auth and candidates else None
     source_records = inspected.get("sources", [])
+    # Only already-public source IDs and exception CLASS names are logged.
+    # No feed response body, URL, secrets or email identifiers enter logs.
+    source_health = [
+        {"feed_id": record["feed_id"], "status": record["status"],
+         "error_type": record.get("error") if record["status"] != "ok" else None}
+        for record in source_records
+    ]
     results = {"mode": mode, "eligible": len(candidates), "captured": 0,
+               "coverage_status": ("degraded" if any(x["status"] != "ok"
+                                                      for x in source_records)
+                                   else "healthy"),
+               "source_health": source_health,
                "healthy_sources": sum(x["status"] == "ok" for x in source_records),
                "failed_sources": sum(x["status"] != "ok" for x in source_records),
                "verified_publisher_links": inspected["public_verified_publisher_links"],
@@ -135,6 +163,11 @@ def main():
         result = run(opts.mode)
         # Public Actions log: only counts, no recipient, secret, URL or article data.
         print(json.dumps(result, ensure_ascii=False), flush=True)
+        if result["coverage_status"] == "degraded":
+            # This is a GitHub Actions annotation, not a failure of safe
+            # partial operation; operator can see which publisher failed.
+            print("::warning::RASD news source coverage degraded; inspect source_health counts",
+                  flush=True)
     except Exception:
         # An error could mean SMTP accepted the mail before a network failure.
         # Never retry automatically; keep the private reservation on HOLD.

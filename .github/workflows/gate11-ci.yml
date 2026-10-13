@@ -8,6 +8,7 @@ on:
       - gate11-receipt-readback-hardening
       - gate11-protected-preflight
       - gate11-publisher-coverage-hardening
+      - gate11-explicit-manual-consent
 
 permissions:
   contents: read

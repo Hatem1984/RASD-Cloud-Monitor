@@ -39,3 +39,12 @@ Official docs:
 - https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
 - https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions
 - https://support.google.com/accounts/answer/185833?hl=en
+
+
+## Gate 11 operator consent hardened (13 October 2026)
+
+The `send` mode now needs **both** the existing protected fifth secret and a **new confirmation text typed on every fresh GitHub workflow dispatch** in the `send_confirmation` input. For preflight/dry-run leave that input empty. The safe value is documented in the reviewed public `gate11_runner.py`; it is an explicit human acknowledgment, **not** a password or replacement for the environment required reviewer.
+
+The production sending function fails closed unless all of these GitHub-provided facts match: event `workflow_dispatch`, branch `main`, repository `Hatem1984/RASD-Cloud-Monitor`, initiating actor `Hatem1984`, a numeric GitHub run ID and **run attempt exactly 1**. Using GitHub **Re-run jobs** on a previously approved send can never authorize another SMTP attempt; dispatch a new manually approved workflow instead. These checks do not configure a reviewer automatically; repository owner must still configure the protected environment, reviewers and secrets via GitHub Settings before any real preflight.
+
+No permanent schedule, credential, website automation subscription or paid action was created by this change.

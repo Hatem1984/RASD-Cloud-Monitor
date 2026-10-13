@@ -33,6 +33,20 @@ CONFIG = {"feeds": [{"id": "hapi", "name": "Hapi native news RSS",
 JPEG = b"\xff\xd8" + (b"A" * 9000)
 
 APPROVED_HASH = hashlib.sha256(b"sender@gmail.com").hexdigest()
+MANUAL_SEND_ENV = {
+    "RASD_GATE11_SEND_APPROVED": "YES_I_APPROVE_GMAIL_DELIVERY",
+    "GITHUB_EVENT_NAME": "workflow_dispatch",
+    "GITHUB_REF": "refs/heads/main",
+    "GITHUB_REPOSITORY": "Hatem1984/RASD-Cloud-Monitor",
+    "GITHUB_ACTOR": "Hatem1984",
+    "GITHUB_RUN_ATTEMPT": "1",
+    "GITHUB_RUN_ID": "456789123",
+    "RASD_GATE11_RUN_CONFIRMATION": "CONFIRM_ONE_MANUAL_RASD_GMAIL_RUN",
+    "RASD_GMAIL_USER": "sender@gmail.com",
+    "RASD_APPROVED_RECIPIENT": "sender@gmail.com",
+    "RASD_GMAIL_APP_PASSWORD": "fake-test-only-value",
+    "RASD_PRIVATE_LEDGER_TOKEN": "mock_token_nonsecret_123456",
+}
 
 
 def empty_private_ledger():
@@ -416,9 +430,75 @@ class CandidateAndDryRunTests(unittest.TestCase):
                 credentials()
 
     def test_send_authorization_without_all_secrets_fails_closed(self):
-        with patch.dict(os.environ, {"RASD_GATE11_SEND_APPROVED":
-                                     "YES_I_APPROVE_GMAIL_DELIVERY"}, clear=True):
+        incomplete = {k: v for k, v in MANUAL_SEND_ENV.items()
+                      if k != "RASD_PRIVATE_LEDGER_TOKEN"}
+        with patch.dict(os.environ, incomplete, clear=True):
             with self.assertRaisesRegex(RuntimeError, "missing_protected_delivery_configuration"):
+                credentials()
+
+    def test_only_manual_dispatch_on_main_can_unlock_send(self):
+        with patch.dict(os.environ, MANUAL_SEND_ENV, clear=True):
+            self.assertEqual(credentials()["RASD_APPROVED_RECIPIENT"], "sender@gmail.com")
+        for event, ref in (("schedule", "refs/heads/main"),
+                           ("push", "refs/heads/main"),
+                           ("workflow_dispatch", "refs/heads/develop"),
+                           ("workflow_dispatch", "refs/tags/v1"),
+                           ("", "refs/heads/main")):
+            with self.subTest(event=event, ref=ref):
+                environment = {**MANUAL_SEND_ENV,
+                               "GITHUB_EVENT_NAME": event, "GITHUB_REF": ref}
+                with patch.dict(os.environ, environment, clear=True):
+                    with self.assertRaisesRegex(RuntimeError,
+                                                "gmail_delivery_requires_manual_main_dispatch"):
+                        credentials()
+
+    def test_github_rerun_cannot_reuse_past_mail_approval(self):
+        for attempt in ("2", "3", "", "zero"):
+            with self.subTest(attempt=attempt):
+                e = {**MANUAL_SEND_ENV, "GITHUB_RUN_ATTEMPT": attempt}
+                with patch.dict(os.environ, e, clear=True):
+                    with self.assertRaisesRegex(RuntimeError,
+                                                "gmail_delivery_requires_new_workflow_run"):
+                        credentials()
+        with patch.dict(os.environ, {**MANUAL_SEND_ENV, "GITHUB_RUN_ID": ""}, clear=True):
+            with self.assertRaisesRegex(RuntimeError,
+                                        "gmail_delivery_requires_new_workflow_run"):
+                credentials()
+
+    def test_other_repository_or_actor_cannot_send_using_cached_confirmation(self):
+        variants = ({"GITHUB_REPOSITORY": "Other/RASD-Cloud-Monitor"},
+                    {"GITHUB_ACTOR": "unapproved-collaborator"},
+                    {"GITHUB_ACTOR": ""})
+        for overrides in variants:
+            with self.subTest(overrides=overrides):
+                with patch.dict(os.environ, {**MANUAL_SEND_ENV, **overrides}, clear=True):
+                    with self.assertRaisesRegex(RuntimeError,
+                                                "gmail_delivery_requires_approved_repo_owner"):
+                        credentials()
+
+    def test_static_environment_secret_without_per_run_consent_fails_closed(self):
+        for confirmation in ("", "YES_I_APPROVE_GMAIL_DELIVERY",
+                             "CONFIRM_ONE_MANUAL_RASD_GMAIL_RUN "):
+            with self.subTest(confirmation=confirmation):
+                environment = {**MANUAL_SEND_ENV, "RASD_GATE11_RUN_CONFIRMATION": confirmation}
+                with patch.dict(os.environ, environment, clear=True):
+                    with self.assertRaisesRegex(RuntimeError,
+                                                "gmail_delivery_requires_per_run_confirmation"):
+                        credentials()
+
+    def test_preflight_never_grants_send_permission(self):
+        environment = {k: v for k, v in MANUAL_SEND_ENV.items()
+                       if k != "RASD_GATE11_SEND_APPROVED"}
+        with patch.dict(os.environ, environment, clear=True):
+            self.assertEqual(credentials(require_send_approval=False)["RASD_GMAIL_USER"],
+                             "sender@gmail.com")
+            with self.assertRaisesRegex(RuntimeError, "gmail_delivery_not_authorized"):
+                credentials()
+
+    def test_wrong_sender_recipient_never_unlocks_manual_send(self):
+        environment = {**MANUAL_SEND_ENV, "RASD_APPROVED_RECIPIENT": "different@gmail.com"}
+        with patch.dict(os.environ, environment, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "sender_recipient_identity_mismatch"):
                 credentials()
 
 

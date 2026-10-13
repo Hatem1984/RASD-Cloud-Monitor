@@ -12,6 +12,11 @@ on:
           - preflight
           - send
         default: dry_run
+      send_confirmation:
+        description: "For send only: type CONFIRM_ONE_MANUAL_RASD_GMAIL_RUN for each manual run. Leave empty for preflight or dry run."
+        required: false
+        type: string
+        default: ""
 
 # No cron, push, PR or repository_dispatch triggers.
 permissions:
@@ -88,6 +93,7 @@ jobs:
       - name: New publisher-verified images with private SMTP receipt
         env:
           RASD_GATE11_SEND_APPROVED: ${{ secrets.RASD_GATE11_SEND_APPROVED }}
+          RASD_GATE11_RUN_CONFIRMATION: ${{ inputs.send_confirmation }}
           RASD_GMAIL_USER: ${{ secrets.RASD_GMAIL_USER }}
           RASD_APPROVED_RECIPIENT: ${{ secrets.RASD_APPROVED_RECIPIENT }}
           RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
