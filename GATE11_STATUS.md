@@ -35,12 +35,16 @@ Gate 10 was closed: 29/29 hosted tests in each of 3 manual workflows; public-sta
 ## Test and release criteria
 - [x] Private branch and empty ledger provisioned on existing private repo.
 - [x] Offline SMTP/ledger/test-fixture safety suite on public hosted runner.
-- [ ] Hosted real RSS delivery dry-run using live-only candidate selection.
+- [x] Hosted live RSS dry-run: run 38333307545 PASS, eligible=0, captured=0, SMTP=0, fixtures=0, schedule OFF. This verifies safe zero-match behavior, not actual delivery.
 - [ ] Required reviewer/environment protection established; 5 GitHub secrets safely provisioned if SMTP app password route is eligible.
 - [ ] One expressly approved real Gmail submission of a genuinely NEW eligible original-source story; SMTP-accepted private receipt read-back.
 - [ ] Gmail Sent and Inbox read-back, including attachment verification.
 - [ ] Second manual run proves no auto-resend; an uncertain state stays on hold.
 - [ ] Gate 11 CLOSE after all true end-to-end evidence. Current status: **PARTIAL — NO REAL MAIL FROM THE CLOUD WORKER**.
+
+## Hosted evidence
+- [Gate 11 branch CI: 44 offline tests PASS + genuine current-feed dry-run PASS](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38333307545)
+- The feed yielded no eligible current planning article. No screenshot and no mail resulted; screenshot code is covered by Gate 10 and fixture/unit regressions, not by a Gate 11 live-match proof.
 
 ## Cost notes
 Standard GitHub-hosted Ubuntu runners in a public repository are currently free by official GitHub pricing. The new Gate 11 pipeline uploads no artifacts. Private RASD-Pilot Actions are not invoked. Artifact/storage quotas, service terms and account eligibility must still be checked before automatic scheduling. No cost authorization or billing change is requested.
