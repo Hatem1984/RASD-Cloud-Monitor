@@ -7,6 +7,7 @@ on:
       - gate11-recipient-lock-and-ledger-qa
       - gate11-receipt-readback-hardening
       - gate11-protected-preflight
+      - gate11-publisher-coverage-hardening
 
 permissions:
   contents: read
