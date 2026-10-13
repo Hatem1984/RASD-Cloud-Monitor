@@ -5,6 +5,7 @@ credentials, paid services or real network traffic are used in these tests.
 """
 from __future__ import annotations
 
+import os
 import json
 import unittest
 from datetime import datetime, timezone
@@ -12,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from capture_public import allowed_url
-from gate11_runner import candidate_from_feed
+from gate11_runner import candidate_from_feed, run
 from monitor import (APPROVED_FEED_URLS, article_id, inspect,
                      parse_rss, read_feed)
 
@@ -88,6 +89,27 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
         self.assertEqual(result["planning_headline_matches"], 1)
         self.assertFalse(result["scheduler_enabled"])
         self.assertFalse(result["email_sent"])
+
+    def test_partial_live_source_outage_is_visible_not_false_full_success(self):
+        hapi = next(f for f in CONFIG["feeds"] if f["id"] == "hapi")
+        masry = next(f for f in CONFIG["feeds"] if f["id"] == "almasryalyoum")
+        def simulated_fetch(url, limit):
+            if url == hapi["url"]:
+                raise TimeoutError("controlled outage")
+            if url == masry["url"]:
+                return feed_xml(MASRY_URL, title="خبر رياضي لا يخص الوزارة")
+            raise AssertionError("unexpected URL")
+        with patch.dict(os.environ, {}, clear=True):
+            result = run("dry_run", fetch=simulated_fetch, clock=CURRENT)
+        self.assertEqual(result["healthy_sources"], 1)
+        self.assertEqual(result["failed_sources"], 1)
+        self.assertEqual(result["coverage_status"], "degraded")
+        self.assertEqual(result["smtp_accepted"], 0)
+        self.assertEqual(result["source_health"], [
+            {"feed_id": "hapi", "status": "failed", "error_type": "TimeoutError"},
+            {"feed_id": "almasryalyoum", "status": "ok", "error_type": None},
+        ])
+        self.assertFalse(result["scheduler_enabled"])
 
     def test_no_automatic_capture_of_expired_native_publisher_story(self):
         feed = next(f for f in CONFIG["feeds"] if f["id"] == "almasryalyoum")
