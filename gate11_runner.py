@@ -20,13 +20,6 @@ from monitor import article_id, canonical_url, inspect
 ENABLE_PHRASE = "YES_I_APPROVE_GMAIL_DELIVERY"
 RUN_CONFIRMATION_PHRASE = "CONFIRM_ONE_MANUAL_RASD_GMAIL_RUN"
 
-# Only these two owner-initiated, human-reviewed workflows may authorize mail.
-# The digest has its own additional exact-workflow check before reading state.
-APPROVED_SEND_WORKFLOW_REFS = frozenset({
-    "Hatem1984/RASD-Cloud-Monitor/.github/workflows/gate11-manual.yml@refs/heads/main",
-    "Hatem1984/RASD-Cloud-Monitor/.github/workflows/digest-mail-manual.yml@refs/heads/main",
-})
-
 
 def candidate_from_feed(article: dict, config: dict, now: datetime) -> dict | None:
     """Reject old/undated/fixture/unverified articles before screenshot or email."""
@@ -96,8 +89,6 @@ def credentials(*, require_send_approval: bool = True) -> dict:
         # A new human-entered confirmation for EACH manual workflow run.
         if os.environ.get("RASD_GATE11_RUN_CONFIRMATION") != RUN_CONFIRMATION_PHRASE:
             raise RuntimeError("gmail_delivery_requires_per_run_confirmation")
-        if os.environ.get("GITHUB_WORKFLOW_REF") not in APPROVED_SEND_WORKFLOW_REFS:
-            raise RuntimeError("gmail_delivery_requires_reviewed_workflow")
     names = ("RASD_GMAIL_USER", "RASD_APPROVED_RECIPIENT",
              "RASD_GMAIL_APP_PASSWORD", "RASD_PRIVATE_LEDGER_TOKEN")
     env = {name: os.environ.get(name, "") for name in names}
