@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from capture_public import (allowed_url, image_quality, capture_publisher,
-                            classify_publisher_http_status)
+                            classify_publisher_http_status, accept_staged_image)
 from screenshot_probe import choose_targets, REFERENCE
 
 
@@ -98,6 +98,35 @@ class BrowserSafetyTests(unittest.TestCase):
         for status, expected in cases.items():
             with self.subTest(status=status):
                 self.assertEqual(classify_publisher_http_status(status), expected)
+
+    def test_staged_valid_image_is_committed_only_after_quality_checks(self):
+        with tempfile.TemporaryDirectory() as td:
+            folder = Path(td)
+            staged, final = folder / "candidate.jpg", folder / "approved.jpg"
+            image = Image.new("RGB", (1200, 900), "white")
+            paint = ImageDraw.Draw(image)
+            paint.rectangle((0, 0, 1200, 180), fill=(18, 30, 52))
+            for y in range(210, 850, 32):
+                paint.rectangle((40, y, 1110, y + 12), fill=(35, 45, 66))
+            image.save(staged, quality=85)
+            self.assertGreater(staged.stat().st_size, 8000)
+            output = accept_staged_image(staged, final)
+            self.assertTrue(output["ok"])
+            self.assertTrue(final.is_file())
+            self.assertFalse(staged.exists())
+            self.assertEqual(output["image"], "approved.jpg")
+
+    def test_rejected_staged_image_does_not_overwrite_existing_evidence(self):
+        with tempfile.TemporaryDirectory() as td:
+            folder = Path(td)
+            staged, final = folder / "candidate.jpg", folder / "approved.jpg"
+            final.write_bytes(b"previous-accepted-evidence")
+            old_bytes = final.read_bytes()
+            staged.write_bytes(b"invalid-jpeg" * 2000)
+            output = accept_staged_image(staged, final)
+            self.assertFalse(output["ok"])
+            self.assertEqual(output["reason"], "visual_qa_invalid_image")
+            self.assertEqual(final.read_bytes(), old_bytes)
 
     def test_bad_publisher_denied_before_playwright(self):
         with tempfile.TemporaryDirectory() as td:
