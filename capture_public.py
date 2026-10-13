@@ -12,6 +12,7 @@ from PIL import Image, ImageStat, UnidentifiedImageError
 APPROVED_PUBLISHERS = {
     "hapijournal.com": frozenset({"hapijournal.com", "www.hapijournal.com"}),
     "elwatannews.com": frozenset({"elwatannews.com", "www.elwatannews.com"}),
+    "almasryalyoum.com": frozenset({"almasryalyoum.com", "www.almasryalyoum.com"}),
 }
 CHALLENGE_WORDS = (
     "verify you are human", "just a moment...", "checking your browser",

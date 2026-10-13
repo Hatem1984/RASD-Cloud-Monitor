@@ -16,6 +16,14 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from xml.etree import ElementTree as ET
 
 
+# Reviewed, exact native publisher RSS endpoints; never accept arbitrary URLs
+# from modified public configuration or follow redirects to other destinations.
+APPROVED_FEED_URLS = frozenset({
+    "https://hapijournal.com/feed/",
+    "https://www.almasryalyoum.com/rss/rssfeeds",
+})
+
+
 class RejectRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
         raise RuntimeError("feed_redirect_blocked")
@@ -85,8 +93,8 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
 
 def read_feed(url: str, size_limit: int) -> bytes:
     """Hardcoded, reviewed domain: never follow redirects or read unlimited content."""
-    if not is_publisher_link(url, ["hapijournal.com", "www.hapijournal.com"]):
-        raise ValueError("feed_domain_not_approved")
+    if url not in APPROVED_FEED_URLS:
+        raise ValueError("feed_endpoint_not_reviewed")
     request = Request(url, headers={"User-Agent": "RASD-Cloud-Public-Monitor/0.1"})
     with build_opener(RejectRedirect()).open(request, timeout=20) as response:
         if response.status != 200 or response.geturl() != url:
