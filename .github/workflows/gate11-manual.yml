@@ -38,7 +38,7 @@ jobs:
           python-version: '3.11'
       - name: Install capture/test dependencies
         run: |
-          python -m pip install "Pillow>=10,<13" "playwright>=1.50,<2"
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
           python -m playwright install --with-deps chromium
       - name: Run all offline tests including Gate 11
         run: python -m unittest discover -s tests -v
@@ -60,7 +60,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install existing image dependency for safe imports only
-        run: python -m pip install "Pillow>=10,<13"
+        run: python -m pip install -r requirements-test.txt
       - name: Offline test suite; no credentials exposed
         run: python -m unittest discover -s tests -v
       - name: Read private receipt ledger and authenticate Gmail only; never email
@@ -86,7 +86,7 @@ jobs:
           python-version: '3.11'
       - name: Install capture/test dependencies
         run: |
-          python -m pip install "Pillow>=10,<13" "playwright>=1.50,<2"
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
           python -m playwright install --with-deps chromium
       - name: Verify offline safety before any live delivery
         run: python -m unittest discover -s tests -v
