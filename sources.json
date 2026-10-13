@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "scope": "Egyptian Ministry of Planning - publicly published news only",
+  "keywords": [
+    "وزارة التخطيط",
+    "وزير التخطيط",
+    "وزيرة التخطيط",
+    "التخطيط والتنمية الاقتصادية"
+  ],
+  "feeds": [
+    {
+      "id": "hapi",
+      "name": "Hapi native news RSS",
+      "url": "https://hapijournal.com/feed/",
+      "allowed_article_hosts": ["hapijournal.com", "www.hapijournal.com"]
+    }
+  ],
+  "max_feed_bytes": 1500000,
+  "recent_hours": 72
+}
