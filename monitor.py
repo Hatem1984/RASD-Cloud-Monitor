@@ -137,7 +137,9 @@ def inspect(config: dict, fetch=read_feed, now=None) -> dict:
         "email_sent": False,
         "scheduler_enabled": False,
         "state_persistence_enabled": False,
-        "limitations": "Single-source sample; no persistent cross-run deduplication or full media coverage.",
+        "limitations": ("Native RSS headline-only monitoring of reviewed sources; "
+                        "no comprehensive media coverage. This read-only scan "
+                        "does not persist cross-run deduplication."),
     }
 
 
