@@ -17,6 +17,12 @@ jobs:
     steps:
       - name: Check out this independent public repository
         uses: actions/checkout@v4
+      - name: Set up Python for image-quality regressions
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install free image-quality test dependency
+        run: python -m pip install "Pillow>=10,<13"
       - name: Run offline security and deduplication tests
         run: python -m unittest discover -s tests -v
       - name: Read one reviewed public RSS feed (no email)
