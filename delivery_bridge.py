@@ -137,6 +137,8 @@ def build_email(article: dict, screenshot: bytes, sender: str) -> EmailMessage:
     """Only one sender/recipient; identity is from protected Actions secrets."""
     if not sender or not re.fullmatch(r"[^@\s]+@gmail\.com", sender, re.I):
         raise ValueError("sender_must_be_a_gmail_address")
+    if article.get("selection") != "live_feed_discovery" or not article.get("published"):
+        raise ValueError("historical_or_undated_article_forbidden")
     url = article.get("url", "")
     key = article.get("id", "")
     headline = article.get("headline", "")
