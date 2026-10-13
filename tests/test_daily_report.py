@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from daily_report import gather, generate, render_docx, render_html
+from daily_report import cairo_display_time, gather, generate, render_docx, render_html
 
 NOW = datetime(2026, 10, 13, 3, 10, tzinfo=timezone.utc)
 HAPI = "https://hapijournal.com/feed/"
@@ -38,6 +38,16 @@ def fetch_both(url, limit):
 
 
 class DailyReportTests(unittest.TestCase):
+    def test_cairo_dates_render_as_readable_arabic_without_rtl_iso_mixing(self):
+        report = gather(CONFIG, fetch=fetch_both, now=NOW)
+        self.assertIn("١٣ أكتوبر ٢٠٢٦", report["display_window_end"])
+        self.assertIn("بتوقيت القاهرة", report["display_window_start"])
+        self.assertNotIn("EEST", report["display_window_end"])
+        self.assertEqual(report["window_end_cairo"][:10], "2026-10-13")
+        self.assertNotEqual(report["display_window_end"], report["window_end_cairo"])
+        self.assertIn(report["display_window_start"], render_html(report))
+        self.assertIn(report["display_window_end"], render_html(report))
+
     def test_two_real_domain_mock_headlines_are_selected_and_ordered(self):
         report = gather(CONFIG, fetch=fetch_both, now=NOW)
         self.assertEqual(report["coverage"], "HEALTHY")
@@ -63,6 +73,27 @@ class DailyReportTests(unittest.TestCase):
                 doc_xml = archive.read("word/document.xml").decode("utf-8")
                 self.assertIn("لم يُعثر", doc_xml)
                 self.assertIn("w:bidi", doc_xml)
+
+    def test_older_first_feed_cannot_hide_newest_second_publisher_story(self):
+        # Regression: the common monitor probe returns the first 15 matches;
+        # a real digest must rank across all feeds BEFORE truncating.
+        def many_stories(url, limit):
+            if url == HAPI:
+                items = [
+                    ("وزارة التخطيط خبر قديم " + str(i),
+                     "https://hapijournal.com/old-planning-" + str(i),
+                     "Tue, 13 Oct 2026 01:00:00 +0000")
+                    for i in range(18)
+                ]
+                return xml(items)
+            return xml([(SECOND_TITLE, SECOND_URL,
+                         "Tue, 13 Oct 2026 03:00:00 +0000")])
+        report = gather(CONFIG, fetch=many_stories, now=NOW)
+        self.assertEqual(len(report["articles"]), 15)
+        self.assertEqual(report["articles"][0]["url"], SECOND_URL)
+        self.assertEqual(report["articles"][0]["headline"], SECOND_TITLE)
+        self.assertEqual(report["articles"][0]["source"],
+                         "Al Masry Al Youm native news RSS")
 
     def test_historical_undated_and_future_dated_items_are_not_reported(self):
         def mixed(url, limit):

@@ -111,6 +111,31 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
         ])
         self.assertFalse(result["scheduler_enabled"])
 
+    def test_transient_bad_rss_recovers_on_one_retry(self):
+        calls = {"masry": 0}
+        def fetch_once_bad(url, limit):
+            if "almasryalyoum" not in url:
+                return feed_xml(HAPI_URL)
+            calls["masry"] += 1
+            return b"not valid xml" if calls["masry"] == 1 else feed_xml(MASRY_URL)
+        result = inspect(CONFIG, fetch=fetch_once_bad, now=CURRENT)
+        self.assertEqual(calls["masry"], 2)
+        self.assertEqual([s["status"] for s in result["sources"]], ["ok", "ok"])
+        self.assertEqual(result["planning_headline_matches"], 2)
+
+    def test_transient_timeout_recovers_without_double_count(self):
+        calls = {"masry": 0}
+        def fetch_once_slow(url, limit):
+            if "almasryalyoum" not in url:
+                return feed_xml(HAPI_URL)
+            calls["masry"] += 1
+            if calls["masry"] == 1:
+                raise TimeoutError("transient")
+            return feed_xml(MASRY_URL)
+        result = inspect(CONFIG, fetch=fetch_once_slow, now=CURRENT)
+        self.assertEqual(calls["masry"], 2)
+        self.assertEqual(result["planning_headline_matches"], 2)
+
     def test_no_automatic_capture_of_expired_native_publisher_story(self):
         feed = next(f for f in CONFIG["feeds"] if f["id"] == "almasryalyoum")
         _, matches = parse_rss(

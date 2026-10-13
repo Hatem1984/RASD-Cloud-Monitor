@@ -75,8 +75,8 @@ class PublicMonitoringTests(unittest.TestCase):
         def fetch(url, max_size):
             nonlocal attempt
             attempt += 1
-            if attempt == 1:
-                raise TimeoutError("simulated")
+            if attempt <= 2:
+                raise TimeoutError("simulated persistent two-attempt publisher outage")
             return rss(item("وزارة التخطيط تعقد اجتماعا", "https://hapijournal.com/a"))
         attempt = 0
         result = inspect(cfg, fetch=fetch, now=NOW)

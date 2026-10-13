@@ -11,6 +11,7 @@ on:
       - gate11-explicit-manual-consent
       - gate11-full-pipeline-acceptance
       - gate12-daily-word-pdf-reports
+      - gate12-ci-downloadable-artifact-qa
 
 permissions:
   contents: read
@@ -65,3 +66,13 @@ jobs:
           assert len(PdfReader(pdfs[0]).pages) >= 1, "PDF pages missing"
           print("rasd_daily_report_word_pdf_verified; no_email; no_schedule")
           PY
+      - name: Package verified public-source Word/PDF report for audit and direct download
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-public-report-ci
+          path: |
+            report-output/RASD-Daily-*.docx
+            report-output/RASD-Daily-*.pdf
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 6

@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from xml.etree import ElementTree as ET
 
@@ -105,7 +106,12 @@ def read_feed(url: str, size_limit: int) -> bytes:
         return data
 
 
-def inspect(config: dict, fetch=read_feed, now=None) -> dict:
+def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15) -> dict:
+    # The default preserves the original compact public monitoring response.
+    # Reporting can explicitly request a larger validated pool before it sorts
+    # by publisher publication time and selects the 15 newest headlines.
+    if not isinstance(article_limit, int) or not 1 <= article_limit <= 200:
+        raise ValueError("invalid_rss_article_limit")
     checked = datetime.now(timezone.utc) if now is None else now
     sources = []
     discovered = []
@@ -113,17 +119,29 @@ def inspect(config: dict, fetch=read_feed, now=None) -> dict:
     for feed in config["feeds"]:
         record = {"feed_id": feed["id"], "status": "failed",
                   "verified_links": 0, "headline_matches": 0}
-        try:
-            data = fetch(feed["url"], config["max_feed_bytes"])
-            count, matches = parse_rss(data, feed, config["keywords"], checked,
-                                       config["recent_hours"])
-            record.update(status="ok", verified_links=count, headline_matches=len(matches))
-            for entry in matches:
-                if entry["id"] not in ids:
-                    discovered.append(entry)
-                    ids.add(entry["id"])
-        except Exception as exc:
-            record["error"] = type(exc).__name__
+        for attempt in range(2):
+            try:
+                data = fetch(feed["url"], config["max_feed_bytes"])
+                count, matches = parse_rss(data, feed, config["keywords"], checked,
+                                           config["recent_hours"])
+                record.update(status="ok", verified_links=count,
+                              headline_matches=len(matches))
+                record.pop("error", None)
+                for entry in matches:
+                    if entry["id"] not in ids:
+                        discovered.append(entry)
+                        ids.add(entry["id"])
+                break
+            except Exception as exc:
+                record["error"] = type(exc).__name__
+                # One bounded reattempt for transient RSS/XML/network failure.
+                # Never retry invalid publishers, unsafe redirects, DTD or
+                # unapproved endpoints; never mask a second failure.
+                transient = isinstance(exc, (ET.ParseError, TimeoutError, URLError))
+                if isinstance(exc, HTTPError):
+                    transient = exc.code in {429, 500, 502, 503, 504}
+                if not transient or attempt == 1:
+                    break
         sources.append(record)
     if not sources or all(item["status"] == "failed" for item in sources):
         raise RuntimeError("all_public_RSS_sources_failed")
@@ -133,7 +151,7 @@ def inspect(config: dict, fetch=read_feed, now=None) -> dict:
         "public_verified_publisher_links": sum(s["verified_links"] for s in sources),
         "planning_headline_matches": len(discovered),
         "sources": sources,
-        "matched_public_articles": discovered[:15],
+        "matched_public_articles": discovered[:article_limit],
         "email_sent": False,
         "scheduler_enabled": False,
         "state_persistence_enabled": False,
