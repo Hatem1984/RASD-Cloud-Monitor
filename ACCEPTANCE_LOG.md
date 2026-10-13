@@ -108,3 +108,13 @@ These are **three distinct GitHub workflows** and all currently have *manual-onl
 - Added `GATE11_SECURE_SETUP.md` with exact secure UI path, minimal private-repository token scope, four environment secret names, and explicit ban on sharing secrets in chat/public files. No secrets are configured from this connector.
 - [Cloud acceptance evidence: 38336358797](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38336358797): **59/59** hosted offline tests passed; live publisher RSS `dry_run` succeeded with 0 eligible articles, 0 SMTP attempts, 0 historic fixtures and scheduling off.
 - Stage **GATE11-PREFLIGHT code VERIFIED**, but **operational preflight UNRUN** (protected credentials not available). Gate 11 **OPEN** pending privileged GitHub environment configuration, real authentication-only protected job, explicit consent for actual cloud send, SMTP/private receipt, Gmail Sent/Inbox readback and no-replay evidence.
+
+
+## Gate 11 coverage checkpoint — two publisher-owned live RSS sources (13 October 2026)
+
+- [PR #5](https://github.com/Hatem1984/RASD-Cloud-Monitor/pull/5) merged as `703e0992a0204871e5c8902fa74738f121eade02`.
+- Verified original publishers: existing Hapi RSS and the additional independently checked [Al Masry Al Youm native RSS](https://www.almasryalyoum.com/rss/rssfeeds). **Both feeds are used in dry-run only**; do not interpret an article fixture as a new discovery.
+- RSS fetch is now pinned to **exactly two reviewed URLs** instead of opening all paths on a trusted domain. Native article-domain capture is separately constrained to the original publisher. No Google News proxy or aggregator URL can be emailed as an original publisher.
+- Safe observability was added to gate11_runner result: healthy/failed original-feed counts, verified publisher article link count, and exact planning headline match count. No user address, access token, article body, or private state is included.
+- [Hosted GitHub Actions run 38336995776](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38336995776): **65/65 offline tests PASSED**, public live-feed dry-run **SUCCESS**, `healthy_sources=2`, `failed_sources=0`, `verified_publisher_links=60`, `planning_headline_matches=0`, `eligible=0`, `smtp_accepted=0`, `scheduler_enabled=false`.
+- These are verified source-access/QA improvements, **not** proof of genuine news capture/send to Gmail. Protected Github Actions environment/secrets and actual preflight remain pending; live cloud Gmail delivery and inbox/attachment readback remain unproven. **Gate 11 remains OPEN.**
