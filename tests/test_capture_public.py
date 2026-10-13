@@ -86,8 +86,8 @@ class BrowserSafetyTests(unittest.TestCase):
     def test_http_failures_are_fixed_codes_not_untrusted_server_text(self):
         cases = {
             None: "publisher_no_http_response",
-            401: "publisher_auth_required",
-            403: "publisher_access_forbidden",
+            401: "publisher_access_refused",
+            403: "publisher_access_refused",
             404: "publisher_article_unavailable",
             410: "publisher_article_unavailable",
             429: "publisher_rate_limited",
