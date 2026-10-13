@@ -1,4 +1,4 @@
-"""Gate 13 integration tests: fake publisher RSS + real DOCX/PDF parser + mock private GitHub + fake SMTP.
+"""Gate 13 integration tests: fake publisher RSS + real Word image parser + mock private GitHub + fake SMTP.
 
 The tests never authenticate Gmail or write to a real private repository.
 """
@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from pypdf import PdfWriter
+from PIL import Image, ImageDraw
 
 from digest_mailer import (
     WORKFLOW_REF, build_digest_message, deliver_digest, report_identity, run,
@@ -50,12 +50,15 @@ def publisher_fetch(url, limit):
     raise AssertionError("unapproved RSS URL")
 
 
-def pdf_builder(report, path):
-    writer = PdfWriter()
-    for _ in range(25):
-        writer.add_blank_page(width=595, height=842)
-    with path.open("wb") as handle:
-        writer.write(handle)
+def publisher_capture(url, publisher, destination):
+    image = Image.new("RGB", (1200, 900), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, 0, 1199, 200), fill=(13, 32, 55))
+    for y in range(220, 870, 30):
+        draw.rectangle((35, y, 1150, y + 16), fill=(30, 44, 60))
+    image.save(destination, quality=90)
+    return {"ok": True, "actual_url": url,
+            "title": "وزارة التخطيط تراجع مؤشرات التنمية"}
 
 
 class FakeSMTPSender:
@@ -71,12 +74,11 @@ class FakeSMTPSender:
         assert msg["From"] == SENDER and msg["To"] == SENDER
         assert not msg.get_all("Bcc") and not msg.get_all("Cc")
         parts = list(msg.iter_attachments())
-        assert len(parts) == 2, "Exactly Word and PDF"
+        assert len(parts) == 1, "Exactly one Word attachment"
         assert parts[0].get_content_type() == (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-        assert parts[1].get_content_type() == "application/pdf"
         assert parts[0].get_payload(decode=True).startswith(b"PK")
-        assert parts[1].get_payload(decode=True).startswith(b"%PDF-")
+        assert parts[0].get_filename().endswith(".docx")
         self.sent.append(msg)
         return {}
 
@@ -92,14 +94,13 @@ class DailyProtectedEmailTests(unittest.TestCase):
         self.feed_calls.append(url)
         return publisher_fetch(url, limit)
 
-    def execute(self, *, pdf=pdf_builder, fetch=None):
+    def execute(self, *, capture=publisher_capture, fetch=None):
         with patch.dict(os.environ, self.env, clear=True), \
-             patch("delivery_bridge.build_opener", return_value=self.api), \
-             patch("daily_report.render_pdf", side_effect=pdf):
-            return run(clock=CLOCK, fetch=fetch or self.fetch,
+             patch("delivery_bridge.build_opener", return_value=self.api):
+            return run(clock=CLOCK, fetch=fetch or self.fetch, capture=capture,
                        smtp_factory=FakeSMTPSender)
 
-    def test_digest_real_document_files_two_attachments_and_one_private_receipt(self):
+    def test_digest_one_verified_word_attachment_and_one_private_receipt(self):
         first = self.execute()
         self.assertEqual(first["date_cairo"], "2026-10-13")
         self.assertEqual(first["articles"], 1)
@@ -113,9 +114,9 @@ class DailyProtectedEmailTests(unittest.TestCase):
         self.assertEqual(self.api.writes, 2)
         def forbidden_rss(*args):
             raise AssertionError("Same-day replay must not scan publishers")
-        def forbidden_pdf(*args):
-            raise AssertionError("Same-day replay must not generate PDF")
-        second = self.execute(pdf=forbidden_pdf, fetch=forbidden_rss)
+        def forbidden_capture(*args):
+            raise AssertionError("Same-day replay must not capture images")
+        second = self.execute(capture=forbidden_capture, fetch=forbidden_rss)
         self.assertEqual(second["status"], "already_accepted")
         self.assertTrue(second["source_scan_skipped"])
         self.assertIsNone(second["articles"])
@@ -124,11 +125,19 @@ class DailyProtectedEmailTests(unittest.TestCase):
         self.assertEqual(len(FakeSMTPSender.sent), 1)
         self.assertEqual(self.api.writes, 2)
 
-    def test_no_history_or_match_still_reports_actual_zero_rss_headlines(self):
-        outcome = self.execute(fetch=lambda url, limit: rss())
-        self.assertEqual(outcome["articles"], 0)
-        self.assertTrue(outcome["smtp_accepted"])
-        self.assertEqual(len(FakeSMTPSender.sent), 1)
+    def test_no_news_holds_instead_of_sending_unverified_word(self):
+        with self.assertRaisesRegex(RuntimeError, "digest_publisher_evidence_incomplete"):
+            self.execute(fetch=lambda url, limit: rss())
+        self.assertEqual(self.api.writes, 0)
+        self.assertEqual(len(FakeSMTPSender.sent), 0)
+
+    def test_publisher_access_refused_never_reserves_or_sends(self):
+        def blocked(*args):
+            return {"ok": False, "reason": "publisher_access_refused"}
+        with self.assertRaisesRegex(RuntimeError, "digest_publisher_evidence_incomplete"):
+            self.execute(capture=blocked)
+        self.assertEqual(self.api.writes, 0)
+        self.assertEqual(FakeSMTPSender.sent, [])
 
     def test_wrong_private_ledger_recipient_fails_before_public_news_scan(self):
         self.api.state["approved_recipient_sha256"] = "0" * 64
@@ -170,13 +179,15 @@ class DailyProtectedEmailTests(unittest.TestCase):
             self.execute(fetch=lambda *x: self.fail("no feed"))
         self.assertEqual(FakeSMTPSender.sent, [])
 
-    def test_bad_pdf_never_reserves_or_sends(self):
-        def invalid_pdf(report, file):
-            file.write_bytes(b"not PDF content" * 400)
-        with self.assertRaisesRegex(ValueError, "report_attachment_format_invalid"):
-            self.execute(pdf=invalid_pdf)
+    def test_bad_image_never_reserves_or_sends(self):
+        def corrupted_image(url, publisher, path):
+            path.write_bytes(b"not-a-screenshot" * 1000)
+            return {"ok": True, "actual_url": url,
+                    "title": "وزارة التخطيط تراجع مؤشرات التنمية"}
+        with self.assertRaisesRegex(RuntimeError, "digest_publisher_evidence_incomplete"):
+            self.execute(capture=corrupted_image)
         self.assertEqual(self.api.writes, 0)
-        self.assertEqual(len(FakeSMTPSender.sent), 0)
+        self.assertEqual(FakeSMTPSender.sent, [])
 
     def test_after_smtp_receipt_write_failure_next_run_stays_on_hold(self):
         self.api.spoof_second_write = True
@@ -192,17 +203,15 @@ class DailyProtectedEmailTests(unittest.TestCase):
         self.assertTrue(held["source_scan_skipped"])
         self.assertEqual(len(FakeSMTPSender.sent), 1)
 
-    def test_one_feed_outage_reports_degraded_but_all_down_fails_before_reservation(self):
+    def test_degraded_or_offline_feeds_never_reserve_or_send(self):
         def partial(url, limit):
-            if "hapijournal" in url:
+            if "almasryalyoum" in url:
                 raise TimeoutError("simulate partial outage")
-            return rss()
-        result = self.execute(fetch=partial)
-        self.assertEqual(result["coverage"], "DEGRADED")
-        self.assertEqual(result["articles"], 0)
-        self.assertTrue(result["smtp_accepted"])
-        self.api = FakeGithubContents()
-        FakeSMTPSender.sent = []
+            return publisher_fetch(url, limit)
+        with self.assertRaisesRegex(RuntimeError, "digest_publisher_evidence_incomplete"):
+            self.execute(fetch=partial)
+        self.assertEqual(self.api.writes, 0)
+        self.assertEqual(FakeSMTPSender.sent, [])
         with self.assertRaisesRegex(RuntimeError, "all_public_RSS_sources_failed"):
             self.execute(fetch=lambda *x: (_ for _ in ()).throw(
                 TimeoutError("both feeds down")))
