@@ -6,8 +6,8 @@ A standalone monitoring worker for **publicly published** Egyptian Ministry of P
 
 - **Public RSS inspection:** tested on real GitHub-hosted runner.
 - **Durable public URL observation state:** tested successfully in **two separate GitHub Actions runs**.
-- **Security + state regression suite:** **19/19 PASS** on GitHub.
-- **Scheduling:** OFF. Both workflows are `workflow_dispatch` only.
+- **Full integrated offline regression suite:** **29/29 PASS** on the real GitHub-hosted browser-capture run.
+- **Scheduling:** OFF. All three workflows are `workflow_dispatch` only.
 - **Gmail delivery:** OFF. No Gmail keys, addresses, attachments, recipient lists or private user records are stored in this repository.
 - **Publisher screenshots:** INTEGRATED AND CLOUD-TESTED via independent, manual, public-source-only Chromium workflow with image-quality checks. **Word/PDF and Gmail delivery:** not integrated in this worker; automated end-to-end delivery is not proven.
 
@@ -15,7 +15,7 @@ A standalone monitoring worker for **publicly published** Egyptian Ministry of P
 
 The only currently validated direct-feed source here is `https://hapijournal.com/feed/`. The latest live probes read 10 direct publisher URLs but found zero matching Ministry of Planning headlines. Zero results **do not prove** that no relevant news exists or that the system has comprehensive publisher coverage. The Youm7 RSS endpoint previously failed standard XML parsing in a separate cloud trial and remains disabled.
 
-## Two deliberately separate manual workflows
+## Three deliberately separate manual workflows
 
 **1. RASD public monitoring — manual dry-run only**
 
@@ -33,7 +33,17 @@ Runs the same public intake and offline tests, then reads the existing isolated 
 - A broken/missing expected state file fails closed; source outages cannot silently erase the previous state.
 - If no matching story appears, the run counter still advances. This proves continuity, not a successful detection.
 
-## Manual, source-verified screenshot workflow\n\n**Actions → RASD publisher capture — manual only, no email.** This workflow installs Chromium and Pillow on the free hosted runner, runs all 29 offline tests, reads the reviewed Hapi feed, and photographs at most two matching original publisher pages. It rejects unrelated domains, redirects, blank screenshots, non-news pages, and unusual network URLs. The public screenshots and audit JSON are kept as GitHub Actions artifacts for **one day**, not committed to Git history.\n\nWhen RSS contains **zero matching headlines**, it photographs a separately labeled **historical El Watan public article dated 12 October 2026**, ONLY to verify that real browser screenshots still work. This image must **never** be presented as a newly discovered relevant item or trigger a news alert. Visual inspection and the QA gate both passed in the first cloud test.\n\n- [Gate 10 real cloud screenshot run — success](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38331637986)\n- [GitHub short-lived screenshot and JSON artifact](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38331637986)\n- Live test: Hapi 10 direct RSS links, 0 matched; historical El Watan screenshot 102,947 bytes, HTTP 200, visual standard deviation 68.25, dark pixel fraction 0.175, accepted and manually viewed.\n\n## Evidence
+## 3. Manual, source-verified screenshot workflow
+
+**Actions → RASD publisher capture — manual only, no email.** This workflow installs Chromium and Pillow on the free hosted runner, runs all 29 offline tests, reads the reviewed Hapi feed, and photographs at most two matching original publisher pages. It rejects unrelated domains, redirects outside reviewed publisher hosts, blank screenshots, non-news pages, and unusual network URLs. The public screenshots and audit JSON are kept as GitHub Actions artifacts for **one day**, not committed to Git history.
+
+When RSS contains **zero matching headlines**, it photographs a separately labeled **historical El Watan public article dated 12 October 2026**, ONLY to verify that real browser screenshots still work. This image must **never** be presented as a newly discovered relevant item or trigger a news alert. Visual inspection and the QA gate both passed in the first cloud test.
+
+- [Gate 10 real cloud screenshot run — success](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38331637986)
+- [GitHub short-lived screenshot and JSON artifact](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38331637986)
+- Live test: Hapi 10 direct RSS links, 0 matched; historical El Watan screenshot 102,947 bytes, HTTP 200, visual standard deviation 68.25, dark pixel fraction 0.175, accepted and manually viewed.
+
+## Evidence
 
 - [Cloud state run #1 — success](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38330223809)
 - [Cloud state run #2 — success](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38330365566)
