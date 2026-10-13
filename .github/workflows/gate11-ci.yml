@@ -3,6 +3,7 @@ name: RASD Gate 11 — isolated branch security CI
 on:
   push:
     branches:
+      - main
       - gate11-secure-gmail-bridge
       - gate11-recipient-lock-and-ledger-qa
       - gate11-receipt-readback-hardening
