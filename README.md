@@ -1,67 +1,52 @@
-# RASD Cloud Monitor — Public News Worker (staging)
+# RASD | رصد — Cloud News Monitor
 
-A standalone monitoring worker for **publicly published** Egyptian Ministry of Planning news. This public repository remains separate from the private `RASD-Pilot` code and the earlier public browser-proof repo.
+**Status (13 October 2026): Staging / verified public-news cloud workflows; Gmail production delivery NOT enabled.**
 
-## Status: verified cloud acceptance, NOT autonomous production
+RASD tracks **public Ministry of Planning-related headlines** from reviewed Egyptian publisher-owned RSS feeds. The public runner is hosted by GitHub Actions. All sensitive mail delivery state remains in the separate PRIVATE `Hatem1984/RASD-Pilot` repository; no user credentials or private mail receipts are committed here.
 
-- **Public RSS inspection:** tested on real GitHub-hosted runner.
-- **Durable public URL observation state:** tested successfully in **two separate GitHub Actions runs**.
-- **Full integrated offline regression suite:** **29/29 PASS** on the real GitHub-hosted browser-capture run.
-- **Scheduling:** OFF. All three workflows are `workflow_dispatch` only.
-- **Gmail delivery:** OFF. No Gmail keys, addresses, attachments, recipient lists or private user records are stored in this repository.
-- **Publisher screenshots:** INTEGRATED AND CLOUD-TESTED via independent, manual, public-source-only Chromium workflow with image-quality checks. **Word/PDF and Gmail delivery:** not integrated in this worker; automated end-to-end delivery is not proven.
+## Implemented and cloud-verified
 
-## Source coverage and truthful status
+| Capability | Status | Evidence and caveat |
+| --- | --- | --- |
+| Public original-source RSS | Verified | Hapi + Al Masry Al Youm. Both are real native publisher feeds; temporary outages are exposed as `DEGRADED`, not concealed. |
+| Browser screenshot QA | Verified for historical **QA-only** public publisher page | [Gate 10](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38331637986). A genuinely new eligible RSS article screenshot still needs a live-match test. |
+| Public observation state | Verified | Isolated public `rasd-public-state` branch, URL hashes only; three known successful runs. **Observation is not delivery.** |
+| Private Gmail delivery control | Implementation and simulated E2E verified | SHA-checked private ledger, pinned recipient, at-most-one automated submission attempt, manual HOLD on uncertainty, per-run owner approval. **No real Gmail credentials or delivery yet.** |
+| Private authentication-only preflight | Mock-tested | Manual protected environment required; real account access not yet configured. |
+| Arabic Word + PDF | Cloud document generation and open/structure checks passed | See [Gate 12 guide](GATE12_DAILY_REPORT.md). Current genuine public RSS data, 24h Cairo report window, no invented headlines; source limitations explicit. |
+| Downloadable CI report | Available | Successful report CI uploads a **1-day** public-source-only ZIP with DOCX and PDF after both files pass structural validation. |
+| Unattended cron/email | **OFF** | No production schedule and no real SMTP send; both require separate acceptance and consent. |
 
-The only currently validated direct-feed source here is `https://hapijournal.com/feed/`. The latest live probes read 10 direct publisher URLs but found zero matching Ministry of Planning headlines. Zero results **do not prove** that no relevant news exists or that the system has comprehensive publisher coverage. The Youm7 RSS endpoint previously failed standard XML parsing in a separate cloud trial and remains disabled.
+## Current workflows
 
-## Three deliberately separate manual workflows
+1. [Public RSS manual dry run](.github/workflows/manual-probe.yml) — original publisher feed probes only.
+2. [Public state acceptance](.github/workflows/stateful-manual.yml) — public URL-hash state, manual only.
+3. [Publisher screenshot QA](.github/workflows/capture-manual.yml) — public verified articles; historical fixture explicitly QA-only.
+4. [Gate 11 branch CI](.github/workflows/gate11-ci.yml) — offline security regressions, live RSS read-only scan, and document-generation QA. Push-triggered on **named QA branches only**, NOT scheduled mail.
+5. [Gate 11 Gmail protected bridge](.github/workflows/gate11-manual.yml) — defaults to `dry_run`; optional protected `preflight`; `send` is blocked until account-level environment secrets, fresh manual confirmation and reviewer approval exist.
+6. [Arabic Word + PDF manual digest](.github/workflows/report-manual.yml) — creates DOCX/PDF and a **1-day** GitHub artifact from one RSS observation, no mail or private ledger access.
 
-**1. RASD public monitoring — manual dry-run only**
+## Manual Word/PDF download
 
-Read-only permissions (`contents: read`), offline tests, one public RSS read, short-lived count artifact. No state mutation.
+1. Open [RASD Arabic daily Word and PDF](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/workflows/report-manual.yml).
+2. Use **Run workflow** on `main` (requires the owner's GitHub session).
+3. When the run succeeds, download the `rasd-daily-public-word-pdf` artifact under the run's **Artifacts** section. The ZIP contains one `.docx` and one `.pdf`.
+4. For code-branch QA, a successful latest Gate 11 CI run publishes a separate `rasd-public-report-ci` artifact using only original public headlines. **CI packages are not proof of daily scheduled report delivery.**
 
-**2. RASD state persistence — manual acceptance only**
+An empty report means **no qualifying RSS headline was found in the sources and window checked**, not that no relevant ministry news exists on the internet. Source outages appear as `DEGRADED`. The PDF and Word use a shared observation and sort newest verified headlines **across both publishers before selecting a maximum of 15**.
 
-Runs the same public intake and offline tests, then reads the existing isolated branch `rasd-public-state`, merges newly observed public article URL *hashes*, and writes back `public-state.json`.
+## Strict security and delivery boundary
 
-- Stores **only** schema version, count of successful runs, latest successful scan timestamp, and public URL identity hashes with timestamps.
-- Does **not** store article texts, screenshots, mailboxes, recipients, delivery status or passwords.
-- The branch is **PUBLIC**, as are any data committed there. Never use it for private news, emails, delivery receipts or sensitive fields.
-- The stateful workflow uses repository-scoped `contents: write` permission to push its state branch. This token is *not technically restricted* to that branch by GitHub permissions; the job itself is coded to write only that branch.
-- Concurrent stateful workflow runs are serialized by a shared Actions concurrency group.
-- A broken/missing expected state file fails closed; source outages cannot silently erase the previous state.
-- If no matching story appears, the run counter still advances. This proves continuity, not a successful detection.
+- No secrets, Gmail address, Google account password, mail tokens, signed URLs, private delivery receipts or private file content in the public repo/artifacts.
+- SMTP attempt is withheld until the separate private recipient fingerprint matches and the GitHub state reservation is durably re-read.
+- Real send can only be initiated by the approved owner via a **new** manual `workflow_dispatch` on `main`, a protected environment and new per-run confirmation. Re-run attempts are rejected. It is not possible to guarantee user-visible exactly-once delivery using SMTP + GitHub commits; uncertain states require manual Gmail Sent reconciliation.
+- Screenshots of historic public articles are labeled testing references, never treated as fresh alerts.
+- No paid browser automation, billing changes, personal Windows operations, or cron enablement were performed as part of these gates.
 
-## 3. Manual, source-verified screenshot workflow
+## Acceptance still OPEN
 
-**Actions → RASD publisher capture — manual only, no email.** This workflow installs Chromium and Pillow on the free hosted runner, runs all 29 offline tests, reads the reviewed Hapi feed, and photographs at most two matching original publisher pages. It rejects unrelated domains, redirects outside reviewed publisher hosts, blank screenshots, non-news pages, and unusual network URLs. The public screenshots and audit JSON are kept as GitHub Actions artifacts for **one day**, not committed to Git history.
+**Gate 11 — real protected Gmail:** The owner must configure `rasd-gmail-manual-approval` and the four eligible protected credentials in GitHub directly, then approve preflight. A later separately authorized live-mail test must prove SMTP, private acceptance receipt, Gmail Sent/Inbox image attachment, and safe re-run. Details: [Gate 11 secure setup](GATE11_SECURE_SETUP.md).
 
-When RSS contains **zero matching headlines**, it photographs a separately labeled **historical El Watan public article dated 12 October 2026**, ONLY to verify that real browser screenshots still work. This image must **never** be presented as a newly discovered relevant item or trigger a news alert. Visual inspection and the QA gate both passed in the first cloud test.
+**Gate 12 — manual downloadable artifact:** cloud construction and real document QA are verified. A dedicated `report-manual.yml` GitHub `workflow_dispatch` download still requires owner initiation. Daily scheduled production and Gmail report delivery are **not** enabled.
 
-- [Gate 10 real cloud screenshot run — success](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38331637986)
-- [GitHub short-lived screenshot and JSON artifact](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38331637986)
-- Live test: Hapi 10 direct RSS links, 0 matched; historical El Watan screenshot 102,947 bytes, HTTP 200, visual standard deviation 68.25, dark pixel fraction 0.175, accepted and manually viewed.
-
-## Evidence
-
-- [Cloud state run #1 — success](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38330223809)
-- [Cloud state run #2 — success](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38330365566)
-- [View persisted public state](https://github.com/Hatem1984/RASD-Cloud-Monitor/blob/rasd-public-state/public-state.json)
-- Offline fixture tests prove the same relevant URL is observed **once across two simulated runs**; live RSS happened to return zero matching headlines, so a real-world repeated relevant URL has not yet been observed twice.
-
-## Gate 11: code implemented, real Gmail integration NOT activated
-
-- [Gate 11 delivery security model and live acceptance checklist](GATE11_STATUS.md).
-- [Hosted Gate 11 security CI and real RSS no-mail dry-run](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38333307545): 44/44 offline tests passed; live feed produced 0 eligible articles, 0 screenshots, 0 emails.
-- The separate private ledger was initialized within the existing PRIVATE RASD-Pilot repository on branch `rasd-private-delivery-state`; no identifying receipt data is in this PUBLIC repository.
-- `gate11-manual.yml` defaults to no-mail dry-run and requires a separate protected environment with explicit approval and credentials for its send job. No secrets were supplied; no live autonomous Gmail sending or cron has been tested/activated.
-
-## Next acceptance gates
-
-1. Expand tested direct publisher coverage without accepting malformed RSS or Google News links as original publisher URLs.
-2. **Completed for known reference:** capture and visually validate a real publisher webpage in this worker; **pending**: independently capture a genuinely new RSS-discovered ministry article when a match appears.
-3. Separate private delivery from public discovery. **Observed does not mean sent**. Prove secure, idempotent Gmail dispatch without publishing tokens or private delivery state.
-4. Authorize and test automatic 30-minute scheduling only **after** delivery, usage controls, and other risks are settled.
-
-No new spending, GitHub billing changes, operations on the user's PC filesystem, email dispatch or automatic schedule was performed for these manual acceptance gates.
+Use [Acceptance log](ACCEPTANCE_LOG.md) as the dated, audited source of verified results. Avoid interpreting passing unit tests as real Gmail delivery.
