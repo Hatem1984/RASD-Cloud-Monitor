@@ -90,7 +90,12 @@ def run(mode: str, *, config_path: Path = Path("sources.json"),
     inspected = inspect(config, now=now, **({"fetch": fetch} if fetch else {}))
     candidates = eligible_candidates(inspected, config, now)
     ledger = ledger_factory(auth["RASD_PRIVATE_LEDGER_TOKEN"]) if auth and candidates else None
+    source_records = inspected.get("sources", [])
     results = {"mode": mode, "eligible": len(candidates), "captured": 0,
+               "healthy_sources": sum(x["status"] == "ok" for x in source_records),
+               "failed_sources": sum(x["status"] != "ok" for x in source_records),
+               "verified_publisher_links": inspected["public_verified_publisher_links"],
+               "planning_headline_matches": inspected["planning_headline_matches"],
                "smtp_accepted": 0, "already_accepted": 0,
                "manual_review_hold": 0, "rejected_capture": 0,
                "test_fixture_used": False, "scheduler_enabled": False}
