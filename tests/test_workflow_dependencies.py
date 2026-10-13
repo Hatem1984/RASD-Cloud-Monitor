@@ -30,7 +30,7 @@ class WorkflowDependenciesContractTests(unittest.TestCase):
             line = line.strip()
             if line and not line.startswith("#"):
                 packages.add(re.split(r"[<>=!~]", line, maxsplit=1)[0].casefold())
-        self.assertEqual(packages, {"pillow", "python-docx", "pypdf"})
+        self.assertEqual(packages, {"pillow", "python-docx"})
 
     def test_every_workflow_uses_the_same_test_dependencies(self):
         for name in WORKFLOWS:
