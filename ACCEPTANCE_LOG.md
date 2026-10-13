@@ -98,3 +98,13 @@ These are **three distinct GitHub workflows** and all currently have *manual-onl
 - Read-only connector confirmation: linked Gmail is the approved mailbox; the private ledger's recipient hash equals SHA-256 of that previously authorized mailbox. Two earlier RASD subject messages were present in Sent; they are not evidence of delivery by this autonomous worker.
 - The personal Windows Hatem Commander browser connection was unavailable (404), and the available GitHub connector does not expose Actions environment-secret write methods. Consequently the protected environment, account-specific Google app-password eligibility, and live SMTP delivery remain **unverified and not configured**.
 - **Gate 11 remains OPEN**. No credentials pasted, SMTP test sent, automatic schedule enabled, billing change or local Windows file operation occurred in this hardening pass.
+
+
+## Gate 11 — protected authentication preflight (13 October 2026)
+
+- [PR #4](https://github.com/Hatem1984/RASD-Cloud-Monitor/pull/4) merged as `ed4cb9cced4b3f7b0cde2fddad27ddb1a7f86fa9`.
+- Added `gate11_preflight.py`: separately authorized protected GitHub environment job verifies private ledger read and approved mailbox fingerprint and performs TLS Gmail SMTP **authentication only**. There are zero email transmissions and zero private ledger writes by construction. It does not grant permission for the separate `send` job.
+- Added `preflight` to **manual** mode selector, protected by `rasd-gmail-manual-approval` environment; default `dry_run` and separate explicit `send` approval remain unchanged.
+- Added `GATE11_SECURE_SETUP.md` with exact secure UI path, minimal private-repository token scope, four environment secret names, and explicit ban on sharing secrets in chat/public files. No secrets are configured from this connector.
+- [Cloud acceptance evidence: 38336358797](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38336358797): **59/59** hosted offline tests passed; live publisher RSS `dry_run` succeeded with 0 eligible articles, 0 SMTP attempts, 0 historic fixtures and scheduling off.
+- Stage **GATE11-PREFLIGHT code VERIFIED**, but **operational preflight UNRUN** (protected credentials not available). Gate 11 **OPEN** pending privileged GitHub environment configuration, real authentication-only protected job, explicit consent for actual cloud send, SMTP/private receipt, Gmail Sent/Inbox readback and no-replay evidence.
