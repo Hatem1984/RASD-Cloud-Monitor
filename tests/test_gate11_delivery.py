@@ -1,4 +1,5 @@
 """Gate 11 offline tests: never access Gmail, GitHub network or real credentials."""
+import hashlib
 import json
 import os
 import tempfile
@@ -8,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from delivery_bridge import (
-    build_email, complete_entry, deliver_reserved, gmail_submit,
+    NoGitHubRedirect, build_email, complete_entry, deliver_reserved, gmail_submit,
     reserve_entry, validate_ledger,
 )
 from gate11_runner import candidate_from_feed, eligible_candidates, credentials, run
@@ -28,10 +29,17 @@ CONFIG = {"feeds": [{"id": "hapi", "name": "Hapi native news RSS",
           "max_feed_bytes": 1500000}
 JPEG = b"\xff\xd8" + (b"A" * 9000)
 
+APPROVED_HASH = hashlib.sha256(b"sender@gmail.com").hexdigest()
+
+
+def empty_private_ledger():
+    return {"schema_version": 2, "approved_recipient_sha256": APPROVED_HASH,
+            "entries": {}}
+
 
 class StateMachineTests(unittest.TestCase):
     def test_reserve_then_accept_never_resends(self):
-        initial = {"schema_version": 1, "entries": {}}
+        initial = empty_private_ledger()
         reserved, action = reserve_entry(initial, KEY, NOW.isoformat())
         self.assertEqual(action, "reserved")
         self.assertEqual(initial["entries"], {})
@@ -43,7 +51,7 @@ class StateMachineTests(unittest.TestCase):
         self.assertEqual(action3, "already_accepted")
 
     def test_uncertain_state_is_not_automatically_released(self):
-        reserved, _ = reserve_entry({"schema_version": 1, "entries": {}},
+        reserved, _ = reserve_entry(empty_private_ledger(),
                                     KEY, NOW.isoformat())
         for i in range(3):
             _, action = reserve_entry(reserved, KEY, NOW.isoformat())
@@ -59,7 +67,7 @@ class StateMachineTests(unittest.TestCase):
 
     def test_cannot_mark_unreserved_as_accepted(self):
         with self.assertRaises(ValueError):
-            complete_entry({"schema_version": 1, "entries": {}},
+            complete_entry(empty_private_ledger(),
                            KEY, NOW.isoformat(), "<rasd-" + KEY + "@gmail.com>")
 
 
@@ -80,9 +88,12 @@ class FakeSMTP:
 
 class StubLedger:
     def __init__(self):
-        self.state = {"schema_version": 1, "entries": {}}
+        self.state = empty_private_ledger()
         self.fail_after_smtp = False
-    def reserve(self, key):
+    def reserve(self, key, sender):
+        digest = hashlib.sha256(sender.strip().casefold().encode("utf-8")).hexdigest()
+        if digest != self.state["approved_recipient_sha256"]:
+            raise ValueError("recipient_not_approved_by_private_ledger")
         self.state, action = reserve_entry(self.state, key, NOW.isoformat())
         return action
     def mark_smtp_accepted(self, key, message_id):
@@ -160,6 +171,24 @@ class EmailSafetyTests(unittest.TestCase):
                         JPEG, self.email)
         with self.assertRaisesRegex(ValueError, "historical_or_undated"):
             build_email({**self.article, "published": None}, JPEG, self.email)
+
+    def test_private_ledger_fixes_recipient_despite_matching_env_secrets(self):
+        with tempfile.TemporaryDirectory() as p:
+            image = Path(p) / "image.jpg"
+            image.write_bytes(JPEG)
+            ledger = StubLedger()
+            with self.assertRaisesRegex(ValueError, "recipient_not_approved_by_private_ledger"):
+                deliver_reserved(self.article, image, sender="attacker@gmail.com",
+                                 approved_recipient="attacker@gmail.com",
+                                 app_password="fake-test-only-value",
+                                 ledger=ledger, smtp_factory=FakeSMTP)
+            self.assertEqual(FakeSMTP.sent, 0)
+            self.assertEqual(ledger.state["entries"], {})
+
+    def test_cross_domain_github_ledger_redirect_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "private_ledger_redirect_forbidden"):
+            NoGitHubRedirect().redirect_request(None, None, 302, "Found",
+                                                 {}, "https://attacker.example/token")
 
     def test_wrong_recipient_in_mail_is_never_smtp_submitted(self):
         msg = build_email(self.article, JPEG, self.email)
