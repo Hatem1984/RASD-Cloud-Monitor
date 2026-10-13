@@ -61,7 +61,8 @@ def proof_capture(article: dict, feeds: list[dict], destination: Path,
 
 
 def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
-                       capture=capture_publisher, now: datetime | None = None) -> dict:
+                       capture=capture_publisher, now: datetime | None = None,
+                       archive_writer=None) -> dict:
     """Fail-closed for final Word; produce a redacted audit manifest on HOLD."""
     config = json.loads(config_path.read_text(encoding="utf-8"))
     report = gather(config, fetch=fetch, now=now)
@@ -100,8 +101,31 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
                     raise RuntimeError("publisher_proof_word_invalid")
                 word.replace(output_dir / filename)
             result["word_created"] = True
+            result["archive_status"] = "NOT_CONFIGURED"
+            if archive_writer is not None:
+                # Archive the exact verified bytes while screenshot temp files exist.
+                # Fail closed if cloud upload/readback fails; only a private
+                # manifest written LAST commits a complete archived report.
+                evidence = [(row["id"], Path(tmp) / (row["id"] + ".jpg"),
+                             row["sha256"]) for row in rows]
+                try:
+                    receipt = archive_writer.publish_ready(
+                        report=result, word=output_dir / filename, evidence=evidence)
+                    if (receipt.get("status") != "PRIVATE_VERIFIED" or
+                            receipt.get("screenshots_archived") != len(rows) or
+                            receipt.get("word_archived") is not True):
+                        raise RuntimeError("private_archive_receipt_invalid")
+                except Exception:
+                    (output_dir / filename).unlink(missing_ok=True)
+                    result["status"] = "HOLD"
+                    result["word_created"] = False
+                    result["archive_status"] = "FAILED"
+                else:
+                    result["archive_status"] = "PRIVATE_VERIFIED"
+                    result["archive_manifest_sha256"] = receipt["manifest_sha256"]
         else:
             result["word_created"] = False
+            result["archive_status"] = "NOT_ATTEMPTED"
         manifest_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n",
                                  encoding="utf-8")
         return result
