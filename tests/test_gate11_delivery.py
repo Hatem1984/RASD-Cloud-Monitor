@@ -402,6 +402,10 @@ class CandidateAndDryRunTests(unittest.TestCase):
                              fetch=lambda *a: xml, capture=mock_capture,
                              deliver=impossible_delivery, clock=NOW)
             self.assertEqual(result["captured"], 1)
+            self.assertEqual(result["healthy_sources"], 1)
+            self.assertEqual(result["failed_sources"], 0)
+            self.assertEqual(result["verified_publisher_links"], 1)
+            self.assertEqual(result["planning_headline_matches"], 1)
             self.assertEqual(result["smtp_accepted"], 0)
             self.assertFalse(result["scheduler_enabled"])
             self.assertFalse(result["test_fixture_used"])
