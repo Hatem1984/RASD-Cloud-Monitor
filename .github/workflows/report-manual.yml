@@ -1,4 +1,4 @@
-name: RASD Arabic daily Word and PDF — manual public sources only
+name: RASD Arabic Word-only NEWS PREVIEW — manual (not final proof)
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  generate-word-pdf:
+  generate-word-preview:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -21,32 +21,30 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install free report and browser dependencies
-        run: |
-          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
-          python -m playwright install --with-deps chromium
-      - name: Generate Arabic Word and PDF from original public RSS sources only
+      - name: Install only Word report dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Generate clearly labelled Arabic Word preview; NOT a final screenshot-verified report
         env:
           RASD_GATE11_SEND_APPROVED: ""
         run: python daily_report.py --output-dir report-output
-      - name: Verify both real document files structurally before exposing artifact
+      - name: Verify exactly one Word preview and no final report claim
         run: |
           python - <<'PY'
           from pathlib import Path
           from docx import Document
-          from pypdf import PdfReader
-          word = list(Path("report-output").glob("RASD-Daily-*.docx"))
-          pdf = list(Path("report-output").glob("RASD-Daily-*.pdf"))
-          assert len(word) == 1 and len(pdf) == 1, "expected exactly one Word and PDF"
-          assert word[0].stat().st_size > 3000 and pdf[0].stat().st_size > 3000
-          assert Document(word[0]).paragraphs
-          assert len(PdfReader(pdf[0]).pages) >= 1
-          print("verified_docs=2; email_sent=0; schedule=off")
+          previews = list(Path("report-output").glob("RASD-Preview-*.docx"))
+          assert len(previews) == 1, "expected exactly one Word preview"
+          assert previews[0].stat().st_size > 3000
+          document = Document(previews[0])
+          assert document.paragraphs
+          assert "مسودة" in document.paragraphs[0].text
+          assert not list(Path("report-output").glob("*.pdf"))
+          print("rasd_word_preview_verified; not_final; no_email; no_schedule")
           PY
-      - name: Downloadable public-news-only report for operator, short retention
+      - name: Downloadable Word-only RSS preview, not verified screenshot report
         uses: actions/upload-artifact@v4
         with:
-          name: rasd-daily-public-word-pdf
-          path: report-output/RASD-Daily-*
+          name: rasd-daily-word-preview
+          path: report-output/RASD-Preview-*.docx
           if-no-files-found: error
           retention-days: 1
