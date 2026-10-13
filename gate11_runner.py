@@ -62,8 +62,10 @@ def eligible_candidates(inspection: dict, config: dict, now: datetime, limit: in
     return found
 
 
-def credentials() -> dict:
-    if os.environ.get("RASD_GATE11_SEND_APPROVED") != ENABLE_PHRASE:
+def credentials(*, require_send_approval: bool = True) -> dict:
+    # Preflight deliberately cannot send; it validates auth without needing
+    # the separate consent flag required by the real dispatch path.
+    if require_send_approval and os.environ.get("RASD_GATE11_SEND_APPROVED") != ENABLE_PHRASE:
         raise RuntimeError("gmail_delivery_not_authorized")
     names = ("RASD_GMAIL_USER", "RASD_APPROVED_RECIPIENT",
              "RASD_GMAIL_APP_PASSWORD", "RASD_PRIVATE_LEDGER_TOKEN")
