@@ -23,6 +23,9 @@ RUN_CONFIRMATION_PHRASE = "CONFIRM_ONE_MANUAL_RASD_GMAIL_RUN"
 # Only reviewed, non-sensitive failure labels may reach PUBLIC Actions logs.
 SAFE_CAPTURE_FAILURE_CODES = frozenset({
     "publisher_not_approved", "publisher_http_failure",
+    "publisher_no_http_response", "publisher_access_refused",
+    "publisher_article_unavailable", "publisher_rate_limited",
+    "publisher_server_error",
     "redirect_outside_publisher", "page_content_unavailable",
     "not_a_planning_article", "screenshot_too_small",
     "visual_qa_too_small_dimensions", "visual_qa_blank_or_low_content",

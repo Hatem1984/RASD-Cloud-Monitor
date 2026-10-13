@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
 from PIL import Image, ImageStat, UnidentifiedImageError
 
@@ -19,6 +20,21 @@ CHALLENGE_WORDS = (
     "verify you are human", "just a moment...", "checking your browser",
     "captcha", "access denied",
 )
+
+
+def classify_publisher_http_status(status: int | None) -> str:
+    """A fixed diagnostic code only: no raw response bodies or website text."""
+    if status is None:
+        return "publisher_no_http_response"
+    if status in (401, 403):
+        return "publisher_access_refused"
+    if status == 404 or status == 410:
+        return "publisher_article_unavailable"
+    if status == 429:
+        return "publisher_rate_limited"
+    if 500 <= status <= 599:
+        return "publisher_server_error"
+    return "publisher_http_failure"
 
 
 def allowed_url(url: str, publisher: str, *, asset: bool = False) -> bool:
@@ -57,6 +73,27 @@ def image_quality(path: Path) -> dict:
         return {"accepted": False, "reason": "invalid_image"}
 
 
+def accept_staged_image(staged: Path, destination: Path) -> dict:
+    """Commit a newly captured JPEG only after passing all visual checks.
+
+    Validation errors never overwrite an existing screenshot at destination.
+    Staging files are caller-owned and may be discarded on failure.
+    """
+    if staged.stat().st_size < 8000:
+        return {"ok": False, "reason": "screenshot_too_small"}
+    quality = image_quality(staged)
+    if not quality["accepted"]:
+        return {"ok": False, "reason": "visual_qa_" + quality["reason"],
+                "quality": quality}
+    raw = staged.read_bytes()
+    if not raw.startswith(bytes((0xFF, 0xD8))):
+        return {"ok": False, "reason": "invalid_jpeg_signature"}
+    staged.replace(destination)
+    return {"ok": True, "reason": "accepted",
+            "image": destination.name, "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(), "quality": quality}
+
+
 def capture_publisher(url: str, publisher: str, destination: Path,
                       timeout_ms: int = 26000) -> dict:
     """Capture only a publicly published article within an approved publisher."""
@@ -79,7 +116,8 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                 page = context.new_page()
                 response = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
                 if response is None or not 200 <= response.status < 400:
-                    return {"ok": False, "reason": "publisher_http_failure"}
+                    return {"ok": False, "reason": classify_publisher_http_status(
+                        None if response is None else response.status)}
                 if not allowed_url(page.url, publisher):
                     return {"ok": False, "reason": "redirect_outside_publisher"}
                 title = page.title()
@@ -90,29 +128,17 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                     return {"ok": False, "reason": "not_a_planning_article"}
                 page.wait_for_timeout(1300)
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                page.screenshot(path=str(destination), type="jpeg",
-                                quality=80, full_page=False, timeout=15000)
-                if destination.stat().st_size < 8000:
-                    destination.unlink(missing_ok=True)
-                    return {"ok": False, "reason": "screenshot_too_small"}
-                quality = image_quality(destination)
-                if not quality["accepted"]:
-                    destination.unlink(missing_ok=True)
-                    return {"ok": False, "reason": "visual_qa_" + quality["reason"],
-                            "quality": quality}
-                raw = destination.read_bytes()
-                if not raw.startswith(bytes((0xFF, 0xD8))):
-                    destination.unlink(missing_ok=True)
-                    return {"ok": False, "reason": "invalid_jpeg_signature"}
-                return {"ok": True, "reason": "accepted",
-                        "actual_url": page.url, "title": title[:300],
-                        "http_status": response.status,
-                        "image": destination.name, "bytes": len(raw),
-                        "sha256": hashlib.sha256(raw).hexdigest(),
-                        "quality": quality}
+                with TemporaryDirectory(prefix=".rasd-capture-", dir=destination.parent) as temp:
+                    staged = Path(temp) / "candidate.jpg"
+                    page.screenshot(path=str(staged), type="jpeg",
+                                    quality=80, full_page=False, timeout=15000)
+                    accepted = accept_staged_image(staged, destination)
+                if not accepted["ok"]:
+                    return accepted
+                return {**accepted, "actual_url": page.url,
+                        "title": title[:300], "http_status": response.status}
             finally:
                 browser.close()
     except Exception as exc:
-        # Keep the network/browser error in the audit; never claim a capture.
-        destination.unlink(missing_ok=True)
+        # Only fresh, fully validated files are promoted to destination.
         return {"ok": False, "reason": type(exc).__name__}
