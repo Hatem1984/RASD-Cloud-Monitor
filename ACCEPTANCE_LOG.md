@@ -87,3 +87,14 @@ These are **three distinct GitHub workflows** and all currently have *manual-onl
 - No private Github credential or Gmail app password has been provisioned via this connector. The Github connector does not support deployment-environment and Actions secret APIs, so these are an explicit operational access blocker rather than a failing Python test.
 - **Gate 11 remains OPEN** until a protected environment and approved account credential are provisioned, followed by genuine new-article capture, SMTP acceptance receipt, Gmail Sent/Inbox read-back and second-run no-resend proof.
 
+
+
+## Gate 11 — private delivery read-back hardening, still no live Gmail (13 Oct 2026)
+
+- [PR #3](https://github.com/Hatem1984/RASD-Cloud-Monitor/pull/3) merged as `49bac9f7bf54bdf1fde685b9a1d1a8528e9dc3f8`.
+- The private GitHub Contents API write now requires a verifiable commit receipt and a **separate read-back** of the exact new private state plus changed blob SHA **before proceeding to SMTP**. A seemingly successful HTTP response that did not durably save a reservation no longer triggers delivery.
+- Three new zero-network tests simulate a false-positive API success, an invalid commit receipt, and SMTP acceptance followed by missing receipt persistence. All reject unsafe automatic replay.
+- [Hosted GitHub Actions evidence, run 38335808568](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38335808568): **53/53 offline tests PASS** plus live RSS `dry_run` PASS (0 currently eligible stories, 0 captures, 0 SMTP sends, historical-fixture flag false, schedule off).
+- Read-only connector confirmation: linked Gmail is the approved mailbox; the private ledger's recipient hash equals SHA-256 of that previously authorized mailbox. Two earlier RASD subject messages were present in Sent; they are not evidence of delivery by this autonomous worker.
+- The personal Windows Hatem Commander browser connection was unavailable (404), and the available GitHub connector does not expose Actions environment-secret write methods. Consequently the protected environment, account-specific Google app-password eligibility, and live SMTP delivery remain **unverified and not configured**.
+- **Gate 11 remains OPEN**. No credentials pasted, SMTP test sent, automatic schedule enabled, billing change or local Windows file operation occurred in this hardening pass.
