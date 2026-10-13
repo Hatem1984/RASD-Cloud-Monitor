@@ -20,6 +20,25 @@ from monitor import article_id, canonical_url, inspect
 ENABLE_PHRASE = "YES_I_APPROVE_GMAIL_DELIVERY"
 RUN_CONFIRMATION_PHRASE = "CONFIRM_ONE_MANUAL_RASD_GMAIL_RUN"
 
+# Only reviewed, non-sensitive failure labels may reach PUBLIC Actions logs.
+SAFE_CAPTURE_FAILURE_CODES = frozenset({
+    "publisher_not_approved", "publisher_http_failure",
+    "redirect_outside_publisher", "page_content_unavailable",
+    "not_a_planning_article", "screenshot_too_small",
+    "visual_qa_too_small_dimensions", "visual_qa_blank_or_low_content",
+    "visual_qa_invalid_image", "invalid_jpeg_signature",
+    "TimeoutError", "Error", "url_mismatch", "title_mismatch",
+})
+
+
+def record_capture_rejection(results: dict, reason: str | None) -> None:
+    """Aggregate fixed audit codes; never print URLs, exceptions or page text."""
+    code = reason if isinstance(reason, str) and reason in SAFE_CAPTURE_FAILURE_CODES else "other"
+    results["rejected_capture"] += 1
+    counts = results["capture_rejection_reasons"]
+    counts[code] = counts.get(code, 0) + 1
+
+
 
 def candidate_from_feed(article: dict, config: dict, now: datetime) -> dict | None:
     """Reject old/undated/fixture/unverified articles before screenshot or email."""
@@ -132,22 +151,24 @@ def run(mode: str, *, config_path: Path = Path("sources.json"),
                "planning_headline_matches": inspected["planning_headline_matches"],
                "smtp_accepted": 0, "already_accepted": 0,
                "manual_review_hold": 0, "rejected_capture": 0,
+               "capture_rejection_reasons": {},
                "test_fixture_used": False, "scheduler_enabled": False}
     # Ephemeral hosted-runner directory, not the user's machine or a public artifact.
     with tempfile.TemporaryDirectory(prefix="rasd-g11-") as workdir:
         for article in candidates:
             dest = Path(workdir) / (article["id"] + ".jpg")
             capture_result = capture(article["url"], article["publisher"], dest)
-            if not capture_result.get("ok") or (
-                canonical_url(capture_result.get("actual_url", "")) !=
-                    canonical_url(article["url"])
-            ):
-                results["rejected_capture"] += 1
+            if not capture_result.get("ok"):
+                record_capture_rejection(results, capture_result.get("reason"))
+                continue
+            if (canonical_url(capture_result.get("actual_url", "")) !=
+                    canonical_url(article["url"])):
+                record_capture_rejection(results, "url_mismatch")
                 continue
             # The original publisher headline must agree with browser title.
             # A false negative is safer than attaching a different article.
             if article["headline"].strip()[:12] not in capture_result.get("title", ""):
-                results["rejected_capture"] += 1
+                record_capture_rejection(results, "title_mismatch")
                 continue
             results["captured"] += 1
             if mode == "send":
