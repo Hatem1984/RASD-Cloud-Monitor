@@ -12,6 +12,7 @@ on:
       - gate11-full-pipeline-acceptance
       - gate12-daily-word-pdf-reports
       - gate12-ci-downloadable-artifact-qa
+      - gate13-protected-daily-report-email
 
 permissions:
   contents: read
@@ -26,7 +27,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install only existing test image dependency
-        run: python -m pip install "Pillow>=10,<13" "python-docx>=1.1,<2"
+        run: python -m pip install "Pillow>=10,<13" "python-docx>=1.1,<2" "pypdf>=5,<8"
       - name: All offline tests; NO browser network, NO SMTP, NO secrets
         run: python -m unittest discover -s tests -v
 
