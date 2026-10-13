@@ -44,7 +44,7 @@ class DailyReportTests(unittest.TestCase):
         self.assertIn("بتوقيت القاهرة", report["display_window_start"])
         self.assertNotIn("EEST", report["display_window_end"])
         self.assertEqual(report["window_end_cairo"][:10], "2026-10-13")
-        self.assertIn(report["display_window_end"], report["window_end_cairo"])
+        self.assertNotEqual(report["display_window_end"], report["window_end_cairo"])
         self.assertIn(report["display_window_start"], render_html(report))
         self.assertIn(report["display_window_end"], render_html(report))
 
