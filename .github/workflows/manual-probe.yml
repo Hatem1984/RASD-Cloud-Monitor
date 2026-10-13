@@ -1,0 +1,31 @@
+name: RASD public monitoring — manual dry-run only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-public-manual-probe
+  cancel-in-progress: false
+
+jobs:
+  inspect-public-news:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out this independent public repository
+        uses: actions/checkout@v4
+      - name: Run offline security and deduplication tests
+        run: python -m unittest discover -s tests -v
+      - name: Read one reviewed public RSS feed (no email)
+        run: python monitor.py
+      - name: Save public-only probe evidence for one day
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-public-news-manual-probe
+          path: evidence/latest-probe.json
+          if-no-files-found: warn
+          retention-days: 1
