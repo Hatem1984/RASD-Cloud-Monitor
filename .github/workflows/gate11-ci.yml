@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - gate11-secure-gmail-bridge
+      - gate11-recipient-lock-and-ledger-qa
 
 permissions:
   contents: read
