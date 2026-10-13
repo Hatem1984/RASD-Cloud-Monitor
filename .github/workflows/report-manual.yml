@@ -1,0 +1,52 @@
+name: RASD Arabic daily Word and PDF — manual public sources only
+
+on:
+  workflow_dispatch:
+
+# The reports include only publicly published RSS headlines and original URLs.
+# No mail, no secret, no private state, no schedule, no external browser automation.
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-manual-public-daily-digest
+  cancel-in-progress: false
+
+jobs:
+  generate-word-pdf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install free report and browser dependencies
+        run: |
+          python -m pip install "python-docx>=1.1,<2" "Pillow>=10,<13" "playwright>=1.50,<2" "pypdf>=5,<8"
+          python -m playwright install --with-deps chromium
+      - name: Generate Arabic Word and PDF from original public RSS sources only
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: python daily_report.py --output-dir report-output
+      - name: Verify both real document files structurally before exposing artifact
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from docx import Document
+          from pypdf import PdfReader
+          word = list(Path("report-output").glob("RASD-Daily-*.docx"))
+          pdf = list(Path("report-output").glob("RASD-Daily-*.pdf"))
+          assert len(word) == 1 and len(pdf) == 1, "expected exactly one Word and PDF"
+          assert word[0].stat().st_size > 3000 and pdf[0].stat().st_size > 3000
+          assert Document(word[0]).paragraphs
+          assert len(PdfReader(pdf[0]).pages) >= 1
+          print("verified_docs=2; email_sent=0; schedule=off")
+          PY
+      - name: Downloadable public-news-only report for operator, short retention
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-daily-public-word-pdf
+          path: report-output/RASD-Daily-*
+          if-no-files-found: error
+          retention-days: 1
