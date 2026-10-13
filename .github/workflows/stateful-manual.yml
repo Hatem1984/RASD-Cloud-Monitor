@@ -1,0 +1,82 @@
+name: RASD state persistence — manual acceptance only
+
+on:
+  workflow_dispatch:
+
+# The only write is to a distinct branch containing public URL fingerprints,
+# with NO email credentials, usernames, personal data, photos or story text.
+permissions:
+  contents: write
+
+concurrency:
+  group: rasd-public-fingerprint-state
+  cancel-in-progress: false
+
+jobs:
+  verify-and-persist:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Fetch public worker (no private code)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run all offline tests before touching persistent state
+        run: python -m unittest discover -s tests -v
+      - name: Read previously saved public URL fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          git ls-remote --exit-code --heads origin rasd-public-state >/dev/null
+          status=$?
+          set -e
+          case "$status" in
+            0)
+              git fetch origin rasd-public-state:refs/remotes/origin/rasd-public-state
+              # If the branch exists but the expected file is missing, FAIL CLOSED.
+              git show refs/remotes/origin/rasd-public-state:public-state.json > "$RUNNER_TEMP/rasd-before.json"
+              ;;
+            2)
+              printf '%s\n' '{"schema_version":1,"run_count":0,"last_successful_scan_utc":null,"seen_ids":{}}' > "$RUNNER_TEMP/rasd-before.json"
+              ;;
+            *)
+              echo "Cannot determine state branch; refusing to reset state"
+              exit 1
+              ;;
+          esac
+      - name: Scan real public RSS and merge observed URL hashes
+        run: |
+          python stateful_probe.py --config sources.json \
+            --previous "$RUNNER_TEMP/rasd-before.json" \
+            --next "$RUNNER_TEMP/rasd-next.json" \
+            --evidence evidence/stateful-probe.json
+      - name: Upload public-only audit counts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-public-stateful-probe-${{ github.run_id }}
+          path: evidence/stateful-probe.json
+          retention-days: 1
+          if-no-files-found: error
+      - name: Commit public fingerprints to isolated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git show-ref --verify --quiet refs/remotes/origin/rasd-public-state; then
+            git switch -C rasd-public-state refs/remotes/origin/rasd-public-state
+          else
+            git switch --orphan rasd-public-state
+            git rm -rf --ignore-unmatch . >/dev/null 2>&1 || true
+          fi
+          cp "$RUNNER_TEMP/rasd-next.json" public-state.json
+          git add -- public-state.json
+          if git diff --cached --quiet; then
+            echo "No state differences"
+          else
+            git -c user.name="RASD Public Monitor" \
+                -c user.email="rasd-monitor@users.noreply.github.com" \
+                commit -m "state: record public RSS observation fingerprints"
+            git push origin HEAD:rasd-public-state
+          fi
+          echo "Persisted public state branch. No email or scheduled monitoring."
