@@ -64,6 +64,27 @@ class DailyReportTests(unittest.TestCase):
                 self.assertIn("لم يُعثر", doc_xml)
                 self.assertIn("w:bidi", doc_xml)
 
+    def test_older_first_feed_cannot_hide_newest_second_publisher_story(self):
+        # Regression: the common monitor probe returns the first 15 matches;
+        # a real digest must rank across all feeds BEFORE truncating.
+        def many_stories(url, limit):
+            if url == HAPI:
+                items = [
+                    ("وزارة التخطيط خبر قديم " + str(i),
+                     "https://hapijournal.com/old-planning-" + str(i),
+                     "Tue, 13 Oct 2026 01:00:00 +0000")
+                    for i in range(18)
+                ]
+                return xml(items)
+            return xml([(SECOND_TITLE, SECOND_URL,
+                         "Tue, 13 Oct 2026 03:00:00 +0000")])
+        report = gather(CONFIG, fetch=many_stories, now=NOW)
+        self.assertEqual(len(report["articles"]), 15)
+        self.assertEqual(report["articles"][0]["url"], SECOND_URL)
+        self.assertEqual(report["articles"][0]["headline"], SECOND_TITLE)
+        self.assertEqual(report["articles"][0]["source"],
+                         "Al Masry Al Youm native news RSS")
+
     def test_historical_undated_and_future_dated_items_are_not_reported(self):
         def mixed(url, limit):
             if url != HAPI:
