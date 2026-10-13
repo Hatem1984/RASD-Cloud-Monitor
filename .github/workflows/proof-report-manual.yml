@@ -1,0 +1,40 @@
+name: RASD Gate 18 — screenshot-required report staging (manual, no email)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-cloud-proof-manual-qa
+  cancel-in-progress: false
+
+jobs:
+  prove-news:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install cloud runtime dependencies
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --with-deps chromium
+      - name: Run offline safety and completeness tests
+        run: python -m unittest discover -s tests -v
+      - name: Capture every candidate from original publisher and prepare strict proof
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: python cloud_proof_report.py --output-dir proof-output
+      - name: Retain only proof status manifest during public repository staging
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-proof-audit-${{ github.run_id }}
+          path: proof-output/RASD-Proof-*-manifest.json
+          retention-days: 1
+          if-no-files-found: warn
