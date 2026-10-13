@@ -19,6 +19,19 @@ from monitor import inspect, read_feed
 CAIRO = ZoneInfo("Africa/Cairo")
 WINDOW_HOURS = 24
 MAX_ARTICLES = 15
+ARABIC_MONTHS = (
+    "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+    "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+)
+ARABIC_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
+
+
+def cairo_display_time(moment: datetime) -> str:
+    """Human-readable fully Arabic dates avoid RTL reordering of ISO/EEST text."""
+    local = moment.astimezone(CAIRO)
+    value = (f"{local.day} {ARABIC_MONTHS[local.month - 1]} {local.year}"
+             f"، الساعة {local.hour:02}:{local.minute:02} بتوقيت القاهرة")
+    return value.translate(ARABIC_DIGITS)
 
 
 def gather(config: dict, *, fetch=read_feed, now: datetime | None = None) -> dict:
@@ -63,6 +76,8 @@ def gather(config: dict, *, fetch=read_feed, now: datetime | None = None) -> dic
         "title": "رصد | التقرير الإخباري اليومي",
         "window_start_cairo": since.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
         "window_end_cairo": checked.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
+        "display_window_start": cairo_display_time(since),
+        "display_window_end": cairo_display_time(checked),
         "coverage": coverage,
         "verified_links": observed["public_verified_publisher_links"],
         "rss_matches": observed["planning_headline_matches"],
@@ -134,7 +149,7 @@ def render_docx(report: dict, destination: Path) -> None:
     p.add_run(report["title"])
     p = doc.add_paragraph()
     _rtl(p)
-    p.add_run("الفترة: " + report["window_start_cairo"] + " إلى " + report["window_end_cairo"])
+    p.add_run("الفترة: " + report["display_window_start"] + " إلى " + report["display_window_end"])
     p = doc.add_paragraph()
     _rtl(p)
     p.add_run(
@@ -220,8 +235,8 @@ def render_html(report: dict) -> str:
         '.empty{border:1px solid #cbdde3;border-radius:6px;padding:14px;}'
         'footer{border-top:1px solid #dae7ec;margin-top:22px;font-size:10px;color:#617582;}'
         '</style></head><body><header><h1>' + esc(report["title"]) +
-        '</h1><div>' + esc(report["window_start_cairo"]) + " إلى " +
-        esc(report["window_end_cairo"]) + '</div><div class="badge">' + esc(status) +
+        '</h1><div>' + esc(report["display_window_start"]) + " إلى " +
+        esc(report["display_window_end"]) + '</div><div class="badge">' + esc(status) +
         " | روابط الناشرين: " + esc(report["verified_links"]) +
         " | الأخبار المدرجة: " + esc(len(report["articles"])) +
         "</div></header><main>" + articles +
