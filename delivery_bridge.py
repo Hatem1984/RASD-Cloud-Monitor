@@ -6,16 +6,17 @@ No delivery is attempted without explicit caller authorization.
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 import re
 import smtplib
 import ssl
 from datetime import datetime, timezone
 from email.message import EmailMessage
-from email.utils import make_msgid
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 
 from monitor import article_id
 from capture_public import APPROVED_PUBLISHERS, allowed_url
@@ -24,6 +25,7 @@ PRIVATE_REPO = "Hatem1984/RASD-Pilot"
 PRIVATE_BRANCH = "rasd-private-delivery-state"
 PRIVATE_FILE = "delivery-state.json"
 HEX_ID = re.compile(r"^[0-9a-f]{24}$")
+RECIPIENT_DIGEST = re.compile(r"^[0-9a-f]{64}$")
 MAX_LEDGER_ITEMS = 20000
 
 
@@ -32,9 +34,11 @@ def now_iso() -> str:
 
 
 def validate_ledger(state: dict) -> dict:
-    if not isinstance(state, dict) or set(state) != {"schema_version", "entries"}:
+    if not isinstance(state, dict) or set(state) != {"schema_version", "entries", "approved_recipient_sha256"}:
         raise ValueError("invalid_private_ledger_shape")
-    if state["schema_version"] != 1 or not isinstance(state["entries"], dict):
+    if (state["schema_version"] != 2 or not isinstance(state["entries"], dict)
+            or not isinstance(state["approved_recipient_sha256"], str)
+            or not RECIPIENT_DIGEST.fullmatch(state["approved_recipient_sha256"])):
         raise ValueError("invalid_private_ledger_version")
     if len(state["entries"]) > MAX_LEDGER_ITEMS:
         raise ValueError("private_ledger_capacity_exceeded")
@@ -78,6 +82,11 @@ def complete_entry(state: dict, key: str, clock: str, message_id: str) -> dict:
     return result
 
 
+class NoGitHubRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        raise RuntimeError("private_ledger_redirect_forbidden")
+
+
 class PrivateGitHubLedger:
     """GitHub Contents API, separate PRIVATE repository, compare-and-swap SHA."""
     def __init__(self, token: str):
@@ -99,9 +108,10 @@ class PrivateGitHubLedger:
         })
         # Never log requests, exception bodies, token, or private response data.
         try:
-            with urlopen(request, timeout=20, context=ssl.create_default_context()) as response:
+            opener = build_opener(NoGitHubRedirect(), HTTPSHandler(context=ssl.create_default_context()))
+            with opener.open(request, timeout=20) as response:
                 return json.loads(response.read(3_000_000).decode("utf-8"))
-        except (HTTPError, URLError, TimeoutError, ValueError) as error:
+        except (HTTPError, URLError, TimeoutError, ValueError, RuntimeError):
             raise RuntimeError("private_ledger_request_failed") from None
 
     def read(self) -> tuple[dict, str]:
@@ -120,8 +130,11 @@ class PrivateGitHubLedger:
         self._request("PUT", {"message": "gate11: update private mail acceptance ledger",
                               "branch": PRIVATE_BRANCH, "sha": sha, "content": content})
 
-    def reserve(self, article_key: str) -> str:
+    def reserve(self, article_key: str, sender: str) -> str:
         state, sha = self.read()
+        recipient = hashlib.sha256(sender.strip().casefold().encode("utf-8")).hexdigest()
+        if not hmac.compare_digest(recipient, state["approved_recipient_sha256"]):
+            raise ValueError("recipient_not_approved_by_private_ledger")
         updated, action = reserve_entry(state, article_key, now_iso())
         if action == "reserved":
             # Commit must complete BEFORE SMTP transmission.
@@ -203,7 +216,7 @@ def deliver_reserved(article: dict, image_file: Path, *,
     if not image_file.is_file():
         raise ValueError("verified_image_not_available")
     message = build_email(article, image_file.read_bytes(), sender)
-    action = ledger.reserve(article["id"])
+    action = ledger.reserve(article["id"], sender)
     if action != "reserved":
         return action
     receipt = gmail_submit(message, sender, app_password, smtp_factory=smtp_factory)

@@ -48,3 +48,12 @@ Gate 10 was closed: 29/29 hosted tests in each of 3 manual workflows; public-sta
 
 ## Cost notes
 Standard GitHub-hosted Ubuntu runners in a public repository are currently free by official GitHub pricing. The new Gate 11 pipeline uploads no artifacts. Private RASD-Pilot Actions are not invoked. Artifact/storage quotas, service terms and account eligibility must still be checked before automatic scheduling. No cost authorization or billing change is requested.
+
+## Gate 11 hardening verification (13 October 2026)
+
+- The separate private ledger has been safely upgraded from empty schema v1 to empty schema v2. It holds the fingerprint of the single approved recipient and never stores email credentials.
+- The cloud delivery code now rejects any sender inconsistent with that independently stored private fingerprint, even if both Actions address settings accidentally match an unapproved mailbox.
+- GitHub private-ledger API redirects are rejected before bearer credentials can be sent to another destination.
+- Hosted CI: 50 out of 50 offline tests passed, including mocked real GitHub Contents API state commits, conflict rejection before SMTP, and duplicate suppression.
+- Hosted live-source dry-run also passed, with zero eligible articles and zero Gmail sends. Evidence: https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38334975735
+- Real Gmail credentials remain unconfigured; no real SMTP send, inbox verification, or automatic schedule. Gate 11 still OPEN.
