@@ -6,6 +6,7 @@ on:
       - gate11-secure-gmail-bridge
       - gate11-recipient-lock-and-ledger-qa
       - gate11-receipt-readback-hardening
+      - gate11-protected-preflight
 
 permissions:
   contents: read
