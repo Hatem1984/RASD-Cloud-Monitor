@@ -13,6 +13,7 @@ on:
       - gate12-daily-word-pdf-reports
       - gate12-ci-downloadable-artifact-qa
       - gate13-protected-daily-report-email
+      - gate14-workflow-dependency-hardening
 
 permissions:
   contents: read
@@ -27,7 +28,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install only existing test image dependency
-        run: python -m pip install "Pillow>=10,<13" "python-docx>=1.1,<2" "pypdf>=5,<8"
+        run: python -m pip install -r requirements-test.txt
       - name: All offline tests; NO browser network, NO SMTP, NO secrets
         run: python -m unittest discover -s tests -v
 
@@ -43,7 +44,7 @@ jobs:
           python-version: '3.11'
       - name: Install browser with public dependencies only; no credentials
         run: |
-          python -m pip install "Pillow>=10,<13" "playwright>=1.50,<2" "python-docx>=1.1,<2" "pypdf>=5,<8"
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
           python -m playwright install --with-deps chromium
       - name: Inspect actual publisher feed with no mail and no persistent private state
         env:
