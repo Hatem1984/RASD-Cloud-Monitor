@@ -21,6 +21,21 @@ CHALLENGE_WORDS = (
 )
 
 
+def classify_publisher_http_status(status: int | None) -> str:
+    """A fixed diagnostic code only: no raw response bodies or website text."""
+    if status is None:
+        return "publisher_no_http_response"
+    if status in (401, 403):
+        return "publisher_access_refused"
+    if status == 404 or status == 410:
+        return "publisher_article_unavailable"
+    if status == 429:
+        return "publisher_rate_limited"
+    if 500 <= status <= 599:
+        return "publisher_server_error"
+    return "publisher_http_failure"
+
+
 def allowed_url(url: str, publisher: str, *, asset: bool = False) -> bool:
     """Disallow IPs, unrelated origins, non-TLS schemes and unusual ports."""
     try:
@@ -79,7 +94,8 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                 page = context.new_page()
                 response = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
                 if response is None or not 200 <= response.status < 400:
-                    return {"ok": False, "reason": "publisher_http_failure"}
+                    return {"ok": False, "reason": classify_publisher_http_status(
+                        None if response is None else response.status)}
                 if not allowed_url(page.url, publisher):
                     return {"ok": False, "reason": "redirect_outside_publisher"}
                 title = page.title()
