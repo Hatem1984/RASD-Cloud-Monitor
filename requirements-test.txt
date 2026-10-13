@@ -1,0 +1,5 @@
+# Unified offline test dependencies for every GitHub Actions workflow that discovers tests.
+# Excludes Playwright browser binaries; install Chromium only where needed.
+Pillow>=10,<13
+python-docx>=1.1,<2
+pypdf>=5,<8
