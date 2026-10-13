@@ -47,12 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment: rasd-gmail-manual-approval
-    env:
-      RASD_GATE11_SEND_APPROVED: ${{ secrets.RASD_GATE11_SEND_APPROVED }}
-      RASD_GMAIL_USER: ${{ secrets.RASD_GMAIL_USER }}
-      RASD_APPROVED_RECIPIENT: ${{ secrets.RASD_APPROVED_RECIPIENT }}
-      RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
-      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -65,4 +60,10 @@ jobs:
       - name: Verify offline safety before any live delivery
         run: python -m unittest discover -s tests -v
       - name: New publisher-verified images with private SMTP receipt
+        env:
+          RASD_GATE11_SEND_APPROVED: ${{ secrets.RASD_GATE11_SEND_APPROVED }}
+          RASD_GMAIL_USER: ${{ secrets.RASD_GMAIL_USER }}
+          RASD_APPROVED_RECIPIENT: ${{ secrets.RASD_APPROVED_RECIPIENT }}
+          RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
+          RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
         run: python gate11_runner.py --mode send
