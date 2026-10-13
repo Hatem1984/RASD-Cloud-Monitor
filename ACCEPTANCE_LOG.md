@@ -40,3 +40,15 @@ The current test is a **working cloud dry-run**, not an autonomous production ne
 - State stores only hashed public source URLs, first observation timestamps and scan counters; it has no messages, credentials, names, recipient addresses, email status or private project files.
 - Important distinction: these are **observations**, not delivery receipts, and GitHub Actions `contents: write` permission is repository-wide even though the workflow pushes exclusively to the public state branch.
 - **Acceptance:** GitHub runner and branch persistence PASS. Automated daily monitoring / screenshot-in-worker / private Gmail delivery / exactly-once email remain NOT implemented or enabled.
+
+
+## Gate 10 — real browser screenshot integrated in the public worker (13 October 2026)
+
+- **Actual hosted runner:** [capture #1, run 38331637986](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38331637986): **SUCCESS**. Chromium + Pillow installed; **29/29 offline security/observation/image tests passed** in GitHub Actions.
+- The worker read the Hapi native RSS: **10 direct publisher links**, **0 matching ministry headlines**, so **NO newly discovered headline could be photographed** in this run. It correctly used an explicitly marked **historical regression article** from El Watan (`https://www.elwatannews.com/news/details/8375816`) as the screenshot test, without adding it as a discovered story.
+- Captured an original publisher page on 13 October, HTTP **200**, JPEG **1200 × 900**, **102,947 bytes**, SHA-256 `b1ba75b821df0922d42bcb45c5ff333bae53a12acaccb867f25a0fe738827ef1`.
+- The result's image-quality checks passed: luminance standard deviation **68.25** and dark-pixel fraction **0.175**. The artifact JPEG and JSON were downloaded, inspected and the JPEG verified byte-for-byte against the runner's logged SHA-256; the original newspaper logo, date and exact headline are visibly rendered.
+- Screenshot and report were uploaded as a **one-day public Actions artifact**, NOT committed to Git history.
+- The new browser workflow retains `workflow_dispatch` only, read-only permissions, no emails, no secrets, no scheduled trigger and no state writes. Asset requests are restricted to the approved publisher domain and its subdomains.
+- The two existing workflow suites were upgraded to install Pillow before running the expanded offline test discovery; they require regression cloud validation on their updated commits.
+- **Acceptance:** real public publisher screenshot + visual content validation inside the RASD Cloud Monitor worker **PASS**. Automatic new-story capture is NOT confirmed until a real RSS match occurs. Gmail delivery and 30-minute cron remain OFF. No paid services were enabled.
