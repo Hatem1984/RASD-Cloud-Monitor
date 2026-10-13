@@ -37,6 +37,10 @@ MANUAL_SEND_ENV = {
     "RASD_GATE11_SEND_APPROVED": "YES_I_APPROVE_GMAIL_DELIVERY",
     "GITHUB_EVENT_NAME": "workflow_dispatch",
     "GITHUB_REF": "refs/heads/main",
+    "GITHUB_REPOSITORY": "Hatem1984/RASD-Cloud-Monitor",
+    "GITHUB_ACTOR": "Hatem1984",
+    "GITHUB_RUN_ATTEMPT": "1",
+    "GITHUB_RUN_ID": "456789123",
     "RASD_GATE11_RUN_CONFIRMATION": "CONFIRM_ONE_MANUAL_RASD_GMAIL_RUN",
     "RASD_GMAIL_USER": "sender@gmail.com",
     "RASD_APPROVED_RECIPIENT": "sender@gmail.com",
@@ -446,6 +450,30 @@ class CandidateAndDryRunTests(unittest.TestCase):
                 with patch.dict(os.environ, environment, clear=True):
                     with self.assertRaisesRegex(RuntimeError,
                                                 "gmail_delivery_requires_manual_main_dispatch"):
+                        credentials()
+
+    def test_github_rerun_cannot_reuse_past_mail_approval(self):
+        for attempt in ("2", "3", "", "zero"):
+            with self.subTest(attempt=attempt):
+                e = {**MANUAL_SEND_ENV, "GITHUB_RUN_ATTEMPT": attempt}
+                with patch.dict(os.environ, e, clear=True):
+                    with self.assertRaisesRegex(RuntimeError,
+                                                "gmail_delivery_requires_new_workflow_run"):
+                        credentials()
+        with patch.dict(os.environ, {**MANUAL_SEND_ENV, "GITHUB_RUN_ID": ""}, clear=True):
+            with self.assertRaisesRegex(RuntimeError,
+                                        "gmail_delivery_requires_new_workflow_run"):
+                credentials()
+
+    def test_other_repository_or_actor_cannot_send_using_cached_confirmation(self):
+        variants = ({"GITHUB_REPOSITORY": "Other/RASD-Cloud-Monitor"},
+                    {"GITHUB_ACTOR": "unapproved-collaborator"},
+                    {"GITHUB_ACTOR": ""})
+        for overrides in variants:
+            with self.subTest(overrides=overrides):
+                with patch.dict(os.environ, {**MANUAL_SEND_ENV, **overrides}, clear=True):
+                    with self.assertRaisesRegex(RuntimeError,
+                                                "gmail_delivery_requires_approved_repo_owner"):
                         credentials()
 
     def test_static_environment_secret_without_per_run_consent_fails_closed(self):
