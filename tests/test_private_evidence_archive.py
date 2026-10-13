@@ -108,6 +108,17 @@ class PrivateArchiveTests(unittest.TestCase):
                 self.store.publish_ready(report=ready_report(), word=word, evidence=images)
         self.assertFalse(any("/manifests/" in key for key in self.client.objects))
 
+    def test_archive_refuses_word_missing_the_approved_screenshot(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            word, images = self.proof(root)
+            other_doc = Document()
+            other_doc.add_paragraph("Missing screenshot despite a publisher proof.")
+            other_doc.save(word)
+            with self.assertRaisesRegex(RuntimeError, "private_archive_embedded_screenshot_mismatch"):
+                self.store.publish_ready(report=ready_report(), word=word, evidence=images)
+        self.assertFalse(any("/manifests/" in key for key in self.client.objects))
+
     def test_illegal_bucket_and_prefix_blocked(self):
         with self.assertRaises(ValueError):
             PrivateEvidenceArchive(self.client, bucket="../public")
