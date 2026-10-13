@@ -56,9 +56,10 @@ jobs:
           import json
           import os
           from pathlib import Path
-          result = json.loads(
-              Path(os.environ["RUNNER_TEMP"], "rasd-capture-readonly.json").read_text()
-          )
+          lines = Path(
+              os.environ["RUNNER_TEMP"], "rasd-capture-readonly.json"
+          ).read_text().splitlines()
+          result = json.loads(lines[0])  # Following lines may be Actions warnings.
           if result["eligible"] and not result["captured"]:
               print("::warning::Publisher screenshot NOT verified: consult sanitized rejection codes; RSS and Word/PDF can still pass.")
           PY
