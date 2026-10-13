@@ -177,6 +177,11 @@ def render_docx(report: dict, destination: Path) -> None:
             link_paragraph = doc.add_paragraph()
             _rtl(link_paragraph)
             _word_hyperlink(link_paragraph, article["url"])
+            if article.get("evidence_image_path"):
+                evidence_note = doc.add_paragraph()
+                _rtl(evidence_note)
+                evidence_note.add_run("لقطة موثقة من صفحة الناشر الأصلية").italic = True
+                doc.add_picture(article["evidence_image_path"], width=Inches(5.6))
     p = doc.add_paragraph()
     _rtl(p)
     p.add_run("حالة المصادر").bold = True
@@ -200,12 +205,19 @@ def render_docx(report: dict, destination: Path) -> None:
 def render_html(report: dict) -> str:
     esc = lambda val: html.escape(str(val), quote=True)
     def article_html(article, i):
+        evidence = article.get("evidence_image_base64")
+        screenshot_html = (
+            '<figure><img class="evidence" alt="Publisher article screenshot" src="data:image/jpeg;base64,' +
+            evidence + '"><figcaption>لقطة موثقة من صفحة الناشر الأصلية</figcaption></figure>'
+            if evidence else ""
+        )
         return (
             '<section class="article"><h2>' + str(i) + ". " + esc(article["headline"]) +
             '</h2><p class="meta">' + esc(article["source"]) + " | " +
             esc(article["published_at_cairo"]) +
             '</p><p class="url"><a rel="noopener noreferrer" href="' +
-            esc(article["url"]) + '">' + esc(article["url"]) + "</a></p></section>"
+            esc(article["url"]) + '">' + esc(article["url"]) + "</a></p>" +
+            screenshot_html + "</section>"
         )
     articles = "".join(article_html(article, i)
                        for i, article in enumerate(report["articles"], 1))
@@ -231,6 +243,9 @@ def render_html(report: dict) -> str:
         '.url{color:#086a80;font-size:9px;direction:ltr;text-align:left;overflow-wrap:anywhere;}'
         '.url a{color:inherit;text-decoration:underline;}'
         '.article{padding:10px 0;border-bottom:1px solid #dae7ec;break-inside:avoid;}'
+        'figure{margin:12px 0 3px;text-align:center;break-inside:avoid;}'
+        'img.evidence{display:block;max-width:100%;max-height:175mm;object-fit:contain;margin:auto;}'
+        'figcaption{font-size:10px;color:#536c7d;margin-top:4px;}'
         '.badge{font-size:11px;color:#495f6b;}'
         '.empty{border:1px solid #cbdde3;border-radius:6px;padding:14px;}'
         'footer{border-top:1px solid #dae7ec;margin-top:22px;font-size:10px;color:#617582;}'

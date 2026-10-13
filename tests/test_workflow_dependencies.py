@@ -17,6 +17,7 @@ WORKFLOWS = (
     "gate11-ci.yml",
     "report-manual.yml",
     "digest-mail-manual.yml",
+    "proof-report-manual.yml",
 )
 TEST_REQUIREMENTS = "python -m pip install -r requirements-test.txt"
 
@@ -47,7 +48,7 @@ class WorkflowDependenciesContractTests(unittest.TestCase):
                         before_send.index("python gate11_preflight.py"))
 
     def test_gate11_approval_and_scheduled_send_remain_inactive(self):
-        for name in ("gate11-manual.yml", "digest-mail-manual.yml", "report-manual.yml"):
+        for name in ("gate11-manual.yml", "digest-mail-manual.yml", "report-manual.yml", "proof-report-manual.yml"):
             source = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
                 self.assertIn("workflow_dispatch:", source)
