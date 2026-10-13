@@ -20,6 +20,13 @@ from monitor import article_id, canonical_url, inspect
 ENABLE_PHRASE = "YES_I_APPROVE_GMAIL_DELIVERY"
 RUN_CONFIRMATION_PHRASE = "CONFIRM_ONE_MANUAL_RASD_GMAIL_RUN"
 
+# Only these two owner-initiated, human-reviewed workflows may authorize mail.
+# The digest has its own additional exact-workflow check before reading state.
+APPROVED_SEND_WORKFLOW_REFS = frozenset({
+    "Hatem1984/RASD-Cloud-Monitor/.github/workflows/gate11-manual.yml@refs/heads/main",
+    "Hatem1984/RASD-Cloud-Monitor/.github/workflows/digest-mail-manual.yml@refs/heads/main",
+})
+
 
 def candidate_from_feed(article: dict, config: dict, now: datetime) -> dict | None:
     """Reject old/undated/fixture/unverified articles before screenshot or email."""
@@ -53,14 +60,19 @@ def candidate_from_feed(article: dict, config: dict, now: datetime) -> dict | No
 
 
 def eligible_candidates(inspection: dict, config: dict, now: datetime, limit: int = 2) -> list[dict]:
-    found = []
-    for article in inspection.get("matched_public_articles", []):
-        valid = candidate_from_feed(article, config, now)
-        if valid:
-            found.append(valid)
-        if len(found) >= limit:
-            break
-    return found
+    """Prefer truly freshest publisher-verified items, independent of feed order."""
+    if type(limit) is not int or not 1 <= limit <= 200:
+        raise ValueError("invalid_candidate_limit")
+    valid = [
+        candidate for article in inspection.get("matched_public_articles", [])
+        if (candidate := candidate_from_feed(article, config, now)) is not None
+    ]
+    # candidate_from_feed already validated tz-aware dates and source hosts.
+    valid.sort(
+        key=lambda article: parsedate_to_datetime(article["published"]).astimezone(timezone.utc),
+        reverse=True,
+    )
+    return valid[:limit]
 
 
 def credentials(*, require_send_approval: bool = True) -> dict:
@@ -84,6 +96,8 @@ def credentials(*, require_send_approval: bool = True) -> dict:
         # A new human-entered confirmation for EACH manual workflow run.
         if os.environ.get("RASD_GATE11_RUN_CONFIRMATION") != RUN_CONFIRMATION_PHRASE:
             raise RuntimeError("gmail_delivery_requires_per_run_confirmation")
+        if os.environ.get("GITHUB_WORKFLOW_REF") not in APPROVED_SEND_WORKFLOW_REFS:
+            raise RuntimeError("gmail_delivery_requires_reviewed_workflow")
     names = ("RASD_GMAIL_USER", "RASD_APPROVED_RECIPIENT",
              "RASD_GMAIL_APP_PASSWORD", "RASD_PRIVATE_LEDGER_TOKEN")
     env = {name: os.environ.get(name, "") for name in names}
@@ -104,7 +118,8 @@ def run(mode: str, *, config_path: Path = Path("sources.json"),
     now = datetime.now(timezone.utc) if clock is None else clock
     if now.tzinfo is None:
         raise ValueError("naive_clock_forbidden")
-    inspected = inspect(config, now=now, **({"fetch": fetch} if fetch else {}))
+    inspected = inspect(config, now=now, article_limit=200,
+                        **({"fetch": fetch} if fetch else {}))
     candidates = eligible_candidates(inspected, config, now)
     ledger = ledger_factory(auth["RASD_PRIVATE_LEDGER_TOKEN"]) if auth and candidates else None
     source_records = inspected.get("sources", [])
