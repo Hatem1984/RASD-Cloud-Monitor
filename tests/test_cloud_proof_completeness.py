@@ -4,11 +4,9 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
 from PIL import Image, ImageDraw
 from docx import Document
 from cloud_proof_report import build_proof_report
-from daily_report import render_html
 
 NOW = datetime(2026, 10, 13, 12, tzinfo=timezone.utc)
 TITLE = "وزارة التخطيط تستعرض مؤشرات التنمية الاقتصادية"
@@ -32,22 +30,19 @@ def capture(url, publisher, destination):
 
 
 class CloudReportProofTests(unittest.TestCase):
-    def test_all_images_embedded_in_word_and_pdf_markup(self):
-        def make_pdf(report, destination):
-            markup = render_html(report)
-            self.assertEqual(markup.count("data:image/jpeg;base64,"), 2)
-            destination.write_bytes(b"%PDF-1.4 offline rendering fixture")
-        with tempfile.TemporaryDirectory() as tmp, patch(
-                "cloud_proof_report.render_pdf", side_effect=make_pdf):
+    def test_all_verified_publisher_images_embedded_in_final_word_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
             report = build_proof_report(Path("sources.json"), Path(tmp),
                                         fetch=fetch, capture=capture, now=NOW)
             self.assertEqual(report["status"], "READY")
             self.assertEqual(report["screenshots_verified"], 2)
+            self.assertTrue(report["word_created"])
             self.assertEqual(report["owner_pc_required"], False)
-            words = list(Path(tmp).glob("*.docx"))
+            words = list(Path(tmp).glob("RASD-Daily-*.docx"))
             self.assertEqual(len(words), 1)
-            self.assertEqual(len(Document(words[0]).inline_shapes), 2)
-            self.assertEqual(len(list(Path(tmp).glob("*.pdf"))), 1)
+            doc = Document(words[0])
+            self.assertEqual(len(doc.inline_shapes), 2)
+            self.assertFalse(list(Path(tmp).glob("*.pdf")))
 
     def test_degraded_source_coverage_holds_final_report(self):
         def one_feed(url, limit):

@@ -1,4 +1,4 @@
-"""Offline acceptance of Arabic Word/PDF digest; fake RSS only, no SMTP or network."""
+"""Offline acceptance of Arabic Word-only preview; fake RSS only, no SMTP or network."""
 from __future__ import annotations
 
 import json
@@ -7,7 +7,6 @@ import unittest
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
 
 from daily_report import cairo_display_time, gather, generate, render_docx, render_html
 
@@ -150,26 +149,26 @@ class DailyReportTests(unittest.TestCase):
             self.assertIn("w:bidi", body)
             self.assertNotIn("RASD_GMAIL_APP_PASSWORD", body)
 
-    def test_pdf_and_docx_share_one_exact_source_snapshot(self):
-        report_calls = []
+    def test_word_only_preview_uses_one_exact_source_snapshot(self):
+        calls = []
         def once(url, limit):
-            report_calls.append(url)
+            calls.append(url)
             return fetch_both(url, limit)
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             cfg = root / "sources.json"
             cfg.write_text(json.dumps(CONFIG), encoding="utf-8")
-            def fake_pdf(report, dest):
-                self.assertEqual(len(report["articles"]), 2)
-                self.assertTrue((root / "out" / "RASD-Daily-2026-10-13.docx").is_file())
-                dest.write_bytes(b"%PDF-1.7\n" + b"P" * 5000)
-            with patch("daily_report.render_pdf", side_effect=fake_pdf):
-                output = generate(cfg, root / "out", fetch=once, now=NOW)
-            self.assertTrue(output["word_created"] and output["pdf_created"])
-            self.assertEqual(len(report_calls), 2)  # one read per publisher only
-            self.assertEqual(output["articles"], 2)
-            self.assertFalse(output["email_sent"])
-            self.assertFalse(output["scheduler_enabled"])
+            result = generate(cfg, root / "out", fetch=once, now=NOW)
+            self.assertTrue(result["word_created"])
+            self.assertTrue(result["preview_only"])
+            self.assertNotIn("pdf_created", result)
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(result["articles"], 2)
+            self.assertEqual(len(list((root / "out").glob("*.docx"))), 1)
+            self.assertFalse(list((root / "out").glob("*.pdf")))
+            self.assertEqual(result["mode"], "manual_public_word_preview")
+            self.assertFalse(result["email_sent"])
+            self.assertFalse(result["scheduler_enabled"])
 
 
 if __name__ == "__main__":

@@ -1,5 +1,12 @@
 # RASD | رصد — Cloud News Monitor
 
+**Current product decision — 14 October 2026: WORD (.docx) ONLY.** No PDF generation, PDF attachment or PDF report artifacts in active RASD workflows. A final report is valid only when EVERY included article has an original-publisher-page screenshot embedded in its Word document and all reviewed feeds are healthy. If not, the strict report stays `HOLD` (no final DOCX). A text-only RSS Word preview remains available but is explicitly labelled **مسودة** and is NOT a final report.
+
+**Cloud-only:** GitHub-hosted workers do not depend on the owner's laptop. APK/EXE and long-running server architecture are planned, not yet deployed. No live Gmail or automatic schedules authorized.
+
+**Historical note:** Gate 12/13 acceptance and older lines below describing PDF document generation refer to the pre-Gate19 implementation and are superseded by the Word-only policy above. Historical evidence is kept for audit continuity.
+
+
 **Status (13 October 2026): Staging / verified public-news cloud workflows; Gmail production delivery NOT enabled.**
 
 RASD tracks **public Ministry of Planning-related headlines** from reviewed Egyptian publisher-owned RSS feeds. The public runner is hosted by GitHub Actions. All sensitive mail delivery state remains in the separate PRIVATE `Hatem1984/RASD-Pilot` repository; no user credentials or private mail receipts are committed here.

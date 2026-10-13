@@ -1,4 +1,4 @@
-"""RASD daily read-only Arabic Word/PDF digest of validated original RSS headlines.
+"""RASD daily read-only Arabic Word preview of validated original RSS headlines.
 
 Manual cloud report only. Never sends Gmail, reads private credentials or
 mutates persistent state. RSS headline coverage is not comprehensive news coverage.
@@ -260,40 +260,20 @@ def render_html(report: dict) -> str:
     )
 
 
-def render_pdf(report: dict, destination: Path) -> None:
-    from playwright.sync_api import sync_playwright
-
-    markup = render_html(report)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
-        try:
-            context = browser.new_context(accept_downloads=False, service_workers="block")
-            context.route("**/*", lambda route: route.abort())
-            page = context.new_page()
-            page.set_content(markup, wait_until="load")
-            page.pdf(path=str(destination), format="A4", print_background=True,
-                     prefer_css_page_size=True)
-        finally:
-            browser.close()
-    if not destination.is_file() or destination.stat().st_size < 2500:
-        raise RuntimeError("pdf_report_render_invalid")
-
 
 def generate(config_path: Path, output_dir: Path, *, fetch=read_feed,
              now: datetime | None = None) -> dict:
     config = json.loads(config_path.read_text(encoding="utf-8"))
     report = gather(config, fetch=fetch, now=now)
-    # Names include only the Cairo calendar day; no article bodies, personal
-    # information or credentials are placed into artifacts.
+    # Preview never claims to contain publisher-page screenshot evidence.
+    # Only the strict cloud proof report may be treated as a final RASD report.
+    report["title"] = "رصد | مسودة رصد يومية (بدون صور)"
     stamp = report["window_end_cairo"][:10]
-    docx = output_dir / ("RASD-Daily-" + stamp + ".docx")
-    pdf = output_dir / ("RASD-Daily-" + stamp + ".pdf")
+    docx = output_dir / ("RASD-Preview-" + stamp + ".docx")
     render_docx(report, docx)
-    render_pdf(report, pdf)
-    return {"mode": "manual_public_daily_report",
+    return {"mode": "manual_public_word_preview",
             "word_created": docx.is_file(),
-            "pdf_created": pdf.is_file(),
+            "preview_only": True,
             "articles": len(report["articles"]),
             "sources_healthy": sum(s["status"] == "ok" for s in report["sources"]),
             "sources_failed": sum(s["status"] != "ok" for s in report["sources"]),
@@ -302,9 +282,8 @@ def generate(config_path: Path, output_dir: Path, *, fetch=read_feed,
             "scheduler_enabled": False,
             "private_state_used": False}
 
-
 def main():
-    parser = argparse.ArgumentParser(description="Generate source-backed Arabic RASD Word and PDF")
+    parser = argparse.ArgumentParser(description="Generate source-backed Arabic Word preview (not final evidence)")
     parser.add_argument("--output-dir", type=Path, default=Path("report-output"))
     args = parser.parse_args()
     try:

@@ -7,7 +7,6 @@ No Gmail, schedule, bypass or private delivery state is involved.
 """
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import tempfile
@@ -16,7 +15,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from capture_public import APPROVED_PUBLISHERS, allowed_url, capture_publisher, image_quality
-from daily_report import gather, render_docx, render_pdf
+from daily_report import gather, render_docx
 from gate11_runner import SAFE_CAPTURE_FAILURE_CODES
 from monitor import article_id, canonical_url, read_feed
 
@@ -63,7 +62,7 @@ def proof_capture(article: dict, feeds: list[dict], destination: Path,
 
 def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
                        capture=capture_publisher, now: datetime | None = None) -> dict:
-    """Fail-closed for final Word/PDF; produce a redacted audit manifest on HOLD."""
+    """Fail-closed for final Word; produce a redacted audit manifest on HOLD."""
     config = json.loads(config_path.read_text(encoding="utf-8"))
     report = gather(config, fetch=fetch, now=now)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -77,9 +76,6 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
             rows.append({"id": article["id"], "source": article["source"], **result})
             if result["status"] == "verified":
                 article["evidence_image_path"] = str(destination)
-                article["evidence_image_base64"] = base64.b64encode(
-                    destination.read_bytes()
-                ).decode("ascii")
         verified = sum(row["status"] == "verified" for row in rows)
         ready = (bool(rows) and verified == len(rows)
                  and report["coverage"] == "HEALTHY")
@@ -91,21 +87,21 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
             "coverage": report["coverage"],
             "entries": rows,
             "email_sent": False, "scheduler_enabled": False,
-            "owner_pc_required": False,
+            "private_state_used": False, "owner_pc_required": False,
         }
         if ready:
-            # Both files must render before either becomes a final artifact.
-            # A blocked publisher produces only the HOLD manifest.
-            prefix = f"RASD-Proof-{day}"
-            with tempfile.TemporaryDirectory(prefix=".rasd-docs-", dir=output_dir) as work:
-                word = Path(work) / (prefix + ".docx")
-                pdf = Path(work) / (prefix + ".pdf")
+            # Only an evidence-complete Word document may become final.
+            # Publisher refusal or incomplete coverage yields HOLD without DOCX.
+            filename = f"RASD-Daily-{day}.docx"
+            with tempfile.TemporaryDirectory(prefix=".rasd-word-", dir=output_dir) as work:
+                word = Path(work) / filename
                 render_docx(report, word)
-                render_pdf(report, pdf)
-                if not word.is_file() or not pdf.is_file():
-                    raise RuntimeError("publisher_proof_document_missing")
-                word.replace(output_dir / word.name)
-                pdf.replace(output_dir / pdf.name)
+                if not word.is_file() or word.stat().st_size < 3000:
+                    raise RuntimeError("publisher_proof_word_invalid")
+                word.replace(output_dir / filename)
+            result["word_created"] = True
+        else:
+            result["word_created"] = False
         manifest_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n",
                                  encoding="utf-8")
         return result

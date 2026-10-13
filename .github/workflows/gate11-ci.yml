@@ -61,9 +61,9 @@ jobs:
           ).read_text().splitlines()
           result = json.loads(lines[0])  # Following lines may be Actions warnings.
           if result["eligible"] and not result["captured"]:
-              print("::warning::Publisher screenshot NOT verified: consult sanitized rejection codes; RSS and Word/PDF can still pass.")
+              print("::warning::Publisher screenshot NOT verified: consult sanitized rejection codes; RSS and Word preview can still pass.")
           PY
-      - name: Create genuine source-backed Arabic Word/PDF reports without email
+      - name: Create read-only Arabic Word preview (no images, not final proof)
         env:
           RASD_GATE11_SEND_APPROVED: ""
         run: |
@@ -71,23 +71,19 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           from docx import Document
-          from pypdf import PdfReader
-          docx = list(Path("report-output").glob("RASD-Daily-*.docx"))
-          pdfs = list(Path("report-output").glob("RASD-Daily-*.pdf"))
-          assert len(docx) == len(pdfs) == 1, "one Word and PDF expected"
-          assert docx[0].stat().st_size > 3000, "Word is empty"
-          assert pdfs[0].stat().st_size > 3000, "PDF is empty"
-          assert Document(docx[0]).paragraphs, "Word content missing"
-          assert len(PdfReader(pdfs[0]).pages) >= 1, "PDF pages missing"
-          print("rasd_daily_report_word_pdf_verified; no_email; no_schedule")
+          previews = list(Path("report-output").glob("RASD-Preview-*.docx"))
+          assert len(previews) == 1, "one Word preview expected"
+          assert previews[0].stat().st_size > 3000
+          doc = Document(previews[0])
+          assert doc.paragraphs and "مسودة" in doc.paragraphs[0].text
+          assert not list(Path("report-output").glob("*.pdf"))
+          print("rasd_word_preview_verified; no_email; no_schedule")
           PY
-      - name: Package verified public-source Word/PDF report for audit and direct download
+      - name: Package Word-only RSS preview (NOT final screenshot-proof report)
         uses: actions/upload-artifact@v4
         with:
-          name: rasd-public-report-ci
-          path: |
-            report-output/RASD-Daily-*.docx
-            report-output/RASD-Daily-*.pdf
+          name: rasd-word-preview-ci
+          path: report-output/RASD-Preview-*.docx
           if-no-files-found: error
           retention-days: 1
           compression-level: 6

@@ -1,4 +1,4 @@
-"""Gate 13: manual, environment-protected daily DOCX + PDF Gmail transport.
+"""Gate 13: manual, environment-protected screenshot-verified DOCX Gmail transport.
 
 Never scheduled. Reuses Gate 11 manual-owner consent and the same PRIVATE
 compare-and-swap delivery ledger, with a distinct per-Cairo-day report key.
@@ -18,9 +18,9 @@ from email.message import EmailMessage
 from pathlib import Path
 
 from docx import Document
-from pypdf import PdfReader
 
-from daily_report import CAIRO, generate
+from daily_report import CAIRO
+from cloud_proof_report import build_proof_report
 from delivery_bridge import PrivateGitHubLedger, gmail_submit
 from gate11_runner import credentials
 
@@ -39,29 +39,32 @@ def report_identity(now: datetime) -> tuple[str, str]:
     return date, key
 
 
-def verify_documents(word: Path, pdf: Path, date: str) -> tuple[bytes, bytes]:
+def verify_word(word: Path, date: str, expected_images: int) -> bytes:
+    """Verify the one Word attachment really contains screenshot evidence."""
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         raise ValueError("invalid_report_date")
-    if word.name != f"RASD-Daily-{date}.docx" or pdf.name != f"RASD-Daily-{date}.pdf":
+    if word.name != f"RASD-Daily-{date}.docx":
         raise ValueError("report_file_identity_mismatch")
-    if not word.is_file() or not pdf.is_file():
-        raise ValueError("report_attachments_missing")
-    if not (3000 <= word.stat().st_size <= MAX_ATTACHMENT_BYTES
-            and 3000 <= pdf.stat().st_size <= MAX_ATTACHMENT_BYTES):
+    if not word.is_file():
+        raise ValueError("report_attachment_missing")
+    if not 3000 <= word.stat().st_size <= MAX_ATTACHMENT_BYTES:
         raise ValueError("report_attachment_size_invalid")
-    docx_bytes, pdf_bytes = word.read_bytes(), pdf.read_bytes()
-    if not docx_bytes.startswith(b"PK") or not pdf_bytes.startswith(b"%PDF-"):
+    content = word.read_bytes()
+    if not content.startswith(b"PK"):
         raise ValueError("report_attachment_format_invalid")
     try:
-        if not Document(word).paragraphs or not PdfReader(pdf).pages:
-            raise ValueError("report_attachment_empty")
+        doc = Document(word)
+        if (not doc.paragraphs or
+                type(expected_images) is not int or expected_images < 1 or
+                len(doc.inline_shapes) != expected_images):
+            raise ValueError("report_screenshot_evidence_incomplete")
     except Exception:
         raise ValueError("report_attachment_invalid") from None
-    return docx_bytes, pdf_bytes
+    return content
 
 
 def build_digest_message(report: dict, date: str, key: str,
-                         word: bytes, pdf: bytes, sender: str) -> EmailMessage:
+                         word: bytes, sender: str) -> EmailMessage:
     if not re.fullmatch(r"[^@\s]+@gmail\.com", sender, re.I):
         raise ValueError("invalid_gmail_sender")
     if not re.fullmatch(r"[0-9a-f]{24}", key):
@@ -70,11 +73,14 @@ def build_digest_message(report: dict, date: str, key: str,
         raise ValueError("unexpected_report_side_effect")
     if report.get("private_state_used") is not False:
         raise ValueError("private_report_data_forbidden")
-    if report.get("coverage") not in {"HEALTHY", "DEGRADED"}:
-        raise ValueError("unverified_report_coverage")
-    if (not isinstance(report.get("articles"), int)
-            or not 0 <= report["articles"] <= 15):
-        raise ValueError("unverified_report_item_count")
+    if report.get("coverage") != "HEALTHY" or report.get("status") != "READY":
+        raise ValueError("digest_final_evidence_required")
+    if (type(report.get("articles")) is not int or
+            not 1 <= report["articles"] <= 15 or
+            report.get("screenshots_verified") != report["articles"] or
+            report.get("screenshots_missing") != 0 or
+            report.get("word_created") is not True):
+        raise ValueError("digest_all_screenshots_required")
     msg = EmailMessage()
     msg["From"] = sender
     msg["To"] = sender
@@ -86,7 +92,7 @@ def build_digest_message(report: dict, date: str, key: str,
         f"اليوم بتوقيت القاهرة: {date}\n"
         f"حالة تغطية المصادر: {report['coverage']}\n"
         f"العناوين المطابقة: {report['articles']}\n\n"
-        "النسختان المرفقتان Word وPDF. "
+        "المرفق الوحيد Word بصور موثقة من صفحات الناشرين. "
         "خلو التقرير من الأخبار لا يثبت خلو الإنترنت من أخبار الوزارة.\n"
         "تأكيد SMTP لا يعني التحقق من وصول الرسالة لصندوق الوارد.\n"
     )
@@ -95,14 +101,10 @@ def build_digest_message(report: dict, date: str, key: str,
         subtype="vnd.openxmlformats-officedocument.wordprocessingml.document",
         filename=f"RASD-Daily-{date}.docx",
     )
-    msg.add_attachment(
-        pdf, maintype="application", subtype="pdf",
-        filename=f"RASD-Daily-{date}.pdf",
-    )
     return msg
 
 
-def deliver_digest(report: dict, *, date: str, key: str, word: Path, pdf: Path,
+def deliver_digest(report: dict, *, date: str, key: str, word: Path,
                    sender: str, approved_recipient: str, app_password: str,
                    ledger: PrivateGitHubLedger,
                    smtp_factory=smtplib.SMTP_SSL) -> str:
@@ -112,8 +114,8 @@ def deliver_digest(report: dict, *, date: str, key: str, word: Path, pdf: Path,
     if report_identity(datetime.fromisoformat(date + "T12:00:00+03:00"))[1] != key:
         # Identity must be derived from the report day, never arbitrary input.
         raise ValueError("digest_date_identity_mismatch")
-    attachments = verify_documents(word, pdf, date)
-    message = build_digest_message(report, date, key, *attachments, sender)
+    attachment = verify_word(word, date, report.get("articles", 0))
+    message = build_digest_message(report, date, key, attachment, sender)
     action = ledger.reserve(key, sender)  # commits and re-reads BEFORE SMTP
     if action != "reserved":
         return action
@@ -123,8 +125,8 @@ def deliver_digest(report: dict, *, date: str, key: str, word: Path, pdf: Path,
 
 
 def run(*, config_path: Path = Path("sources.json"),
-        fetch=None, clock: datetime | None = None,
-        generator=generate, mailer=deliver_digest,
+        fetch=None, capture=None, clock: datetime | None = None,
+        generator=build_proof_report, mailer=deliver_digest,
         ledger_factory=PrivateGitHubLedger,
         smtp_factory=smtplib.SMTP_SSL) -> dict:
     # Fail before visiting publishers, private state or Gmail when unsafe.
@@ -166,13 +168,16 @@ def run(*, config_path: Path = Path("sources.json"),
         options = {"now": now}
         if fetch is not None:
             options["fetch"] = fetch
+        if capture is not None:
+            options["capture"] = capture
         report = generator(config_path, folder, **options)
-        if not report.get("word_created") or not report.get("pdf_created"):
-            raise RuntimeError("digest_report_not_generated")
+        # STOP before private state reservation and SMTP unless ALL pages
+        # have genuine verified screenshots inside a single final Word file.
+        if report.get("status") != "READY" or not report.get("word_created"):
+            raise RuntimeError("digest_publisher_evidence_incomplete")
         status = mailer(
             report, date=date, key=key,
             word=folder / f"RASD-Daily-{date}.docx",
-            pdf=folder / f"RASD-Daily-{date}.pdf",
             sender=approved["RASD_GMAIL_USER"],
             approved_recipient=approved["RASD_APPROVED_RECIPIENT"],
             app_password=approved["RASD_GMAIL_APP_PASSWORD"],
