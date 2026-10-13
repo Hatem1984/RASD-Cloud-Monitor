@@ -81,7 +81,8 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
                     destination.read_bytes()
                 ).decode("ascii")
         verified = sum(row["status"] == "verified" for row in rows)
-        ready = bool(rows) and verified == len(rows)
+        ready = (bool(rows) and verified == len(rows)
+                 and report["coverage"] == "HEALTHY")
         result = {
             "mode": "cloud_manual_publisher_screenshot_required",
             "status": "READY" if ready else "HOLD",
