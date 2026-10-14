@@ -104,7 +104,7 @@ class PrivateEvidenceArchive:
             payload = _bytes_from_file(image)
             if len(payload) > MAX_SCREENSHOT_BYTES:
                 raise ValueError("private_screenshot_too_large")
-            if not payload.startswith(b"\\xff\\xd8") or _sha(payload) != declared_sha:
+            if not payload.startswith(b"\xff\xd8") or _sha(payload) != declared_sha:
                 raise RuntimeError("private_archive_screenshot_mismatch")
             total_bytes += len(payload)
             staged.append((article_id, declared_sha, payload))
