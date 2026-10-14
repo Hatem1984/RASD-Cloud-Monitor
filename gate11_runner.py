@@ -34,12 +34,20 @@ SAFE_CAPTURE_FAILURE_CODES = frozenset({
 })
 
 
-def record_capture_rejection(results: dict, reason: str | None) -> None:
-    """Aggregate fixed audit codes; never print URLs, exceptions or page text."""
+def record_capture_rejection(results: dict, reason: str | None,
+                             source_row: dict | None = None) -> None:
+    """Aggregate allowlisted codes, with optional per-approved-feed counts.
+
+    Neither raw exception messages, headline, URLs nor publisher HTML are logged.
+    """
     code = reason if isinstance(reason, str) and reason in SAFE_CAPTURE_FAILURE_CODES else "other"
     results["rejected_capture"] += 1
     counts = results["capture_rejection_reasons"]
     counts[code] = counts.get(code, 0) + 1
+    if source_row is not None:
+        source_row["rejected"] += 1
+        per_feed = source_row["rejection_reasons"]
+        per_feed[code] = per_feed.get(code, 0) + 1
 
 
 
@@ -155,25 +163,38 @@ def run(mode: str, *, config_path: Path = Path("sources.json"),
                "smtp_accepted": 0, "already_accepted": 0,
                "manual_review_hold": 0, "rejected_capture": 0,
                "capture_rejection_reasons": {},
-               "test_fixture_used": False, "scheduler_enabled": False}
+               "test_fixture_used": False, "scheduler_enabled": False,
+               "capture_by_feed": [
+                   {"feed_id": feed["id"], "eligible": 0, "captured": 0,
+                    "rejected": 0, "rejection_reasons": {}}
+                   for feed in config["feeds"]
+               ]}
+    # Only source IDs drawn from the reviewed configuration are emitted.
+    by_name = {
+        feed["name"]: results["capture_by_feed"][i]
+        for i, feed in enumerate(config["feeds"])
+    }
     # Ephemeral hosted-runner directory, not the user's machine or a public artifact.
     with tempfile.TemporaryDirectory(prefix="rasd-g11-") as workdir:
         for article in candidates:
+            row = by_name[article["source"]]
+            row["eligible"] += 1
             dest = Path(workdir) / (article["id"] + ".jpg")
             capture_result = capture(article["url"], article["publisher"], dest)
             if not capture_result.get("ok"):
-                record_capture_rejection(results, capture_result.get("reason"))
+                record_capture_rejection(results, capture_result.get("reason"), row)
                 continue
             if (canonical_url(capture_result.get("actual_url", "")) !=
                     canonical_url(article["url"])):
-                record_capture_rejection(results, "url_mismatch")
+                record_capture_rejection(results, "url_mismatch", row)
                 continue
             # The original publisher headline must agree with browser title.
             # A false negative is safer than attaching a different article.
             if article["headline"].strip()[:12] not in capture_result.get("title", ""):
-                record_capture_rejection(results, "title_mismatch")
+                record_capture_rejection(results, "title_mismatch", row)
                 continue
             results["captured"] += 1
+            row["captured"] += 1
             if mode == "send":
                 outcome = deliver(
                     article, dest, sender=auth["RASD_GMAIL_USER"],
