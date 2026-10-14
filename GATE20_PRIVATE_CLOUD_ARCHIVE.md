@@ -1,3 +1,5 @@
+> **Gate 21 hardening (14 October 2026):** Upload preparation now checks **every screenshot and every embedded Word image before the first S3 PUT**, and caps one archived report batch at **75,000,000 bytes**, rather than writing partial article evidence before discovering invalid later files. The R2 bucket and private keys are still **NOT connected**; all cloud storage integrity tests are synthetic, not live R2 uploads. See official free tier at https://developers.cloudflare.com/r2/pricing/ (Standard 10 GB-month, 1M Class A and 10M Class B monthly; exceeding allowances may incur charges). **Never enable billing silently.**
+
 # RASD — Gate 20: private cloud evidence storage (staged, NOT provisioned)
 
 **Decision:** Cloud-only RASD; final artifact **Word (.docx) only**, with actual browser screenshots of original publisher pages for every article. Owner Windows PC never hosts the monitor. Gmail and scheduling remain OFF.
