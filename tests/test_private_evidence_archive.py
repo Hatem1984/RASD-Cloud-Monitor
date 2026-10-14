@@ -11,6 +11,7 @@ from docx import Document
 
 from private_evidence_archive import PrivateEvidenceArchive
 from hashlib import sha256
+from unittest.mock import patch
 
 
 class Precondition(Exception):
@@ -117,7 +118,30 @@ class PrivateArchiveTests(unittest.TestCase):
             other_doc.save(word)
             with self.assertRaisesRegex(RuntimeError, "private_archive_embedded_screenshot_mismatch"):
                 self.store.publish_ready(report=ready_report(), word=word, evidence=images)
-        self.assertFalse(any("/manifests/" in key for key in self.client.objects))
+        self.assertFalse(self.client.objects)
+
+    def test_later_invalid_screenshot_uploads_nothing(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            word, images = self.proof(root)
+            bad = root / "bad.jpg"
+            bad.write_bytes(b"BAD BYTES" * 1000)
+            image2 = ("b" * 24, bad, "0" * 64)
+            report = ready_report()
+            report["articles"] = 2
+            with self.assertRaisesRegex(RuntimeError, "private_archive_screenshot_mismatch"):
+                self.store.publish_ready(report=report, word=word,
+                                         evidence=images + [image2])
+        self.assertFalse(self.client.objects)
+
+    def test_batch_budget_refuses_before_any_upload(self):
+        with tempfile.TemporaryDirectory() as work:
+            word, images = self.proof(Path(work))
+            with patch("private_evidence_archive.MAX_BATCH_BYTES", 9000):
+                with self.assertRaisesRegex(ValueError, "private_archive_batch_budget_exceeded"):
+                    self.store.publish_ready(report=ready_report(), word=word,
+                                             evidence=images)
+        self.assertFalse(self.client.objects)
 
     def test_illegal_bucket_and_prefix_blocked(self):
         with self.assertRaises(ValueError):
