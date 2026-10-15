@@ -24,6 +24,10 @@ ARABIC_MONTHS = (
     "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
     "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
 )
+SOURCE_LABELS = {
+    "Hapi native news RSS": "جريدة حابي",
+    "Al Masry Al Youm native news RSS": "المصري اليوم",
+}
 ARABIC_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
 
 
@@ -79,6 +83,7 @@ def gather(config: dict, *, fetch=read_feed, now: datetime | None = None,
             "source": article["source"],
             "url": article["url"],
             "published_at_cairo": stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
+            "published_display_cairo": cairo_display_time(stamp),
             "_published_utc": stamp,
         })
     articles.sort(key=lambda x: x["_published_utc"], reverse=True)
@@ -136,7 +141,7 @@ def _rtl(paragraph):
     p_pr.append(bidi)
 
 
-def _word_hyperlink(paragraph, url):
+def _word_hyperlink(paragraph, url, label="فتح الخبر في موقع الناشر"):
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     from docx.opc.constants import RELATIONSHIP_TYPE as RT
@@ -150,7 +155,7 @@ def _word_hyperlink(paragraph, url):
     prop.append(color)
     run.append(prop)
     text = OxmlElement("w:t")
-    text.text = url
+    text.text = label
     run.append(text)
     link.append(run)
     paragraph._p.append(link)
@@ -171,7 +176,7 @@ def render_docx(report: dict, destination: Path) -> None:
     styles["Normal"].font.size = Pt(10)
     styles["Normal"].font.color.rgb = RGBColor(36, 52, 69)
     styles["Title"].font.name = "DejaVu Sans"
-    styles["Title"].font.size = Pt(19)
+    styles["Title"].font.size = Pt(17)
     styles["Title"].font.color.rgb = RGBColor(8, 106, 128)
 
     p = doc.add_paragraph(style="Title")
@@ -185,7 +190,7 @@ def render_docx(report: dict, destination: Path) -> None:
     p.add_run(
         "حالة المصادر: " + report["coverage"] +
         " | روابط الناشرين المفحوصة: " + str(report["verified_links"]) +
-        " | أخبار مطابقة خلال 24 ساعة: " + str(len(report["articles"]))
+        " | مواد مطابقة في الفترة: " + str(len(report["articles"]))
     )
 
     if report.get("preview_only"):
@@ -205,7 +210,8 @@ def render_docx(report: dict, destination: Path) -> None:
         )
         counts = {}
         for row in report["articles"]:
-            counts[row["source"]] = counts.get(row["source"], 0) + 1
+            name = SOURCE_LABELS.get(row["source"], row["source"])
+            counts[name] = counts.get(name, 0) + 1
         distribution = doc.add_paragraph()
         _rtl(distribution)
         distribution.add_run(
@@ -228,7 +234,8 @@ def render_docx(report: dict, destination: Path) -> None:
             run.bold = True
             meta = doc.add_paragraph()
             _rtl(meta)
-            meta.add_run("المصدر: " + article["source"] + " | النشر: " + article["published_at_cairo"])
+            meta.add_run("المصدر: " + SOURCE_LABELS.get(article["source"], article["source"]) +
+                         " | النشر: " + article.get("published_display_cairo", article["published_at_cairo"]))
             link_paragraph = doc.add_paragraph()
             _rtl(link_paragraph)
             _word_hyperlink(link_paragraph, article["url"])
@@ -244,7 +251,8 @@ def render_docx(report: dict, destination: Path) -> None:
         p = doc.add_paragraph()
         _rtl(p)
         p.add_run(
-            feed["feed_id"] + ": " + feed["status"] +
+            {"hapi": "جريدة حابي", "almasryalyoum": "المصري اليوم"}.get(feed["feed_id"], feed["feed_id"]) +
+            ": " + ("متاح" if feed["status"] == "ok" else "تعذّر الوصول") +
             " | روابط: " + str(feed["verified_links"]) +
             (" | فشل: " + feed["error_type"] if feed["error_type"] else "")
         )
@@ -325,7 +333,7 @@ def generate(config_path: Path, output_dir: Path, *, fetch=read_feed,
                     start_cairo=start_cairo, max_articles=max_articles)
     # Preview never claims to contain publisher-page screenshot evidence.
     # Only the strict cloud proof report may be treated as a final RASD report.
-    report["title"] = "رصد | مسودة بروفة رصد إعلامي — دون صور موثقة"
+    report["title"] = "رصد | مسودة الفترة الصباحية — دون صور موثقة"
     report["preview_only"] = True
     stamp = report["window_end_cairo"][:10]
     docx = output_dir / ("RASD-Preview-" + stamp + ".docx")

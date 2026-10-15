@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import zipfile
 from datetime import datetime, timedelta
 from email.utils import format_datetime
 from pathlib import Path
@@ -123,6 +124,25 @@ class Gate23CairoPilotTests(unittest.TestCase):
             self.assertIn("غير محددة آليًا", all_text)
             self.assertIn("لا تحتوي صورًا موثقة", all_text)
             self.assertEqual(len(doc.inline_shapes), 0)
+
+
+    def test_word_uses_readable_arabic_date_and_short_clickable_publisher_link(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            cfg = root / "sources.json"
+            cfg.write_text(json.dumps(CONFIG, ensure_ascii=False), encoding="utf-8")
+            generate(cfg, root / "out", fetch=some_articles,
+                     now=NOW, start_cairo=START, max_articles=20)
+            word = next((root / "out").glob("*.docx"))
+            with zipfile.ZipFile(word) as archive:
+                text = archive.read("word/document.xml").decode("utf-8")
+                links = archive.read("word/_rels/document.xml.rels").decode("utf-8")
+            self.assertIn("فتح الخبر في موقع الناشر", text)
+            self.assertIn("جريدة حابي", text)
+            self.assertIn("بتوقيت القاهرة", text)
+            self.assertIn("مواد مطابقة في الفترة", text)
+            self.assertNotIn("%d9", text.casefold())
+            self.assertIn("https://hapijournal.com/planning-pilot-", links)
 
 
 if __name__ == "__main__":
