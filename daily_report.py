@@ -120,7 +120,7 @@ def gather(config: dict, *, fetch=read_feed, now: datetime | None = None,
         "articles": articles,
         "sources": sources,
         "limitations": (
-            "النتائج مبنية على عناوين قنوات RSS الأصلية لمصدرين معتمدين فقط. "
+            f"النتائج مبنية على عناوين قنوات RSS الأصلية لعدد {len(config['feeds'])} من المصادر المعتمدة في هذه التجربة فقط. "
             "قد تتأخر القنوات أو تغفل أخباراً؛ هذه ليست تغطية إعلامية شاملة. "
             f"الحد الأقصى للعرض {max_articles} مادة مطابقة، ولا يتم اختلاق أخبار عند عدم وجود نتائج. "
             "التغطيات التحريرية المتعددة قد تتعلق بحدث واحد؛ تصنيف الأحداث المستقلة يحتاج مراجعة تحريرية."
@@ -234,13 +234,16 @@ def render_docx(report: dict, destination: Path) -> None:
             _rtl(p)
             run = p.add_run(str(index) + ". " + article["headline"])
             run.bold = True
+            p.paragraph_format.keep_with_next = True
             meta = doc.add_paragraph()
             _rtl(meta)
             meta.add_run("المصدر: " + SOURCE_LABELS.get(article["source"], article["source"]) +
                          " | النشر: " + article.get("published_display_cairo", article["published_at_cairo"]))
+            meta.paragraph_format.keep_with_next = True
             link_paragraph = doc.add_paragraph()
             _rtl(link_paragraph)
             _word_hyperlink(link_paragraph, article["url"])
+            link_paragraph.paragraph_format.keep_with_next = bool(article.get("publisher_excerpt"))
             if article.get("publisher_excerpt"):
                 summary = doc.add_paragraph()
                 _rtl(summary)
