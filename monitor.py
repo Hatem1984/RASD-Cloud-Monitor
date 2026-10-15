@@ -7,6 +7,8 @@ publisher headlines and links, not full scraped articles.
 from __future__ import annotations
 
 import hashlib
+import html
+import re
 import json
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -22,6 +24,7 @@ from xml.etree import ElementTree as ET
 APPROVED_FEED_URLS = frozenset({
     "https://hapijournal.com/feed/",
     "https://www.almasryalyoum.com/rss/rssfeeds",
+    "https://www.shorouknews.com/Economy/rss",
 })
 
 
@@ -73,9 +76,20 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
         if not title or not is_publisher_link(url, feed["allowed_article_hosts"]):
             continue
         eligible += 1
-        if not any(k in title.casefold() for k in keywords):
+        # Shorouk's native Economy RSS may mention the ministry only in its
+        # short item description. This is still publisher-owned RSS text, not
+        # aggregator discovery, and is used only for this reviewed feed.
+        search_text = title
+        if feed["id"] == "shorouk":
+            raw_description = (node.findtext("description") or "")[:3500]
+            short_description = html.unescape(re.sub(
+                r"<[^>]*>", " ", raw_description))
+            search_text += " " + short_description
+        if not any(k in search_text.casefold() for k in keywords):
             continue
         published = (node.findtext("pubDate") or "").strip()
+        if feed["id"] == "shorouk" and not published:
+            continue  # No unverifiable timestamp for this newly admitted feed.
         if published:
             try:
                 stamp = parsedate_to_datetime(published)

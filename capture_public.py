@@ -15,6 +15,7 @@ APPROVED_PUBLISHERS = {
     "hapijournal.com": frozenset({"hapijournal.com", "www.hapijournal.com"}),
     "elwatannews.com": frozenset({"elwatannews.com", "www.elwatannews.com"}),
     "almasryalyoum.com": frozenset({"almasryalyoum.com", "www.almasryalyoum.com"}),
+    "shorouknews.com": frozenset({"www.shorouknews.com"}),
 }
 CHALLENGE_WORDS = (
     "verify you are human", "just a moment...", "checking your browser",
@@ -126,7 +127,12 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                     return {"ok": False, "reason": "page_content_unavailable"}
                 if "التخطيط" not in (title + " " + body) and "planning" not in (title + " " + body).lower():
                     return {"ok": False, "reason": "not_a_planning_article"}
-                page.wait_for_timeout(1300)
+                # Frame the genuine story headline; do not create a synthetic
+                # cover or crop an article photo into fake page evidence.
+                headline = page.locator("h1").filter(has_text=title[:15]).first
+                if headline.count():
+                    headline.scroll_into_view_if_needed(timeout=4000)
+                page.wait_for_timeout(800)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 with TemporaryDirectory(prefix=".rasd-capture-", dir=destination.parent) as temp:
                     staged = Path(temp) / "candidate.jpg"

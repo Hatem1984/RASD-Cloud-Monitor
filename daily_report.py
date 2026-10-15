@@ -27,6 +27,7 @@ ARABIC_MONTHS = (
 SOURCE_LABELS = {
     "Hapi native news RSS": "جريدة حابي",
     "Al Masry Al Youm native news RSS": "المصري اليوم",
+    "Al Shorouk native Economy RSS": "بوابة الشروق",
 }
 ARABIC_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
 

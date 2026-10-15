@@ -1,0 +1,62 @@
+name: RASD Gate25 — original-page owner-encrypted acceptance
+
+on:
+  push:
+    branches:
+      - gate25-shorouk-publisher-e2e
+
+concurrency:
+  group: rasd-g25-owner-encrypted-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  shorouk-live-publisher-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install public-only runtime dependencies
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2" "cryptography>=42,<50"
+          python -m playwright install --with-deps chromium
+      - name: Unit tests including candidate source validations
+        run: python -m unittest discover -s tests -v
+      - name: Attempt a genuine original Al Shorouk planning article (NO bypass, NO mail)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python gate25_shorouk_candidate.py "$RUNNER_TEMP/rasd-g25"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          audit=json.loads((Path(os.environ["RUNNER_TEMP"])/"rasd-g25"/"audit.json").read_text())
+          assert audit["email_sent"] is False
+          assert audit["schedule_enabled"] is False
+          if audit["actual_screenshots_verified"] == 1:
+              assert audit["status"] == "SAMPLE_VERIFIED_NOT_DAILY"
+              assert audit["real_word_created"] is True
+              print("RASD_G25_AUTHENTIC_ONE_PAGE_VERIFIED")
+          else:
+              assert audit["status"] == "HOLD"
+              print("::warning::RASD_G25_HOLD: no accepted actual original screenshot")
+          PY
+      - name: Encrypt full original proof and Word using owner-only ephemeral public key
+        run: |
+          python gate25_pack_encrypted.py "$RUNNER_TEMP/rasd-g25" \
+            "$RUNNER_TEMP/rasd-g25-encrypted.json" gate25_owner_pubkey.pem
+          test -s "$RUNNER_TEMP/rasd-g25-encrypted.json"
+      - name: Upload ONLY unreadable, owner-encrypted pilot artifact (never JPEG/DOCX in public)
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-g25-owner-encrypted
+          path: ${{ runner.temp }}/rasd-g25-encrypted.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 6
