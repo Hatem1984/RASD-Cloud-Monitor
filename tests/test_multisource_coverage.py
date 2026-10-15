@@ -41,7 +41,11 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
             "https://www.shorouknews.com/Economy/rss",
         })
         self.assertEqual({f["url"] for f in ALL_CONFIG["feeds"]},
-                         set(APPROVED_FEED_URLS))
+                         {"https://hapijournal.com/feed/",
+                          "https://www.almasryalyoum.com/rss/rssfeeds"})
+        opt_in = json.loads(Path("sources_shorouk.json").read_text())
+        self.assertEqual([f["id"] for f in opt_in["feeds"]], ["shorouk"])
+        self.assertIn(opt_in["feeds"][0]["url"], APPROVED_FEED_URLS)
 
     def test_reject_similar_looking_or_unreviewed_feed_urls_before_network(self):
         for url in (
