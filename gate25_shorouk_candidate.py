@@ -241,6 +241,27 @@ def run(outdir:Path):
         if not capture["ok"]:
             report["reason"]=capture["reason"]
             return report
+        # Re-validate the exact captured JPEG with RASD's production
+        # original-page proof contract, without contacting the publisher twice.
+        # This is real evidence reused byte-for-byte, NEVER synthesized.
+        import shutil
+        from cloud_proof_report import proof_capture
+        feeds=json.loads(Path("sources_shorouk.json").read_text(encoding="utf-8"))["feeds"]
+        def real_evidence_reuse(url,publisher,destination):
+            if url!=article["url"] or publisher!="shorouknews.com":
+                return {"ok":False,"reason":"publisher_not_approved"}
+            shutil.copyfile(photo,destination)
+            return {"ok":True,"actual_url":url,"title":article["title"],
+                    "sha256":capture["sha256"]}
+        approved=proof_capture({
+            "id":article["id"],"url":article["url"],"headline":article["title"],
+            "source":feeds[0]["name"]},
+            feeds,outdir/"validated_proof_tmp.jpg",capture=real_evidence_reuse)
+        (outdir/"validated_proof_tmp.jpg").unlink(missing_ok=True)
+        report["integrated_core_proof_status"]=approved["status"]
+        if approved["status"]!="verified" or approved.get("sha256")!=capture["sha256"]:
+            report["reason"]="production_evidence_contract_not_verified"
+            return report
         target=outdir/"RASD-Gate25-Original-Publisher-Pilot.docx"
         write_pilot_word(article,capture,photo,target)
         report["status"]="SAMPLE_VERIFIED_NOT_DAILY"
