@@ -63,7 +63,7 @@ class Gate26StrictWordTests(unittest.TestCase):
             self.assertIn("w:keepNext",body)
             self.assertIn("ملخص كما أورده الناشر",body)
             self.assertIn("مباحثات",body)
-            self.assertIn("الخبر ينقل تصريحات",body)
+            self.assertIn("تقييمًا أو تصريحًا إيجابيًا",body)
             self.assertIn("www.shorouknews.com/news/view.aspx",rels)
             self.assertTrue(verify_embedded_evidence(words[0],{
                 "status":"READY","screenshots_verified":1,"articles":1,
@@ -96,6 +96,12 @@ class Gate26StrictWordTests(unittest.TestCase):
             self.assertEqual(result["status"],"HOLD")
             self.assertEqual(result["articles"],0)
             self.assertEqual(list(out.glob("*.docx")),[])
+
+    def test_cautious_analysis_tracks_news_type_without_fabricating_outcomes(self):
+        from daily_report import editorial_caution
+        self.assertIn("مؤشرات اقتصادية", editorial_caution("نائب رئيس البنك الدولي يشيد بمؤشرات الاقتصاد"))
+        self.assertIn("اعتماد المخصصات", editorial_caution("وزير التخطيط يبحث إنشاء صندوق للتمويل"))
+        self.assertIn("قرارات تنفيذية", editorial_caution("وزير التخطيط يلتقي وفدًا دوليًا"))
 
     def test_reject_unapproved_source_profile_before_any_network(self):
         with tempfile.TemporaryDirectory() as root:
