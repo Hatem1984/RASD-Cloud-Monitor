@@ -67,7 +67,16 @@ jobs:
         env:
           RASD_GATE11_SEND_APPROVED: ""
         run: |
-          python daily_report.py --output-dir report-output
+          # Public pilot after 08:00 Cairo: exact same-day window, at most 20.
+          # Before 08:00, retain the safe historical 24-hour read-only preview.
+          cairo_hour="$(TZ=Africa/Cairo date +%H)"
+          if [ "$cairo_hour" -ge 8 ]; then
+            cairo_start="$(TZ=Africa/Cairo date +%Y-%m-%dT08:00)"
+            python daily_report.py --output-dir report-output \
+              --start-cairo "$cairo_start" --max-articles 20
+          else
+            python daily_report.py --output-dir report-output
+          fi
           python - <<'PY'
           from pathlib import Path
           from docx import Document
