@@ -63,6 +63,34 @@ jobs:
           if result["eligible"] and not result["captured"]:
               print("::warning::Publisher screenshot NOT verified: consult sanitized rejection codes; RSS and Word preview can still pass.")
           PY
+      - name: Gate24 — one live original publisher screenshot, strict evidence verification (NO mail)
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python gate24_evidence_probe.py --max-attempts 1 --output-dir "$RUNNER_TEMP/rasd-g24"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          audit_dir = Path(os.environ["RUNNER_TEMP"]) / "rasd-g24"
+          audit = json.loads((audit_dir / "gate24-redacted-audit.json").read_text())
+          assert audit["mode"] == "gate24_real_publisher_sample_probe"
+          assert audit["attempts"] <= 1
+          assert audit["verified_screenshots"] <= audit["attempts"]
+          assert audit["email_sent"] is False
+          assert audit["scheduler_enabled"] is False
+          assert audit["private_state_used"] is False
+          assert audit["daily_word_created"] is False
+          assert audit["all_article_images_verified"] is False
+          assert not list(audit_dir.glob("*.jpg"))
+          assert not list(audit_dir.glob("*.docx"))
+          if audit["status"] != "SAMPLE_VERIFIED_ONLY":
+              print("::warning::Gate24: authentic publisher screenshot not yet verified. No final Word, no email.")
+          else:
+              print("Gate24 SAMPLE evidence passed; full daily Word still NOT accepted.")
+          PY
       - name: Create read-only Arabic Word preview (no images, not final proof)
         env:
           RASD_GATE11_SEND_APPROVED: ""
