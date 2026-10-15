@@ -62,7 +62,7 @@ class Gate26StrictWordTests(unittest.TestCase):
             self.assertNotIn("لمصدرين معتمدين",body)
             self.assertIn("w:keepNext",body)
             self.assertIn("ملخص كما أورده الناشر",body)
-            self.assertIn("مباحثات",body)
+            self.assertIn("مناقشة التعاون",body)
             self.assertIn("تقييمًا أو تصريحًا إيجابيًا",body)
             self.assertIn("www.shorouknews.com/news/view.aspx",rels)
             self.assertTrue(verify_embedded_evidence(words[0],{
