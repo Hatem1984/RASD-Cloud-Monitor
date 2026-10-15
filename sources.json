@@ -25,14 +25,6 @@
         "www.almasryalyoum.com",
         "almasryalyoum.com"
       ]
-    },
-    {
-      "id": "shorouk",
-      "name": "Al Shorouk native Economy RSS",
-      "url": "https://www.shorouknews.com/Economy/rss",
-      "allowed_article_hosts": [
-        "www.shorouknews.com"
-      ]
     }
   ],
   "max_feed_bytes": 1500000,
