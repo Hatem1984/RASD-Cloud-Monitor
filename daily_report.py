@@ -32,6 +32,21 @@ SOURCE_LABELS = {
 ARABIC_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
 
 
+def editorial_caution(headline: str) -> str:
+    """Conservative, headline-dependent interpretation, never a fabricated fact."""
+    if "يشيد" in headline or "مؤشرات" in headline:
+        return ("التغطية تنقل تقييمًا أو تصريحًا إيجابيًا عن مؤشرات اقتصادية؛"
+                " لا يعادل ذلك قياسًا مستقلاً ولا يثبت أثر سياسات محددة."
+                " يلزم فحص البيانات الأصلية والمنهجية قبل استخلاص نتائج.")
+    if "صندوق" in headline or "تمويل" in headline:
+        return ("الخبر يتناول مناقشة أو مقترحًا مرتبطًا بالتمويل؛"
+                " البحث أو الإعلان لا يثبت إنشاء الصندوق أو اعتماد المخصصات أو الصرف الفعلي."
+                " ينبغي متابعة القرارات والاتفاقيات المنشورة رسميًا.")
+    return ("هذه تغطية صحفية لتصريحات أو مباحثات؛ لا يكفي ورودها وحده"
+            " لإثبات صدور قرارات تنفيذية أو تحقق نتائج قابلة للقياس."
+            " ويستلزم التقييم متابعة المصادر الرسمية وتطور الحدث.")
+
+
 def cairo_display_time(moment: datetime) -> str:
     """Human-readable fully Arabic dates avoid RTL reordering of ISO/EEST text."""
     local = moment.astimezone(CAIRO)
@@ -251,8 +266,7 @@ def render_docx(report: dict, destination: Path) -> None:
                 summary.add_run(article["publisher_excerpt"])
                 note = doc.add_paragraph()
                 _rtl(note)
-                note.add_run("قراءة تحليلية محدودة: الخبر ينقل تصريحات أو مباحثات؛ لا يكفي وحده "
-                             "للجزم بتنفيذ قرارات أو تحقق نتائج، ويلزم متابعة ما يستجد.")
+                note.add_run("قراءة تحليلية محدودة: " + editorial_caution(article["headline"]))
             if article.get("evidence_image_path"):
                 evidence_note = doc.add_paragraph()
                 _rtl(evidence_note)
