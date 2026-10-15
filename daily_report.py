@@ -19,6 +19,7 @@ from monitor import inspect, read_feed
 CAIRO = ZoneInfo("Africa/Cairo")
 WINDOW_HOURS = 24
 MAX_ARTICLES = 15
+MAX_PREVIEW_ARTICLES = 20  # Preview-only; strict daily email cap stays 15.
 ARABIC_MONTHS = (
     "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
     "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
@@ -34,16 +35,35 @@ def cairo_display_time(moment: datetime) -> str:
     return value.translate(ARABIC_DIGITS)
 
 
-def gather(config: dict, *, fetch=read_feed, now: datetime | None = None) -> dict:
+def gather(config: dict, *, fetch=read_feed, now: datetime | None = None,
+           start_cairo: datetime | None = None,
+           max_articles: int = MAX_ARTICLES) -> dict:
+    """Collect verified RSS headlines, optionally within an exact Cairo-day window.
+
+    A 20-item cap is permitted for the PUBLIC preview only. Production proof
+    builders continue calling with the original 15-item default.
+    """
     checked = datetime.now(timezone.utc) if now is None else now
-    if checked.tzinfo is None:
+    if checked.tzinfo is None or checked.utcoffset() is None:
         raise ValueError("naive_report_clock_forbidden")
     checked = checked.astimezone(timezone.utc)
+    if type(max_articles) is not int or not 1 <= max_articles <= MAX_PREVIEW_ARTICLES:
+        raise ValueError("report_article_limit_invalid")
+    if start_cairo is None:
+        since = checked - timedelta(hours=WINDOW_HOURS)
+    else:
+        if start_cairo.tzinfo is None or start_cairo.utcoffset() is None:
+            raise ValueError("naive_pilot_start_forbidden")
+        local_start = start_cairo.astimezone(CAIRO)
+        local_end = checked.astimezone(CAIRO)
+        since = local_start.astimezone(timezone.utc)
+        if (local_start.date() != local_end.date() or since > checked or
+                since < checked - timedelta(hours=WINDOW_HOURS)):
+            raise ValueError("pilot_window_must_be_today_and_within_24h")
     # Collect enough validated candidates from BOTH sources before sorting.
     # monitor.inspect defaults to 15 for lightweight probes, which may
     # otherwise hide fresh stories from the second publisher.
     observed = inspect(config, fetch=fetch, now=checked, article_limit=200)
-    since = checked - timedelta(hours=WINDOW_HOURS)
     articles = []
     for original in observed["matched_public_articles"]:
         article = candidate_from_feed(original, config, checked)
@@ -62,6 +82,12 @@ def gather(config: dict, *, fetch=read_feed, now: datetime | None = None) -> dic
             "_published_utc": stamp,
         })
     articles.sort(key=lambda x: x["_published_utc"], reverse=True)
+    unique = {}
+    for article in articles:
+        unique.setdefault(article["id"], article)  # Same URL is one article.
+    articles = list(unique.values())
+    total_window_articles = len(articles)
+    articles = articles[:max_articles]
     for article in articles:
         del article["_published_utc"]
     sources = [{
@@ -81,12 +107,16 @@ def gather(config: dict, *, fetch=read_feed, now: datetime | None = None) -> dic
         "coverage": coverage,
         "verified_links": observed["public_verified_publisher_links"],
         "rss_matches": observed["planning_headline_matches"],
-        "articles": articles[:MAX_ARTICLES],
+        "window_article_count": total_window_articles,
+        "article_limit": max_articles,
+        "truncated": total_window_articles > max_articles,
+        "articles": articles,
         "sources": sources,
         "limitations": (
             "النتائج مبنية على عناوين قنوات RSS الأصلية لمصدرين معتمدين فقط. "
             "قد تتأخر القنوات أو تغفل أخباراً؛ هذه ليست تغطية إعلامية شاملة. "
-            "الحد الأقصى للعرض 15 خبراً مطابقاً، ولا يتم اختلاق أخبار عند عدم وجود نتائج."
+            f"الحد الأقصى للعرض {max_articles} مادة مطابقة، ولا يتم اختلاق أخبار عند عدم وجود نتائج. "
+            "التغطيات التحريرية المتعددة قد تتعلق بحدث واحد؛ تصنيف الأحداث المستقلة يحتاج مراجعة تحريرية."
         ),
         "email_sent": False,
         "scheduler_enabled": False,
@@ -158,6 +188,31 @@ def render_docx(report: dict, destination: Path) -> None:
         " | أخبار مطابقة خلال 24 ساعة: " + str(len(report["articles"]))
     )
 
+    if report.get("preview_only"):
+        notice = doc.add_paragraph()
+        _rtl(notice)
+        notice.add_run(
+            "بروفة / مسودة فقط — لا تحتوي صورًا موثقة لصفحات الناشرين، "
+            "ولا يجوز اعتبارها التقرير النهائي أو إثبات اكتمال الرصد."
+        ).bold = True
+        audit = doc.add_paragraph()
+        _rtl(audit)
+        audit.add_run(
+            "المواد المطابقة داخل الفترة: " + str(report["window_article_count"]) +
+            " | المعروض: " + str(len(report["articles"])) +
+            " | هل تم الاختصار؟ " + ("نعم" if report["truncated"] else "لا") +
+            " | الأحداث المستقلة: غير محددة آليًا"
+        )
+        counts = {}
+        for row in report["articles"]:
+            counts[row["source"]] = counts.get(row["source"], 0) + 1
+        distribution = doc.add_paragraph()
+        _rtl(distribution)
+        distribution.add_run(
+            "توزيع المواد حسب المصدر: " +
+            ("؛ ".join(f"{name}: {count}" for name, count in counts.items())
+             if counts else "لا توجد مواد مطابقة")
+        )
     header = doc.add_paragraph()
     _rtl(header)
     header.add_run("الأخبار المطابقة").bold = True
@@ -262,12 +317,16 @@ def render_html(report: dict) -> str:
 
 
 def generate(config_path: Path, output_dir: Path, *, fetch=read_feed,
-             now: datetime | None = None) -> dict:
+             now: datetime | None = None,
+             start_cairo: datetime | None = None,
+             max_articles: int = MAX_ARTICLES) -> dict:
     config = json.loads(config_path.read_text(encoding="utf-8"))
-    report = gather(config, fetch=fetch, now=now)
+    report = gather(config, fetch=fetch, now=now,
+                    start_cairo=start_cairo, max_articles=max_articles)
     # Preview never claims to contain publisher-page screenshot evidence.
     # Only the strict cloud proof report may be treated as a final RASD report.
-    report["title"] = "رصد | مسودة رصد يومية (بدون صور)"
+    report["title"] = "رصد | مسودة بروفة رصد إعلامي — دون صور موثقة"
+    report["preview_only"] = True
     stamp = report["window_end_cairo"][:10]
     docx = output_dir / ("RASD-Preview-" + stamp + ".docx")
     render_docx(report, docx)
@@ -275,6 +334,13 @@ def generate(config_path: Path, output_dir: Path, *, fetch=read_feed,
             "word_created": docx.is_file(),
             "preview_only": True,
             "articles": len(report["articles"]),
+            "window_article_count": report["window_article_count"],
+            "article_limit": report["article_limit"],
+            "truncated": report["truncated"],
+            "window_start_cairo": report["window_start_cairo"],
+            "window_end_cairo": report["window_end_cairo"],
+            "events_verified": None,
+            "publisher_screenshots_verified": 0,
             "sources_healthy": sum(s["status"] == "ok" for s in report["sources"]),
             "sources_failed": sum(s["status"] != "ok" for s in report["sources"]),
             "coverage": report["coverage"],
@@ -285,9 +351,16 @@ def generate(config_path: Path, output_dir: Path, *, fetch=read_feed,
 def main():
     parser = argparse.ArgumentParser(description="Generate source-backed Arabic Word preview (not final evidence)")
     parser.add_argument("--output-dir", type=Path, default=Path("report-output"))
+    parser.add_argument("--start-cairo",
+                        help="Exact Cairo-local start on today's date: YYYY-MM-DDTHH:MM")
+    parser.add_argument("--max-articles", type=int, default=MAX_ARTICLES,
+                        help="Public preview article cap, 1..20; default 15")
     args = parser.parse_args()
     try:
-        result = generate(Path("sources.json"), args.output_dir)
+        start = (datetime.strptime(args.start_cairo, "%Y-%m-%dT%H:%M")
+                 .replace(tzinfo=CAIRO) if args.start_cairo else None)
+        result = generate(Path("sources.json"), args.output_dir,
+                          start_cairo=start, max_articles=args.max_articles)
         print(json.dumps(result, ensure_ascii=False), flush=True)
         if result["coverage"] == "DEGRADED":
             print("::warning::RASD daily report source coverage DEGRADED", flush=True)
