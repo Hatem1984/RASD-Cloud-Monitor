@@ -1,0 +1,71 @@
+name: RASD Gate26 — strict source-scoped Word proof (owner-encrypted)
+
+on:
+  push:
+    branches:
+      - gate26-optin-proof-report-release
+  workflow_dispatch:
+
+# NO schedule, Gmail, private storage, R2, paid service or deployment protection
+permissions:
+  contents: read
+concurrency:
+  group: rasd-g26-optin-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  genuine-review-word:
+    if: github.ref == 'refs/heads/gate26-optin-proof-report-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor == 'Hatem1984')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install public-only Word/browser/encryption dependencies
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2" "cryptography>=42,<50"
+          python -m playwright install --with-deps chromium
+      - name: Regression tests before live source
+        run: python -m unittest discover -s tests -v
+      - name: RASD strict multi-article complete proof from opt-in Shorouk feed
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python gate26_verified_review.py --profile shorouk --outdir "$RUNNER_TEMP/g26-proof"
+          python - <<'PY'
+          import os,json
+          from pathlib import Path
+          folder=Path(os.environ["RUNNER_TEMP"])/"g26-proof"
+          doc=json.loads((folder/"gate26-review-audit.json").read_text())
+          assert doc["email_sent"] is False
+          assert doc["mail_sent"] is False
+          assert doc["scheduler_enabled"] is False
+          assert doc["production_daily_approved"] is False
+          assert doc["source_scope"] == "single_reviewed_shorouk_feed_only"
+          assert doc["screenshots_verified"] <= doc["articles"]
+          if doc["status"] == "REVIEW_READY":
+              assert doc["screenshots_verified"] == doc["articles"]
+              assert doc["articles"] >= 1
+              print("RASD_GATE26_REAL_ALL_SHOROUK_ARTICLES_PROOF_READY")
+          else:
+              assert doc["status"] == "HOLD"
+              assert not list(folder.glob("*.docx"))
+              print("::warning::RASD G26 HOLD: cannot deliver partial Word or false evidence")
+          PY
+      - name: Encrypt review Word+status before publishing artifact
+        run: |
+          python gate26_encrypt_review.py "$RUNNER_TEMP/g26-proof" \
+            "$RUNNER_TEMP/rasd-gate26-owner-encrypted.json" gate26_owner_review_pubkey.pem
+          test -s "$RUNNER_TEMP/rasd-gate26-owner-encrypted.json"
+      - name: Upload ONLY encrypted proof for owner-controlled offline review
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-gate26-owner-encrypted
+          path: ${{ runner.temp }}/rasd-gate26-owner-encrypted.json
+          retention-days: 1
+          compression-level: 6
+          if-no-files-found: error

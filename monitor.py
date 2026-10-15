@@ -105,7 +105,8 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
             continue
         ids.add(item_id)
         matched.append({"id": item_id, "source": feed["name"],
-                        "headline": title, "url": url, "published": published or None})
+                        "headline": title, "url": url, "published": published or None,
+                        "publisher_excerpt": short_description[:850] if feed["id"] == "shorouk" else ""})
     return eligible, matched
 
 

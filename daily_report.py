@@ -32,6 +32,21 @@ SOURCE_LABELS = {
 ARABIC_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
 
 
+def editorial_caution(headline: str) -> str:
+    """Conservative, headline-dependent interpretation, never a fabricated fact."""
+    if "يشيد" in headline or "مؤشرات" in headline:
+        return ("التغطية تنقل تقييمًا أو تصريحًا إيجابيًا عن مؤشرات اقتصادية؛"
+                " لا يعادل ذلك قياسًا مستقلاً ولا يثبت أثر سياسات محددة."
+                " يلزم فحص البيانات الأصلية والمنهجية قبل استخلاص نتائج.")
+    if "صندوق" in headline or "تمويل" in headline:
+        return ("الخبر يتناول مناقشة أو مقترحًا مرتبطًا بالتمويل؛"
+                " البحث أو الإعلان لا يثبت إنشاء الصندوق أو اعتماد المخصصات أو الصرف الفعلي."
+                " ينبغي متابعة القرارات والاتفاقيات المنشورة رسميًا.")
+    return ("هذه تغطية صحفية لتصريحات أو مباحثات؛ لا يكفي ورودها وحده"
+            " لإثبات صدور قرارات تنفيذية أو تحقق نتائج قابلة للقياس."
+            " ويستلزم التقييم متابعة المصادر الرسمية وتطور الحدث.")
+
+
 def cairo_display_time(moment: datetime) -> str:
     """Human-readable fully Arabic dates avoid RTL reordering of ISO/EEST text."""
     local = moment.astimezone(CAIRO)
@@ -81,6 +96,7 @@ def gather(config: dict, *, fetch=read_feed, now: datetime | None = None,
         articles.append({
             "id": article["id"],
             "headline": article["headline"],
+            "publisher_excerpt": article.get("publisher_excerpt", ""),
             "source": article["source"],
             "url": article["url"],
             "published_at_cairo": stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
@@ -119,7 +135,7 @@ def gather(config: dict, *, fetch=read_feed, now: datetime | None = None,
         "articles": articles,
         "sources": sources,
         "limitations": (
-            "النتائج مبنية على عناوين قنوات RSS الأصلية لمصدرين معتمدين فقط. "
+            f"النتائج مبنية على عناوين قنوات RSS الأصلية لعدد {len(config['feeds'])} من المصادر المعتمدة في هذه التجربة فقط. "
             "قد تتأخر القنوات أو تغفل أخباراً؛ هذه ليست تغطية إعلامية شاملة. "
             f"الحد الأقصى للعرض {max_articles} مادة مطابقة، ولا يتم اختلاق أخبار عند عدم وجود نتائج. "
             "التغطيات التحريرية المتعددة قد تتعلق بحدث واحد؛ تصنيف الأحداث المستقلة يحتاج مراجعة تحريرية."
@@ -233,13 +249,24 @@ def render_docx(report: dict, destination: Path) -> None:
             _rtl(p)
             run = p.add_run(str(index) + ". " + article["headline"])
             run.bold = True
+            p.paragraph_format.keep_with_next = True
             meta = doc.add_paragraph()
             _rtl(meta)
             meta.add_run("المصدر: " + SOURCE_LABELS.get(article["source"], article["source"]) +
                          " | النشر: " + article.get("published_display_cairo", article["published_at_cairo"]))
+            meta.paragraph_format.keep_with_next = True
             link_paragraph = doc.add_paragraph()
             _rtl(link_paragraph)
             _word_hyperlink(link_paragraph, article["url"])
+            link_paragraph.paragraph_format.keep_with_next = bool(article.get("publisher_excerpt"))
+            if article.get("publisher_excerpt"):
+                summary = doc.add_paragraph()
+                _rtl(summary)
+                summary.add_run("ملخص كما أورده الناشر في موجز RSS: ").bold = True
+                summary.add_run(article["publisher_excerpt"])
+                note = doc.add_paragraph()
+                _rtl(note)
+                note.add_run("قراءة تحليلية محدودة: " + editorial_caution(article["headline"]))
             if article.get("evidence_image_path"):
                 evidence_note = doc.add_paragraph()
                 _rtl(evidence_note)
@@ -281,6 +308,8 @@ def render_html(report: dict) -> str:
             esc(article["published_at_cairo"]) +
             '</p><p class="url"><a rel="noopener noreferrer" href="' +
             esc(article["url"]) + '">' + esc(article["url"]) + "</a></p>" +
+            ('<p class="summary"><strong>ملخص موجز الناشر:</strong> ' +
+             esc(article["publisher_excerpt"]) + '</p>' if article.get("publisher_excerpt") else "") +
             screenshot_html + "</section>"
         )
     articles = "".join(article_html(article, i)
