@@ -66,6 +66,14 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
     """Fail-closed for final Word; produce a redacted audit manifest on HOLD."""
     config = json.loads(config_path.read_text(encoding="utf-8"))
     report = gather(config, fetch=fetch, now=now)
+    # The Shorouk-only qualification profile is not the production-wide
+    # daily scope: print the boundary in the Word itself, not just Actions.
+    if ([x["id"] for x in config["feeds"]] == ["shorouk"]):
+        report["title"] = "رصد | تقرير مراجعة مصدر الشروق — صور ناشر موثقة"
+        report["limitations"] += (
+            " هذا اختبار نطاق مصدر الشروق الاختياري وحده؛"
+            " لا يشهد على اكتمال الرصد اليومي لجميع المصادر."
+        )
     output_dir.mkdir(parents=True, exist_ok=True)
     day = report["window_end_cairo"][:10]
     manifest_path = output_dir / f"RASD-Proof-{day}-manifest.json"
