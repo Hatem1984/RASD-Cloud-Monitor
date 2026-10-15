@@ -41,7 +41,7 @@ def publisher_article(url):
         return (u.scheme == "https" and u.hostname == PUBLISHER
                 and u.port in (None, 443) and not u.username and not u.password
                 and u.path.lower() == "/news/view.aspx"
-                and re.fullmatch(r"\\d{8}", params.get("cdate", [""])[0])
+                and re.fullmatch(r"\d{8}", params.get("cdate", [""])[0])
                 and re.fullmatch(r"[a-fA-F0-9-]{36}", params.get("id", [""])[0]))
     except (TypeError, ValueError, AttributeError, IndexError):
         return False
@@ -60,7 +60,7 @@ def fetch_public_feed(url=FEED, max_bytes=700_000):
 
 
 def strip_html(text):
-    return re.sub(r"\\s+", " ", html.unescape(re.sub(r"<[^>]*>", " ", text or ""))).strip()
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]*>", " ", text or ""))).strip()
 
 
 def extract_candidates(feed_bytes, now, *, start_cairo=None):
@@ -154,7 +154,7 @@ def screenshot_article(article, destination):
                     return {"ok":False,"reason":"invalid_or_blank_page_image"}
                 import hashlib
                 raw=destination.read_bytes()
-                if not raw.startswith(b"\\xff\\xd8"):
+                if not raw.startswith(b"\xff\xd8"):
                     destination.unlink(missing_ok=True)
                     return {"ok":False,"reason":"non_jpeg_image"}
                 return {"ok":True,"reason":"verified",
