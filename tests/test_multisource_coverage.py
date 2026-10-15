@@ -168,6 +168,28 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
         self.assertEqual(captured[0], MASRY_URL)
         self.assertEqual(result["smtp_accepted"], 0)
 
+    def test_capture_failures_identify_source_without_raw_error_details(self):
+        def fetch(url, limit):
+            return feed_xml(HAPI_URL if "hapijournal" in url else MASRY_URL)
+
+        def capture(url, publisher, destination):
+            if publisher == "almasryalyoum.com":
+                return {"ok": False,
+                        "reason": "publisher_access_refused",
+                        "private_body": "sensitive website response"}
+            return {"ok": True, "actual_url": url, "title": HEADLINE}
+        with patch.dict(os.environ, {}, clear=True):
+            result = run("dry_run", fetch=fetch, capture=capture, clock=CURRENT)
+        by_feed = {row["feed_id"]: row for row in result["capture_by_feed"]}
+        self.assertEqual(by_feed["hapi"]["captured"], 1)
+        self.assertEqual(by_feed["almasryalyoum"]["rejected"], 1)
+        self.assertEqual(
+            by_feed["almasryalyoum"]["rejection_reasons"],
+            {"publisher_access_refused": 1})
+        self.assertEqual(result["captured"], 1)
+        self.assertEqual(result["rejected_capture"], 1)
+        self.assertNotIn("sensitive website response", json.dumps(result))
+
     def test_no_automatic_capture_of_expired_native_publisher_story(self):
         feed = next(f for f in CONFIG["feeds"] if f["id"] == "almasryalyoum")
         _, matches = parse_rss(
