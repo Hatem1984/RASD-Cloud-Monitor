@@ -81,6 +81,7 @@ def gather(config: dict, *, fetch=read_feed, now: datetime | None = None,
         articles.append({
             "id": article["id"],
             "headline": article["headline"],
+            "publisher_excerpt": article.get("publisher_excerpt", ""),
             "source": article["source"],
             "url": article["url"],
             "published_at_cairo": stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
@@ -240,6 +241,15 @@ def render_docx(report: dict, destination: Path) -> None:
             link_paragraph = doc.add_paragraph()
             _rtl(link_paragraph)
             _word_hyperlink(link_paragraph, article["url"])
+            if article.get("publisher_excerpt"):
+                summary = doc.add_paragraph()
+                _rtl(summary)
+                summary.add_run("ملخص كما أورده الناشر في موجز RSS: ").bold = True
+                summary.add_run(article["publisher_excerpt"])
+                note = doc.add_paragraph()
+                _rtl(note)
+                note.add_run("قراءة تحليلية محدودة: الخبر ينقل تصريحات أو مباحثات؛ لا يكفي وحده "
+                             "للجزم بتنفيذ قرارات أو تحقق نتائج، ويلزم متابعة ما يستجد.")
             if article.get("evidence_image_path"):
                 evidence_note = doc.add_paragraph()
                 _rtl(evidence_note)
@@ -281,6 +291,8 @@ def render_html(report: dict) -> str:
             esc(article["published_at_cairo"]) +
             '</p><p class="url"><a rel="noopener noreferrer" href="' +
             esc(article["url"]) + '">' + esc(article["url"]) + "</a></p>" +
+            ('<p class="summary"><strong>ملخص موجز الناشر:</strong> ' +
+             esc(article["publisher_excerpt"]) + '</p>' if article.get("publisher_excerpt") else "") +
             screenshot_html + "</section>"
         )
     articles = "".join(article_html(article, i)
