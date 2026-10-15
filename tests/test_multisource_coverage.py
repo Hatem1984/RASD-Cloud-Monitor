@@ -18,7 +18,9 @@ from monitor import (APPROVED_FEED_URLS, article_id, inspect,
                      parse_rss, read_feed)
 
 CURRENT = datetime(2026, 10, 13, 12, tzinfo=timezone.utc)
-CONFIG = json.loads(Path("sources.json").read_text(encoding="utf-8"))
+ALL_CONFIG = json.loads(Path("sources.json").read_text(encoding="utf-8"))
+# Existing two-source regression fixtures retain their original scope.
+CONFIG = {**ALL_CONFIG, "feeds": [f for f in ALL_CONFIG["feeds"] if f["id"] != "shorouk"]}
 HAPI_URL = "https://hapijournal.com/news-planning-example"
 MASRY_URL = "https://www.almasryalyoum.com/news/details/4380924"
 HEADLINE = "وزارة التخطيط تستعرض مؤشرات التنمية في مصر"
@@ -32,12 +34,13 @@ def feed_xml(url: str, *, title=HEADLINE, published=PUBLISHED) -> bytes:
 
 
 class OriginalPublisherExpansionTests(unittest.TestCase):
-    def test_exactly_two_reviewed_native_feed_endpoints(self):
+    def test_three_reviewed_native_feed_endpoints(self):
         self.assertEqual(set(APPROVED_FEED_URLS), {
             "https://hapijournal.com/feed/",
             "https://www.almasryalyoum.com/rss/rssfeeds",
+            "https://www.shorouknews.com/Economy/rss",
         })
-        self.assertEqual({f["url"] for f in CONFIG["feeds"]},
+        self.assertEqual({f["url"] for f in ALL_CONFIG["feeds"]},
                          set(APPROVED_FEED_URLS))
 
     def test_reject_similar_looking_or_unreviewed_feed_urls_before_network(self):
