@@ -4,6 +4,11 @@ from datetime import datetime, timezone
 from xml.sax.saxutils import escape
 
 from gate25_shorouk_candidate import extract_candidates, publisher_article
+from monitor import parse_rss, APPROVED_FEED_URLS
+from gate11_runner import candidate_from_feed
+from capture_public import allowed_url
+import json
+from pathlib import Path
 NOW=datetime(2026,10,15,14,30,tzinfo=timezone.utc)
 URL="https://www.shorouknews.com/news/view.aspx?cdate=15102026&id=91362f75-9c72-4897-a136-eb54030ffdcb"
 TITLE="نائب رئيس البنك الدولي يشيد بمؤشرات الاقتصاد المصري"
@@ -51,6 +56,27 @@ class ShoroukCandidateTests(unittest.TestCase):
         other=(TITLE,URL.replace("www.shorouknews.com","hapijournal.com"),
                DESC,"Thu, 15 Oct 2026 13:47:54 +0300")
         self.assertEqual(extract_candidates(feed([irrelevant,other]),NOW),[])
+
+    def test_approved_production_feed_parses_description_and_original_provenance(self):
+        cfg=json.loads(Path("sources.json").read_text(encoding="utf-8"))
+        source=next(x for x in cfg["feeds"] if x["id"]=="shorouk")
+        self.assertIn(source["url"],APPROVED_FEED_URLS)
+        self.assertTrue(allowed_url(URL,"shorouknews.com"))
+        original=feed([(TITLE,URL,DESC,"Thu, 15 Oct 2026 13:47:54 +0300")])
+        count,matches=parse_rss(original,source,cfg["keywords"],now=NOW)
+        self.assertEqual(count,1)
+        self.assertEqual(len(matches),1)
+        selected=candidate_from_feed(matches[0],cfg,NOW)
+        self.assertEqual(selected["publisher"],"shorouknews.com")
+        self.assertEqual(selected["url"],URL)
+
+    def test_unapproved_feed_links_never_enter_new_source(self):
+        cfg=json.loads(Path("sources.json").read_text(encoding="utf-8"))
+        source=next(x for x in cfg["feeds"] if x["id"]=="shorouk")
+        xml=feed([(TITLE,URL.replace("shorouknews.com","example.invalid"),
+                   DESC,"Thu, 15 Oct 2026 13:47:54 +0300")])
+        count,matches=parse_rss(xml,source,cfg["keywords"],now=NOW)
+        self.assertEqual((count,matches),(0,[]))
 
     def test_rejects_xml_entities_and_bad_date(self):
         with self.assertRaisesRegex(ValueError,"xml_entities_forbidden"):
