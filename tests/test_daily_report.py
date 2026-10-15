@@ -162,7 +162,7 @@ class DailyReportTests(unittest.TestCase):
             self.assertTrue(result["word_created"])
             self.assertTrue(result["preview_only"])
             self.assertNotIn("pdf_created", result)
-            self.assertEqual(len(calls), 2)
+            self.assertEqual(len(calls), len(CONFIG["feeds"]))
             self.assertEqual(result["articles"], 2)
             self.assertEqual(len(list((root / "out").glob("*.docx"))), 1)
             self.assertFalse(list((root / "out").glob("*.pdf")))
