@@ -57,8 +57,8 @@ class ShoroukCandidateTests(unittest.TestCase):
                DESC,"Thu, 15 Oct 2026 13:47:54 +0300")
         self.assertEqual(extract_candidates(feed([irrelevant,other]),NOW),[])
 
-    def test_approved_production_feed_parses_description_and_original_provenance(self):
-        cfg=json.loads(Path("sources.json").read_text(encoding="utf-8"))
+    def test_reviewed_opt_in_feed_parses_description_and_original_provenance(self):
+        cfg=json.loads(Path("sources_shorouk.json").read_text(encoding="utf-8"))
         source=next(x for x in cfg["feeds"] if x["id"]=="shorouk")
         self.assertIn(source["url"],APPROVED_FEED_URLS)
         self.assertTrue(allowed_url(URL,"shorouknews.com"))
@@ -71,7 +71,7 @@ class ShoroukCandidateTests(unittest.TestCase):
         self.assertEqual(selected["url"],URL)
 
     def test_unapproved_feed_links_never_enter_new_source(self):
-        cfg=json.loads(Path("sources.json").read_text(encoding="utf-8"))
+        cfg=json.loads(Path("sources_shorouk.json").read_text(encoding="utf-8"))
         source=next(x for x in cfg["feeds"] if x["id"]=="shorouk")
         xml=feed([(TITLE,URL.replace("shorouknews.com","example.invalid"),
                    DESC,"Thu, 15 Oct 2026 13:47:54 +0300")])
