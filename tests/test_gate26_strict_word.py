@@ -58,6 +58,9 @@ class Gate26StrictWordTests(unittest.TestCase):
                 jpg=[x for x in archive.namelist() if x.startswith("word/media/")]
             self.assertEqual(len(jpg),1)
             self.assertIn("تقرير مراجعة مصدر الشروق",body)
+            self.assertIn("لعدد 1 من المصادر المعتمدة",body)
+            self.assertNotIn("لمصدرين معتمدين",body)
+            self.assertIn("w:keepNext",body)
             self.assertIn("ملخص كما أورده الناشر",body)
             self.assertIn("مباحثات",body)
             self.assertIn("الخبر ينقل تصريحات",body)
