@@ -130,6 +130,9 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
     output_dir.mkdir(parents=True, exist_ok=True)
     day = report["window_end_cairo"][:10]
     manifest_path = output_dir / f"RASD-Proof-{day}-manifest.json"
+    # A failed second attempt must not expose a prior same-day final DOCX.
+    # This destination is a temporary build area; archival copies live elsewhere.
+    (output_dir / f"RASD-Daily-{day}.docx").unlink(missing_ok=True)
     rows = []
     with tempfile.TemporaryDirectory(prefix="rasd-proofs-") as tmp:
         for article in report["articles"]:
@@ -152,11 +155,8 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
             "private_state_used": False, "owner_pc_required": False,
         }
         if ready:
-            # The output directory is a scratch work area, not an archive.
-            # Never leave a stale same-day final document after a failed retry.
             filename = f"RASD-Daily-{day}.docx"
             destination = output_dir / filename
-            destination.unlink(missing_ok=True)
             with tempfile.TemporaryDirectory(prefix=".rasd-word-", dir=output_dir) as work:
                 word = Path(work) / filename
                 render_docx(report, word)
