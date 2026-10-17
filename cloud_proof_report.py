@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+import zipfile
+from xml.etree import ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -18,6 +20,56 @@ from capture_public import APPROVED_PUBLISHERS, allowed_url, capture_publisher, 
 from daily_report import gather, render_docx
 from gate11_runner import SAFE_CAPTURE_FAILURE_CODES
 from monitor import article_id, canonical_url, read_feed
+
+
+def word_images_match_capture_digests(word: Path, entries: list[dict]) -> bool:
+    """Check the DOCX actually *displays* each independently captured JPEG.
+
+    ZIP media presence alone is insufficient: every Word drawing must resolve
+    to exactly one internal image relationship and the exact captured SHA-256.
+    No browser, network, secret, mailer, or private ledger is involved.
+    """
+    captured = [row.get("sha256") for row in entries
+                if row.get("status") == "verified"]
+    if (not captured or len(captured) != len(entries) or
+            any(not isinstance(value, str) or len(value) != 64
+                for value in captured)):
+        return False
+    try:
+        with zipfile.ZipFile(word) as archive:
+            if archive.testzip() is not None:
+                return False
+            rels = ET.fromstring(archive.read("word/_rels/document.xml.rels"))
+            document = ET.fromstring(archive.read("word/document.xml"))
+            rel_by_id = {}
+            for rel in rels:
+                if not rel.attrib.get("Type", "").endswith("/image"):
+                    continue
+                target = rel.attrib.get("Target", "")
+                if (not target.startswith("media/") or
+                        "/" in target[len("media/"):] or
+                        not target.lower().endswith((".jpg", ".jpeg"))):
+                    return False
+                rel_by_id[rel.attrib["Id"]] = "word/" + target
+            embed_key = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
+            blip_tag = "{http://schemas.openxmlformats.org/drawingml/2006/main}blip"
+            embeds = [node.attrib.get(embed_key) for node in document.iter(blip_tag)]
+            if not embeds or len(embeds) != len(captured):
+                return False
+            targets = [rel_by_id.get(reference) for reference in embeds]
+            if any(target is None for target in targets):
+                return False
+            # No unused embedded media and no repeated picture standing in
+            # for distinct publisher-article evidence.
+            media = {name for name in archive.namelist()
+                     if name.startswith("word/media/") and not name.endswith("/")}
+            if len(targets) != len(set(targets)) or media != set(targets):
+                return False
+            observed = sorted(hashlib.sha256(archive.read(name)).hexdigest()
+                              for name in targets)
+            return observed == sorted(captured)
+    except (OSError, KeyError, ValueError, TypeError, zipfile.BadZipFile, ET.ParseError):
+        return False
 
 
 def classify_failure(reason: str | None) -> str:
@@ -77,6 +129,9 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
     output_dir.mkdir(parents=True, exist_ok=True)
     day = report["window_end_cairo"][:10]
     manifest_path = output_dir / f"RASD-Proof-{day}-manifest.json"
+    # A failed second attempt must not expose a prior same-day final DOCX.
+    # This destination is a temporary build area; archival copies live elsewhere.
+    (output_dir / f"RASD-Daily-{day}.docx").unlink(missing_ok=True)
     rows = []
     with tempfile.TemporaryDirectory(prefix="rasd-proofs-") as tmp:
         for article in report["articles"]:
@@ -99,38 +154,48 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
             "private_state_used": False, "owner_pc_required": False,
         }
         if ready:
-            # Only an evidence-complete Word document may become final.
-            # Publisher refusal or incomplete coverage yields HOLD without DOCX.
             filename = f"RASD-Daily-{day}.docx"
+            destination = output_dir / filename
             with tempfile.TemporaryDirectory(prefix=".rasd-word-", dir=output_dir) as work:
                 word = Path(work) / filename
                 render_docx(report, word)
-                if not word.is_file() or word.stat().st_size < 3000:
-                    raise RuntimeError("publisher_proof_word_invalid")
-                word.replace(output_dir / filename)
-            result["word_created"] = True
-            result["archive_status"] = "NOT_CONFIGURED"
-            if archive_writer is not None:
-                # Archive the exact verified bytes while screenshot temp files exist.
-                # Fail closed if cloud upload/readback fails; only a private
-                # manifest written LAST commits a complete archived report.
-                evidence = [(row["id"], Path(tmp) / (row["id"] + ".jpg"),
-                             row["sha256"]) for row in rows]
-                try:
-                    receipt = archive_writer.publish_ready(
-                        report=result, word=output_dir / filename, evidence=evidence)
-                    if (receipt.get("status") != "PRIVATE_VERIFIED" or
-                            receipt.get("screenshots_archived") != len(rows) or
-                            receipt.get("word_archived") is not True):
-                        raise RuntimeError("private_archive_receipt_invalid")
-                except Exception:
-                    (output_dir / filename).unlink(missing_ok=True)
-                    result["status"] = "HOLD"
-                    result["word_created"] = False
-                    result["archive_status"] = "FAILED"
-                else:
-                    result["archive_status"] = "PRIVATE_VERIFIED"
-                    result["archive_manifest_sha256"] = receipt["manifest_sha256"]
+                valid_word = (
+                    word.is_file()
+                    and word.stat().st_size >= 3000
+                    and word_images_match_capture_digests(word, rows)
+                )
+                if valid_word:
+                    word.replace(destination)
+            if not valid_word:
+                # A visually plausible document with wrong/unused/missing
+                # media is NOT a final source-backed report.
+                result["status"] = "HOLD"
+                result["word_created"] = False
+                result["archive_status"] = "NOT_ATTEMPTED"
+                result["failure"] = "word_evidence_integrity_failed"
+            else:
+                result["word_created"] = True
+                result["archive_status"] = "NOT_CONFIGURED"
+                if archive_writer is not None:
+                    # Only exact, capture-verified Word bytes may enter the
+                    # private archive; a bad receipt fails closed.
+                    evidence = [(row["id"], Path(tmp) / (row["id"] + ".jpg"),
+                                 row["sha256"]) for row in rows]
+                    try:
+                        receipt = archive_writer.publish_ready(
+                            report=result, word=destination, evidence=evidence)
+                        if (receipt.get("status") != "PRIVATE_VERIFIED" or
+                                receipt.get("screenshots_archived") != len(rows) or
+                                receipt.get("word_archived") is not True):
+                            raise RuntimeError("private_archive_receipt_invalid")
+                    except Exception:
+                        destination.unlink(missing_ok=True)
+                        result["status"] = "HOLD"
+                        result["word_created"] = False
+                        result["archive_status"] = "FAILED"
+                    else:
+                        result["archive_status"] = "PRIVATE_VERIFIED"
+                        result["archive_manifest_sha256"] = receipt["manifest_sha256"]
         else:
             result["word_created"] = False
             result["archive_status"] = "NOT_ATTEMPTED"
