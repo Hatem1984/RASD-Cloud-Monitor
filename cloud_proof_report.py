@@ -22,7 +22,6 @@ from gate11_runner import SAFE_CAPTURE_FAILURE_CODES
 from monitor import article_id, canonical_url, read_feed
 
 
-
 def word_images_match_capture_digests(word: Path, entries: list[dict]) -> bool:
     """Check the DOCX actually *displays* each independently captured JPEG.
 
