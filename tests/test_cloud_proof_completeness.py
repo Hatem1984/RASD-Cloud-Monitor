@@ -22,7 +22,7 @@ def fetch(url, limit):
 def capture(url, publisher, destination):
     image = Image.new("RGB", (1200, 900), "white")
     draw = ImageDraw.Draw(image)
-    draw.rectangle((0, 0, 1199, 200), fill=(10, 20, 40))
+    # Each publisher needs its own independently identifiable screenshot bytes.\n    draw.rectangle((0, 0, 1199, 200),\n                   fill=(10, 20, 40) if publisher == "hapijournal.com"\n                   else (35, 22, 53))
     for y in range(220, 880, 25):
         draw.rectangle((30, y, 1150, y+15), fill=(30, 40, 50))
     image.save(destination, quality=90)
