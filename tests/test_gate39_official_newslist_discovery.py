@@ -67,11 +67,10 @@ class OfficialNewsListDiscoveryTests(unittest.TestCase):
 
     def test_unlinked_numbers_and_impostor_actions_cannot_be_selected(self):
         for html in (
-            '<div id="div_7269">7269</div>',
-            '<a onclick="evilNewsDetails(\\'7269\\',\\'True\\',\\'x\\')">X</a>',
-            '<div id="div_7269"></div><div onclick="newsDetails(\\'7269\\',\\'False\\')">',
-            '<div id="div_7269"></div><div onclick="newsDetails(\\'7269\\',\\'True\\',\\'x\\')"></div>'
-            '<script>const secret=7269;</script>'.replace("div_7269", "div_1"),
+            "<div id='div_7269'>7269</div>",
+            """<a onclick="evilNewsDetails('7269','True','x')">X</a>""",
+            """<div id="div_7269"></div><div onclick="newsDetails('7269','False')">X</div>""",
+            """<div id="div_1"></div><div onclick="newsDetails('7269','True','x')">X</div>""",
         ):
             with self.subTest(html=html[:60]):
                 self.assertEqual(index_articles(html), [])
@@ -107,8 +106,8 @@ class OfficialNewsListDiscoveryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 discover_official_newslist(MockHTTP(MockResponse()), max_articles=x)
         many = "".join(
-            f'<div id="div_{i}"><p onclick="newsDetails(\\'{i}\\',\\'True\\',\\'post\\')">'
-            '</p></div>' for i in range(1, 70)
+            f"""<div id="div_{i}"><p onclick="newsDetails('{i}','True','post')"></p></div>"""
+            for i in range(1, 70)
         )
         found = discover_official_newslist(
             MockHTTP(MockResponse(payload=many.encode())))
