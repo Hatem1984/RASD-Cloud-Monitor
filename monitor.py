@@ -216,12 +216,13 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
                 break
             except Exception as exc:
                 record["error"] = type(exc).__name__
-                # One bounded reattempt for transient RSS/XML/network failure.
-                # Never retry invalid publishers, unsafe redirects, DTD or
-                # unapproved endpoints; never mask a second failure.
+                # One bounded retry only for transient upstream/network
+                # errors. HTTP 429 is an explicit publisher rate-limit: DO NOT
+                # retry and risk aggravating it. Respect 403, redirects, unsafe
+                # endpoint and invalid publisher data by holding the source.
                 transient = isinstance(exc, (ET.ParseError, TimeoutError, URLError))
                 if isinstance(exc, HTTPError):
-                    transient = exc.code in {429, 500, 502, 503, 504}
+                    transient = exc.code in {500, 502, 503, 504}
                 if not transient or attempt == 1:
                     break
         sources.append(record)
