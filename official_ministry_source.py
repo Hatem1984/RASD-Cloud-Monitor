@@ -115,15 +115,23 @@ def index_articles(html: str) -> list[str]:
     return list(found)[:35]
 
 
-def discover_official_newslist(request_context, *, max_articles=35) -> list[str]:
-    """One bounded original-publisher GET with redirects prohibited."""
+def discover_official_newslist(request_context, *, max_articles=35,
+                               page_number=1) -> list[str]:
+    """Bounded original-publisher page GET; no arbitrary destinations.
+
+    pageNum=2 was independently observed as a real publisher news page.
+    Pages 1..4 only: fail closed if report day extends beyond our cap.
+    """
     if type(max_articles) is not int or not 1 <= max_articles <= 35:
         raise ValueError("official_article_limit_invalid")
+    if type(page_number) is not int or not 1 <= page_number <= 4:
+        raise ValueError("official_page_number_invalid")
+    url = NEWSLIST.replace("pageNum=1", f"pageNum={page_number}")
     response = request_context.get(
-        NEWSLIST, timeout=20000, max_redirects=0,
+        url, timeout=20000, max_redirects=0,
         headers={"Accept": "text/html", "Referer": INDEX},
     )
-    if (response.status != 200 or response.url != NEWSLIST
+    if (response.status != 200 or response.url != url
             or "text/html" not in response.headers.get("content-type", "")):
         raise ValueError("official_newslist_http_or_type_invalid")
     data = response.body()
@@ -134,7 +142,6 @@ def discover_official_newslist(request_context, *, max_articles=35) -> list[str]
     except UnicodeDecodeError:
         raise ValueError("official_newslist_encoding_invalid") from None
     return index_articles(html_body)[:max_articles]
-
 
 def original_publication_date(body: str, headline: str) -> date | None:
     """Read date adjacent to article headline, not crawl time or footer date."""

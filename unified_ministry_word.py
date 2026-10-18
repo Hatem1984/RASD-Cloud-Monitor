@@ -53,8 +53,12 @@ class OfficialPageDriver:
         finally:
             self.pw.stop()
 
+    def discover_page(self, page_number: int):
+        return discover_official_newslist(
+            self.context.request, page_number=page_number)
+
     def discover(self):
-        return discover_official_newslist(self.context.request)
+        return self.discover_page(1)
 
     def inspect(self, url: str, *, keywords: list[str],
                 target_day: date, image: Path) -> dict:
@@ -76,9 +80,11 @@ class OfficialPageDriver:
             if published is None:
                 return {"status": "HOLD", "reason": "official_publication_day_missing"}
             if published != target_day:
-                return {"status": "OUT_OF_WINDOW"}
+                return {"status": "OUT_OF_WINDOW",
+                        "published_date_cairo": published.isoformat()}
             if not _ministry_term_present(headline, keywords):
-                return {"status": "EXCLUDED_NON_MATCHING_TERM"}
+                return {"status": "EXCLUDED_NON_MATCHING_TERM",
+                        "published_date_cairo": published.isoformat()}
             proof = _read_original(self.page, url, keywords, target_day, image)
             if proof["status"] != "verified":
                 return {"status": "HOLD", "reason": proof.get("reason", "capture_failed")}
@@ -146,12 +152,14 @@ def build_unified_word(
         "rss_source_count": 2, "official_source_count": 1,
         "rss_matched_on_day": 0, "official_index_urls": 0,
         "official_same_day": 0, "official_offday": 0,
+        "official_pages_checked": 0, "official_pagination_complete": False,
+        "official_pagination_termination": "NOT_VERIFIED",
         "selected_unique_articles": 0,
         "screenshots_verified": 0, "screenshots_missing": 0,
         "word_created": False, "word_images_verified": False,
         "all_sources_healthy": False,
         "failures": {}, "source_health": [],
-        "first_page_official_scope_only": True,
+        "first_page_official_scope_only": False,
         "date_only_official_not_assigned_hour": True,
         "production_sources_changed": False, "keywords_changed": False,
         "source_added_to_production": False, "final_report_published": False,
@@ -191,73 +199,114 @@ def build_unified_word(
         official_ok = False
         try:
             with official_driver_factory() as driver:
-                links = driver.discover()
-                corroboration = driver.discover()
-                if (links != corroboration or len(links) != len(set(links))
-                        or len(links) > 35 or not links):
-                    raise ValueError("invalid_or_unstable_official_index")
-                if any(canonical_official_article(url) != url for url in links):
-                    raise ValueError("unapproved_official_article_link")
-                result["official_index_urls"] = len(links)
                 official_ok = True
-                for link in links:
-                    identifier = article_id(link)
-                    destination = Path(temp) / (identifier + ".jpg")
-                    outcome = driver.inspect(
-                        link, keywords=config["keywords"],
-                        target_day=target_day, image=destination)
-                    status = outcome.get("status")
-                    if status == "OUT_OF_WINDOW":
-                        result["official_offday"] += 1
-                        continue
-                    if status == "EXCLUDED_NON_MATCHING_TERM":
-                        continue
-                    if status != "verified" or outcome.get("id") != identifier:
-                        safe_codes = {
-                            "official_url_invalid", "official_article_unavailable",
-                            "official_article_redirect", "official_content_unavailable",
-                            "official_publication_day_missing",
-                            "official_page_validation_failed", "invalid_article_url",
-                            "publisher_page_unavailable", "publisher_redirect_changed_identity",
-                            "missing_original_headline", "official_page_content_unavailable",
-                            "saved_ministry_keywords_missing",
-                            "publisher_date_mismatch_or_missing",
-                            "original_headline_not_visible", "screenshot_too_small",
-                            "visual_qa_blank_or_low_content", "visual_qa_too_small_dimensions",
-                            "invalid_jpeg_signature",
+                previous_day = None
+                seen_links = set()
+                pagination_complete = False
+                for page_number in range(1, 5):
+                    links = driver.discover_page(page_number)
+                    corroboration = driver.discover_page(page_number)
+                    if (links != corroboration or len(links) != len(set(links))
+                            or len(links) > 35 or
+                            (page_number == 1 and not links)):
+                        raise ValueError("invalid_or_unstable_official_index")
+                    if any(canonical_official_article(url) != url for url in links):
+                        raise ValueError("unapproved_official_article_link")
+                    if set(links) & seen_links:
+                        raise ValueError("duplicate_or_repeated_official_page")
+                    seen_links.update(links)
+                    result["official_pages_checked"] = page_number
+                    result["official_index_urls"] += len(links)
+                    if not links:
+                        pagination_complete = True
+                        result["official_pagination_termination"] = "EMPTY_PAGE"
+                        break
+                    page_dates = []
+                    for link in links:
+                        identifier = article_id(link)
+                        destination = Path(temp) / (identifier + ".jpg")
+                        outcome = driver.inspect(
+                            link, keywords=config["keywords"],
+                            target_day=target_day, image=destination)
+                        status = outcome.get("status")
+                        if status == "HOLD":
+                            safe_issue = outcome.get("reason")
+                            hold(safe_issue if safe_issue in (
+                                "official_article_unavailable",
+                                "official_article_redirect",
+                                "official_content_unavailable",
+                                "official_publication_day_missing",
+                                "official_page_validation_failed",
+                            ) else "official_original_page_rejected")
+                            continue
+                        day_string = outcome.get("published_date_cairo")
+                        try:
+                            observed_day = date.fromisoformat(day_string)
+                        except (TypeError, ValueError):
+                            hold("official_original_publication_date_missing")
+                            continue
+                        if previous_day is not None and observed_day > previous_day:
+                            hold("official_archive_not_reverse_chronological")
+                        previous_day = observed_day
+                        page_dates.append(observed_day)
+                        if status == "OUT_OF_WINDOW":
+                            result["official_offday"] += 1
+                            continue
+                        if status == "EXCLUDED_NON_MATCHING_TERM":
+                            continue
+                        if status != "verified" or outcome.get("id") != identifier:
+                            safe_codes = {
+                                "official_url_invalid", "official_article_unavailable",
+                                "official_article_redirect", "official_content_unavailable",
+                                "official_publication_day_missing",
+                                "official_page_validation_failed", "invalid_article_url",
+                                "publisher_page_unavailable", "publisher_redirect_changed_identity",
+                                "missing_original_headline", "official_page_content_unavailable",
+                                "saved_ministry_keywords_missing",
+                                "publisher_date_mismatch_or_missing",
+                                "original_headline_not_visible", "screenshot_too_small",
+                                "visual_qa_blank_or_low_content", "visual_qa_too_small_dimensions",
+                                "invalid_jpeg_signature",
+                            }
+                            reason = outcome.get("reason", "other")
+                            if reason not in safe_codes:
+                                reason = "other"
+                            hold(reason if reason.startswith("official_") else "official_" + reason)
+                            continue
+                        digest = outcome.get("sha256")
+                        if (not isinstance(digest, str) or len(digest) != 64
+                                or not destination.is_file()):
+                            hold("official_screenshot_missing")
+                            continue
+                        import hashlib
+                        if hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
+                            hold("official_screenshot_sha_mismatch")
+                            continue
+                        result["official_same_day"] += 1
+                        if identifier in selected:
+                            # Same canonical URL from two channels -> one article,
+                            # but keep its original publisher provenance.
+                            continue
+                        selected[identifier] = {
+                            "id": identifier, "headline": outcome["headline"],
+                            "source": OFFICIAL_NAME, "url": link,
+                            "publisher_excerpt": "",
+                            "published_at_cairo": target_day.isoformat() + " (date only)",
+                            "published_display_cairo": (
+                                f"{target_day.isoformat()} — يوم النشر فقط؛ الساعة غير منشورة"),
+                            "_sort": (target_day.isoformat(), "0", ""),
+                            "_kind": "official",
+                            "evidence_image_path": str(destination),
                         }
-                        reason = outcome.get("reason", "other")
-                        if reason not in safe_codes:
-                            reason = "other"
-                        hold(reason if reason.startswith("official_") else "official_" + reason)
-                        continue
-                    digest = outcome.get("sha256")
-                    if (not isinstance(digest, str) or len(digest) != 64
-                            or not destination.is_file()):
-                        hold("official_screenshot_missing")
-                        continue
-                    import hashlib
-                    if hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
-                        hold("official_screenshot_sha_mismatch")
-                        continue
-                    result["official_same_day"] += 1
-                    if identifier in selected:
-                        # Same canonical URL from two channels -> one article,
-                        # but keep its original publisher provenance.
-                        continue
-                    selected[identifier] = {
-                        "id": identifier, "headline": outcome["headline"],
-                        "source": OFFICIAL_NAME, "url": link,
-                        "publisher_excerpt": "",
-                        "published_at_cairo": target_day.isoformat() + " (date only)",
-                        "published_display_cairo": (
-                            f"{target_day.isoformat()} — يوم النشر فقط؛ الساعة غير منشورة"),
-                        "_sort": (target_day.isoformat(), "0", ""),
-                        "_kind": "official",
-                        "evidence_image_path": str(destination),
-                    }
-                    receipts[identifier] = {"id": identifier, "source": OFFICIAL_NAME,
-                                             "status": "verified", "sha256": digest}
+                        receipts[identifier] = {"id": identifier, "source": OFFICIAL_NAME,
+                                                 "status": "verified", "sha256": digest}
+                    if page_dates and max(page_dates) < target_day:
+                        pagination_complete = True
+                        result["official_pagination_termination"] = "OLDER_THAN_TARGET"
+                        break
+                if not pagination_complete:
+                    hold("official_pagination_depth_exceeded")
+                result["official_pagination_complete"] = pagination_complete
         except Exception:
             hold("official_index_unavailable")
         health.append({

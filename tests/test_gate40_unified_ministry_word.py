@@ -61,6 +61,7 @@ class FakeDriver:
     offday = set()
     bad_image = set()
     list_changed = False
+    pages = None
 
     def __init__(self):
         self.calls = 0
@@ -71,21 +72,29 @@ class FakeDriver:
     def __exit__(self, *_):
         return None
 
-    def discover(self):
+    def discover_page(self, page_number):
         self.calls += 1
-        if self.list_changed and self.calls > 1:
-            return self.urls[:-1]
-        return self.urls[:]
+        result = (self.pages.get(page_number, [])[:]
+                  if self.pages is not None else
+                  (self.urls[:] if page_number == 1 else []))
+        if self.list_changed and self.calls % 2 == 0 and page_number == 1:
+            return result[:-1]
+        return result
+
+    def discover(self):
+        return self.discover_page(1)
 
     def inspect(self, url, *, keywords, target_day, image):
         assert target_day == DAY
         if url in self.blocked:
             return {"status": "HOLD", "reason": "official_article_unavailable"}
         if url in self.offday:
-            return {"status": "OUT_OF_WINDOW"}
+            return {"status": "OUT_OF_WINDOW",
+                    "published_date_cairo": "2026-10-16"}
         if url in self.bad_image:
             return {"status": "verified", "id": article_id(url),
-                    "headline": TITLE, "sha256": "a" * 64}
+                    "headline": TITLE, "sha256": "a" * 64,
+                    "published_date_cairo": "2026-10-17"}
         digest = jpeg(image, self.urls.index(url) + 2)
         return {
             "status": "verified", "id": article_id(url),
@@ -121,6 +130,7 @@ class UnifiedOriginalPublisherWordTests(unittest.TestCase):
         FakeDriver.offday = set()
         FakeDriver.bad_image = set()
         FakeDriver.list_changed = False
+        FakeDriver.pages = None
 
     def test_combines_real_publisher_types_and_inserts_sha_verifiable_images(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -223,6 +233,77 @@ class UnifiedOriginalPublisherWordTests(unittest.TestCase):
             self.assertIn("above_15_article_production_cap_no_truncation",
                           result["failures"])
             self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
+
+    def test_two_pages_with_older_cutoff_converge_into_one_word(self):
+        FakeDriver.pages = {1: [OFFICIAL], 2: [OFFICIAL2]}
+        FakeDriver.offday = {OFFICIAL2}
+        FakeDriver.urls = [OFFICIAL, OFFICIAL2]
+        with tempfile.TemporaryDirectory() as tmp:
+            result = execute(tmp)
+            self.assertEqual(result["status"], "READY_QA_ONLY")
+            self.assertEqual(result["official_index_urls"], 2)
+            self.assertEqual(result["official_pages_checked"], 2)
+            self.assertTrue(result["official_pagination_complete"])
+            self.assertEqual(result["official_pagination_termination"], "OLDER_THAN_TARGET")
+            self.assertEqual(result["official_offday"], 1)
+            self.assertEqual(result["selected_unique_articles"], 2)
+
+    def test_repeated_paged_results_hold_without_word(self):
+        FakeDriver.pages = {1: [OFFICIAL], 2: [OFFICIAL]}
+        with tempfile.TemporaryDirectory() as tmp:
+            result = execute(tmp)
+            self.assertEqual(result["status"], "HOLD")
+            self.assertIn("official_index_unavailable", result["failures"])
+            self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
+
+    def test_source_pages_out_of_chronological_order_hold(self):
+        third = "https://mped.gov.eg/singlenews?id=7264&lang=ar"
+        # Page1 still has a 17 October article, hence pagination
+        # continues; page2 improperly jumps from the 16th back to the 17th.
+        FakeDriver.pages = {1: [OFFICIAL, OFFICIAL2], 2: [third]}
+        FakeDriver.offday = {OFFICIAL2}
+        FakeDriver.urls = [OFFICIAL, OFFICIAL2, third]
+        with tempfile.TemporaryDirectory() as tmp:
+            result = execute(tmp)
+            self.assertEqual(result["status"], "HOLD")
+            self.assertIn("official_archive_not_reverse_chronological",
+                          result["failures"])
+            self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
+
+    def test_uncertified_depth_limit_holds_not_partial_report(self):
+        urls = [
+            f"https://mped.gov.eg/singlenews?id={z}&lang=ar"
+            for z in range(7100, 7104)
+        ]
+        FakeDriver.urls = urls
+        FakeDriver.pages = {i + 1: [u] for i, u in enumerate(urls)}
+        with tempfile.TemporaryDirectory() as tmp:
+            result = execute(tmp, include_rss=False)
+            self.assertEqual(result["status"], "HOLD")
+            self.assertIn("official_pagination_depth_exceeded", result["failures"])
+            self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
+
+    def test_two_independent_cairo_target_days_do_not_include_other_days(self):
+        class DatedOneDayDriver(FakeDriver):
+            def inspect(self, url, *, keywords, target_day, image):
+                return {"status": "OUT_OF_WINDOW",
+                        "published_date_cairo": "2026-10-17"}
+        for target, run_clock in (
+            (date(2026, 10, 16), datetime(2026, 10, 17, 9, tzinfo=timezone.utc)),
+            (date(2026, 10, 18), datetime(2026, 10, 18, 9, tzinfo=timezone.utc)),
+        ):
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / "sources.json"
+                source.write_text(json.dumps(PROFILE, ensure_ascii=False))
+                result = build_unified_word(
+                    source, Path(tmp) / "out", target_day=target, now=run_clock,
+                    fetch=lambda url, limit: feed(url, limit, include_rss=False),
+                    official_driver_factory=DatedOneDayDriver,
+                    capture=capture)
+                self.assertEqual(result["status"], "HOLD")
+                self.assertEqual(result["selected_unique_articles"], 0)
+                self.assertEqual(result["screenshots_verified"], 0)
+                self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
 
     def test_disallowed_profile_or_naive_clock_aborts_before_any_network(self):
         with tempfile.TemporaryDirectory() as tmp:
