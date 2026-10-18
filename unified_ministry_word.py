@@ -174,6 +174,10 @@ def build_unified_word(
     # have a verifiable original publisher identity and date. No silent loss.
     inspected = inspect(config, fetch=fetch, now=checked, article_limit=200,
                         require_complete_items=True)
+    if inspected["matched_article_pool_truncated"]:
+        # Otherwise eligible article #201 may vanish BEFORE the 15-item
+        # final document cap is checked; never accept a partial source pool.
+        hold("rss_candidate_pool_exceeded_no_truncation")
     health = [{
         "feed_id": row["feed_id"], "status": row["status"],
         "verified_links": row["verified_links"],
