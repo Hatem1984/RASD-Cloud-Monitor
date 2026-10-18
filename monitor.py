@@ -117,7 +117,7 @@ def _publisher_timestamp(node) -> tuple[datetime, str] | None:
     return timestamp, format_datetime(timestamp)
 
 
-def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hours=72) -> tuple[int, list[dict]]:
+def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hours=72, *, require_complete_items=False) -> tuple[int, list[dict]]:
     """Match saved Ministry phrases in native publisher title OR excerpt.
 
     RSS is a bounded CURRENT feed, not a full publisher archive. Only
@@ -128,6 +128,28 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
     root = ET.fromstring(data)
     if root.tag.rsplit("}", 1)[-1] != "rss":
         raise ValueError("not_rss")
+    # The Stage2 ORIGINAL Word must not silently lose publisher entries
+    # merely because a syntactically valid RSS feed contains an incomplete
+    # item. The older public headline preview retains its filter semantics.
+    if require_complete_items:
+        if root.find("channel") is None:
+            raise ValueError("rss_channel_unverifiable")
+        identities = {}
+        for item in root.findall("./channel/item"):
+            title = (item.findtext("title") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            if not title or not is_publisher_link(link, feed["allowed_article_hosts"]):
+                raise ValueError("rss_original_item_identity_unverifiable")
+            dated = _publisher_timestamp(item)
+            if dated is None:
+                raise ValueError("rss_original_item_date_unverifiable")
+            # Conflicting duplicate URLs cannot be silently resolved by
+            # relevance filtering or first-wins deduplication.
+            key = canonical_url(link)
+            signature = (title, dated[0].isoformat())
+            if key in identities and identities[key] != signature:
+                raise ValueError("rss_original_duplicate_conflict")
+            identities[key] = signature
     now = datetime.now(timezone.utc) if now is None else now
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("naive_monitor_clock_forbidden")
@@ -180,7 +202,7 @@ def read_feed(url: str, size_limit: int) -> bytes:
         return data
 
 
-def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15) -> dict:
+def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15, require_complete_items: bool = False) -> dict:
     # The default preserves the original compact public monitoring response.
     # Reporting can explicitly request a larger validated pool before it sorts
     # by publisher publication time and selects the 15 newest headlines.
@@ -203,7 +225,8 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
             try:
                 data = fetch(feed["url"], config["max_feed_bytes"])
                 count, matches = parse_rss(data, feed, config["keywords"], checked,
-                                           config["recent_hours"])
+                                           config["recent_hours"],
+                                           require_complete_items=require_complete_items)
                 record.update(
                     status="ok", verified_links=count,
                     headline_matches=len(matches),
