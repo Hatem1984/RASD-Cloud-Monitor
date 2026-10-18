@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from time import sleep
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -233,6 +234,14 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
                     transient = exc.code in {500, 502, 503, 504}
                 if not transient or attempt == 1:
                     break
+                if isinstance(exc, ET.ParseError):
+                    # The publisher sometimes serves malformed transient XML
+                    # and immediately recovers. A rapid identical re-request
+                    # can hit the same bad upstream response. Wait once;
+                    # never repair publisher text, skip bad XML items, or
+                    # claim the source healthy until a second FULL parse.
+                    record["rss_parse_retry_delayed"] = True
+                    sleep(1.25)
         sources.append(record)
     if not sources or all(item["status"] == "failed" for item in sources):
         raise RuntimeError("all_public_RSS_sources_failed")
