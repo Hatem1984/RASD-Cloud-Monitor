@@ -50,6 +50,22 @@ class UnifiedWordMimeNoSendTests(unittest.TestCase):
             ):
                 self.assertIs(result[name], False, name)
 
+    def test_strict_valid_empty_rss_is_healthy_not_false_outage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            audit, word = make_report(tmp)
+            audit["source_health"][0]["verified_links"] = 0
+            audit["source_health"][1]["verified_links"] = 0
+            result = no_send_unified_mime_preflight(audit, word, DAY)
+            self.assertEqual(result["original_source_count"], 3)
+            self.assertFalse(result["email_sent"])
+
+    def test_official_ministry_must_still_have_a_discovered_original_link(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            audit, word = make_report(tmp)
+            audit["source_health"][2]["verified_links"] = 0
+            with self.assertRaisesRegex(ValueError, "original_source_incomplete"):
+                no_send_unified_mime_preflight(audit, word, DAY)
+
     def test_unverified_source_full_report_refused_before_mime(self):
         for change in (
             {"status": "HOLD"},
