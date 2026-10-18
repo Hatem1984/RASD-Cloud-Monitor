@@ -118,6 +118,37 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
         ])
         self.assertFalse(result["scheduler_enabled"])
 
+    def test_rss_rate_limit_429_is_not_retried_or_falsely_healthy(self):
+        from urllib.error import HTTPError
+        calls = {"masry": 0}
+        def fetch_rate_limited(url, limit):
+            if "almasryalyoum" not in url:
+                return feed_xml(HAPI_URL)
+            calls["masry"] += 1
+            raise HTTPError(url, 429, "rate-limited", {}, None)
+        result = inspect(CONFIG, fetch=fetch_rate_limited, now=CURRENT)
+        self.assertEqual(calls["masry"], 1)
+        self.assertEqual([x["status"] for x in result["sources"]], ["ok", "failed"])
+        self.assertEqual(result["sources"][1]["error"], "HTTPError")
+        self.assertEqual(result["sources"][1]["http_status"], 429)
+        self.assertEqual(result["planning_headline_matches"], 1)
+        self.assertFalse(result["email_sent"])
+        self.assertFalse(result["scheduler_enabled"])
+
+    def test_rss_transient_503_recovers_with_only_one_same_url_retry(self):
+        from urllib.error import HTTPError
+        calls = {"masry": 0}
+        def fetch_transient(url, limit):
+            if "almasryalyoum" not in url:
+                return feed_xml(HAPI_URL)
+            calls["masry"] += 1
+            if calls["masry"] == 1:
+                raise HTTPError(url, 503, "source-unavailable", {}, None)
+            return feed_xml(MASRY_URL)
+        result = inspect(CONFIG, fetch=fetch_transient, now=CURRENT)
+        self.assertEqual(calls["masry"], 2)
+        self.assertEqual([x["status"] for x in result["sources"]], ["ok", "ok"])
+
     def test_transient_bad_rss_recovers_on_one_retry(self):
         calls = {"masry": 0}
         def fetch_once_bad(url, limit):
