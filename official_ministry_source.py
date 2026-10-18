@@ -138,10 +138,21 @@ def _read_original(page, url: str, keywords: list[str], target_day: date, image:
     except Exception:
         return {"status": "HOLD", "reason": "original_headline_not_visible"}
     with tempfile.TemporaryDirectory(prefix="rasd-official-frame-", dir=image.parent) as td:
-        staged = Path(td) / "publisher.jpg"
-        page.screenshot(path=str(staged), type="jpeg", quality=82,
-                        full_page=False, timeout=15000)
-        proof = accept_staged_image(staged, image)
+        proof = {"ok": False, "reason": "screenshot_too_small"}
+        # A genuine but text-heavy original page may compress below the
+        # acceptance floor in a single viewport. Try the same article's
+        # full rendered page; never skip actual JPEG or visual checks.
+        for full_page in (False, True):
+            staged = Path(td) / (
+                "publisher-full.jpg" if full_page else "publisher-view.jpg")
+            page.screenshot(path=str(staged), type="jpeg", quality=85,
+                            full_page=full_page, timeout=15000)
+            proof = accept_staged_image(staged, image)
+            if proof["ok"]:
+                break
+            if proof["reason"] not in (
+                    "screenshot_too_small", "visual_qa_blank_or_low_content"):
+                break
     if not proof["ok"]:
         return {"status": "HOLD", "reason": proof["reason"]}
     return {
