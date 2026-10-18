@@ -74,9 +74,9 @@ class FakeDriver:
 
     def discover_page(self, page_number):
         self.calls += 1
-        result = (self.urls[:] if page_number == 1 else []
-                  if self.pages is None else
-                  self.pages.get(page_number, [])[:])
+        result = (self.pages.get(page_number, [])[:]
+                  if self.pages is not None else
+                  (self.urls[:] if page_number == 1 else []))
         if self.list_changed and self.calls % 2 == 0 and page_number == 1:
             return result[:-1]
         return result
@@ -232,6 +232,50 @@ class UnifiedOriginalPublisherWordTests(unittest.TestCase):
             self.assertEqual(result["status"], "HOLD")
             self.assertIn("above_15_article_production_cap_no_truncation",
                           result["failures"])
+            self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
+
+    def test_two_pages_with_older_cutoff_converge_into_one_word(self):
+        FakeDriver.pages = {1: [OFFICIAL], 2: [OFFICIAL2]}
+        FakeDriver.offday = {OFFICIAL2}
+        FakeDriver.urls = [OFFICIAL, OFFICIAL2]
+        with tempfile.TemporaryDirectory() as tmp:
+            result = execute(tmp)
+            self.assertEqual(result["status"], "READY_QA_ONLY")
+            self.assertEqual(result["official_index_urls"], 2)
+            self.assertEqual(result["official_pages_checked"], 2)
+            self.assertTrue(result["official_pagination_complete"])
+            self.assertEqual(result["official_pagination_termination"], "OLDER_THAN_TARGET")
+            self.assertEqual(result["official_offday"], 1)
+            self.assertEqual(result["selected_unique_articles"], 2)
+
+    def test_repeated_paged_results_hold_without_word(self):
+        FakeDriver.pages = {1: [OFFICIAL], 2: [OFFICIAL]}
+        with tempfile.TemporaryDirectory() as tmp:
+            result = execute(tmp)
+            self.assertEqual(result["status"], "HOLD")
+            self.assertIn("official_index_unavailable", result["failures"])
+            self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
+
+    def test_source_pages_out_of_chronological_order_hold(self):
+        FakeDriver.pages = {1: [OFFICIAL2], 2: [OFFICIAL]}
+        FakeDriver.offday = {OFFICIAL2}
+        FakeDriver.urls = [OFFICIAL2, OFFICIAL]
+        with tempfile.TemporaryDirectory() as tmp:
+            result = execute(tmp)
+            self.assertEqual(result["status"], "HOLD")
+            self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
+
+    def test_uncertified_depth_limit_holds_not_partial_report(self):
+        urls = [
+            f"https://mped.gov.eg/singlenews?id={z}&lang=ar"
+            for z in range(7100, 7104)
+        ]
+        FakeDriver.urls = urls
+        FakeDriver.pages = {i + 1: [u] for i, u in enumerate(urls)}
+        with tempfile.TemporaryDirectory() as tmp:
+            result = execute(tmp, include_rss=False)
+            self.assertEqual(result["status"], "HOLD")
+            self.assertIn("official_pagination_depth_exceeded", result["failures"])
             self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
 
     def test_disallowed_profile_or_naive_clock_aborts_before_any_network(self):
