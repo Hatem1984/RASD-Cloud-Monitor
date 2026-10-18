@@ -1,0 +1,122 @@
+name: Gate57 — latest-main genuine Stage2 Word acceptance (NO email or schedule)
+
+on:
+  push:
+    branches:
+      - gate57-stage2-real-word-recheck
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-gate57-latest-main-word-acceptance
+  cancel-in-progress: true
+
+jobs:
+  latest-main-real-word-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install isolated original-page browser and private Word render tools
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libreoffice-writer poppler-utils fonts-dejavu-core fonts-noto-core
+      - name: Run complete offline regressions before contacting original publishers
+        run: python -m unittest discover -s tests -v
+      - name: Collect last COMPLETE Cairo day; inspect genuine Word and encrypt all review pages
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+          RASD_MAIL_ENABLED: "false"
+          RASD_SCHEDULER_ENABLED: "false"
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$(TZ=Africa/Cairo date -d yesterday +%Y-%m-%d)"
+          mkdir -p "$RUNNER_TEMP/gate57-private"
+          python unified_ministry_word.py --target-day "$target" \
+            --output-dir "$RUNNER_TEMP/gate57-private" \
+            | tee "$RUNNER_TEMP/gate57-audit.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from gate43_owner_encrypted_review import pack_owner_review
+          from word_render_audit import rendered_word_preflight
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          audit = json.loads((root / "gate57-audit.json").read_text(encoding="utf-8").splitlines()[0])
+          docs = list((root / "gate57-private").glob("RASD-Unified-*.docx"))
+          assert audit["mode"] == "stage2_ministry_unified_word_ephemeral_qa"
+          for flag in ("source_added_to_production", "production_sources_changed",
+                       "keywords_changed", "email_sent", "scheduler_enabled",
+                       "private_storage_used", "final_report_published"):
+              assert audit[flag] is False, flag
+          assert audit["date_only_official_not_assigned_hour"] is True
+          assert audit["production_15_item_cap_intact"] is True
+          ready = audit["status"] == "READY_QA_ONLY"
+          if ready:
+              assert len(docs) == 1
+              assert audit["all_sources_healthy"] is True
+              assert audit["official_pagination_complete"] is True
+              assert audit["word_images_verified"] is True
+              assert audit["screenshots_missing"] == 0
+              assert audit["screenshots_verified"] == audit["selected_unique_articles"]
+              checked = rendered_word_preflight(
+                  docs[0], expected_articles=audit["selected_unique_articles"],
+                  review_pages_dir=root / "gate57-review-pages",
+              )
+              assert checked["status"] == "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW"
+              assert checked["arabic_text_extraction_mode"] in ("layout", "raw")
+              print("GATE57_FULL_ORIGINAL_HEADLINE_RENDER_PASS; HUMAN_REVIEW_PENDING")
+          else:
+              assert audit["status"] == "HOLD" and not docs
+              print("::warning::GATE57_SOURCE_HOLD; NO_INCOMPLETE_WORD")
+          receipt = pack_owner_review(
+              root / "gate57-private", audit,
+              root / "gate57-owner-ciphertext.json", render_passed=ready,
+              review_pages_dir=(root / "gate57-review-pages" if ready else None),
+          )
+          assert receipt["encrypted"] and not receipt["plaintext_artifact"]
+          assert receipt["owner_review_word_included"] == ready
+          assert receipt["owner_review_pages_encrypted"] == ready
+          with (root / "gate57-verdict").open("w", encoding="ascii") as verdict:
+              verdict.write("READY_QA_ONLY" if ready else "HOLD")
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+              summary.write("### Stage 2 live original-source Word acceptance\n\n")
+              summary.write(f"- Cairo date: {audit['target_date_cairo']}\n")
+              summary.write(f"- Report: **{'READY_QA_ONLY' if ready else 'HOLD'}**\n")
+              summary.write(f"- All three approved sources healthy: {audit['all_sources_healthy']}\n")
+              summary.write(f"- Encrypted Word + private visual pages included: {ready}\n")
+              summary.write("- Final human page-by-page approval: **PENDING**\n")
+              summary.write("- Gmail / cron / public publisher media: **DISABLED**\n")
+          print("GATE57_ENCRYPTED_OWNER_EVIDENCE; WORD_INCLUDED=" + str(ready))
+          PY
+      - name: Upload encrypted owner-only artifact even on a correctly blocked source
+        if: ${{ always() && hashFiles('gate57-no-such-file') == '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-gate57-owner-ciphertext-${{ github.run_id }}
+          path: ${{ runner.temp }}/gate57-owner-ciphertext.json
+          retention-days: 1
+          if-no-files-found: ignore
+      - name: Mark live acceptance as FAILED when source/report is HOLD
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RUNNER_TEMP/gate57-verdict" ]; then
+            echo "::error::GATE57_NO_VALID_LIVE_ACCEPTANCE_RECEIPT"
+            exit 1
+          fi
+          if [ "$(cat "$RUNNER_TEMP/gate57-verdict")" != "READY_QA_ONLY" ]; then
+            echo "::error::GATE57_LIVE_REPORT_HOLD_NOT_ACCEPTED"
+            exit 1
+          fi
+          echo "GATE57_MACHINE_QA_ONLY; HUMAN_REVIEW_PENDING"
