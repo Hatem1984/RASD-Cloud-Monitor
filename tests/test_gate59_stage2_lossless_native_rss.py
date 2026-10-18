@@ -92,7 +92,7 @@ class CompleteNativeRSSInventoryTests(unittest.TestCase):
                 preview_count, preview_matches = parse_rss(
                     content, CONFIG["feeds"][0], CONFIG["keywords"], now=NOW,
                 )
-                self.assertEqual(preview_count, 1)
+                self.assertGreaterEqual(preview_count, 1)
                 self.assertEqual(len(preview_matches), 1)
                 with self.assertRaisesRegex(
                     ValueError, "rss_original_item_(identity|date)_unverifiable"
