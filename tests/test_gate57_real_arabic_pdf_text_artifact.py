@@ -14,7 +14,7 @@ from word_render_audit import (
 class ArabicDoubleAlefPDFRegressionTests(unittest.TestCase):
     def test_synthetic_actual_libreoffice_layout_artifact_verifies_full_title(self):
         # Independently reproduced with DejaVu Sans, RTL Word -> LibreOffice
-        # PDF -> Poppler -layout: the extracted word gains one initial Alef.
+        # PDF -> Poppler -layout: the extracted word transposes the first Alef and Lam.
         doc = SimpleNamespace(paragraphs=[SimpleNamespace(
             text="1. وزارة التخطيط والتنمية الاقتصادية تناقش الاستثمار والاقتصاد والابتكار"
         )])
@@ -51,7 +51,7 @@ class ArabicDoubleAlefPDFRegressionTests(unittest.TestCase):
             _verify_headlines_in_independent_pdf_extractions(
                 doc, layout_text=bad, raw_text=bad, expected_articles=1)
 
-    def test_only_one_duplicated_initial_alef_is_accepted(self):
+    def test_only_one_transposed_initial_alef_is_accepted(self):
         self.assertIn("الاقتصادية", _arabic_headline_tokens(
             "االقتصادية", pdf_extraction=True))
         self.assertNotIn("الاقتصادية", _arabic_headline_tokens(

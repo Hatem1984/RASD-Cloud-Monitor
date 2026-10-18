@@ -57,13 +57,13 @@ def _arabic_headline_tokens(
                             normalized))
     if not pdf_extraction:
         return tokens
-    # Reproducible LibreOffice/Poppler Arabic text-layer artifact:
-    # source "الاقتصادية" -> pdftotext "االقتصادية", and
-    # source "والاقتصاد" -> pdftotext "واالقتصاد".
-    # Allow ONLY one duplicated initial Alef immediately before "ال",
-    # optionally after one common Arabic proclitic. The rest of each FULL
-    # original title token must still be present in a single PDF extraction.
-    return {re.sub(r"^([وفبكل]?)اال", r"\1ال", token) for token in tokens}
+    # Reproducible LibreOffice/Poppler text-layer artifact:
+    # source "الاقتصادية" (alef-lam-alef) is extracted as
+    # "االقتصادية" (alef-alef-lam); same transposition after a proclitic.
+    # Swap ONLY this exact letter-order artifact: NO characters are dropped,
+    # no original Word content is edited, and ALL other original headline
+    # words must still occur in ONE PDF extraction mode.
+    return {re.sub(r"^([وفبكل]?)اال", r"\1الا", token) for token in tokens}
 
 
 def _verify_original_headlines_in_pdf(doc, pdf_text: str, count: int) -> None:
