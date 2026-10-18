@@ -185,7 +185,7 @@ def build_unified_word(
         "http_status": (
             row.get("http_status") if row["status"] != "ok"
             and row.get("http_status") in {
-                400, 401, 403, 404, 408, 429, 500, 502, 503, 504,
+                301, 302, 303, 307, 308, 400, 401, 403, 404, 408, 429, 500, 502, 503, 504,
             } else None
         ),
     } for row in inspected["sources"]]
