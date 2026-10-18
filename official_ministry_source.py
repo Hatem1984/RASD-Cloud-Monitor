@@ -23,6 +23,9 @@ from monitor import _ministry_term_present, article_id
 
 CAIRO = ZoneInfo("Africa/Cairo")
 INDEX = "https://mped.gov.eg/News?id=57&lang=ar"
+# Observed GET from the Ministry's own news listing (Gate39 live network
+# log), not a guessed ID, search engine, or an unrelated provider.
+NEWSLIST = "https://mped.gov.eg/News/NewsList?lang=ar&pageNum=1&typeId=0"
 # A PUBLISHED/INDEPENDENTLY REVIEWED ORIGINAL-PAGE URL, not a discovery feed.
 SAMPLE = "https://mped.gov.eg/singlenews?id=7269&lang=ar"
 OFFICIAL_HOSTS = frozenset(("mped.gov.eg", "www.mped.gov.eg"))
@@ -63,15 +66,34 @@ def allowed_official_resource(url: str) -> bool:
 
 
 class _Links(HTMLParser):
+    """Read ID pairs from the Ministry's published NewsList card structure.
+
+    Its article cards use <div id="div_7269"> and the publisher-defined
+    newsDetails('7269','True',...) click handler, NOT ordinary href links.
+    Requiring BOTH prevents treating arbitrary digits as discovered stories.
+    """
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.hrefs = []
+        self.card_ids = set()
+        self.action_ids = []
 
     def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
         if tag.casefold() == "a":
-            target = dict(attrs).get("href")
+            target = attributes.get("href")
             if target:
                 self.hrefs.append(target)
+        identity = re.fullmatch(r"div_([1-9][0-9]{0,8})", attributes.get("id") or "")
+        if tag.casefold() == "div" and identity:
+            self.card_ids.add(identity.group(1))
+        action = (attributes.get("onclick") or "").strip()
+        match = re.match(
+            r"^newsDetails\s*\(\s*'([1-9][0-9]{0,8})'\s*,\s*'(?:True|False)'\s*,",
+            action, flags=re.ASCII,
+        )
+        if match and len(action) <= 1400:
+            self.action_ids.append(match.group(1))
 
 
 def index_articles(html: str) -> list[str]:
@@ -84,7 +106,34 @@ def index_articles(html: str) -> list[str]:
         url = canonical_official_article(urljoin(INDEX, raw))
         if url:
             found[url] = None
+    for article_number in parser.action_ids[:250]:
+        if article_number in parser.card_ids:
+            # This number comes EXCLUSIVELY from a real original publisher
+            # HTML card+click action. Never enumerate or guess IDs.
+            link = (f"https://mped.gov.eg/singlenews?id={article_number}&lang=ar")
+            found[link] = None
     return list(found)[:35]
+
+
+def discover_official_newslist(request_context, *, max_articles=35) -> list[str]:
+    """One bounded original-publisher GET with redirects prohibited."""
+    if type(max_articles) is not int or not 1 <= max_articles <= 35:
+        raise ValueError("official_article_limit_invalid")
+    response = request_context.get(
+        NEWSLIST, timeout=20000, max_redirects=0,
+        headers={"Accept": "text/html", "Referer": INDEX},
+    )
+    if (response.status != 200 or response.url != NEWSLIST
+            or "text/html" not in response.headers.get("content-type", "")):
+        raise ValueError("official_newslist_http_or_type_invalid")
+    data = response.body()
+    if not data or len(data) > 1_500_000:
+        raise ValueError("official_newslist_size_invalid")
+    try:
+        html_body = data.decode("utf-8", "strict")
+    except UnicodeDecodeError:
+        raise ValueError("official_newslist_encoding_invalid") from None
+    return index_articles(html_body)[:max_articles]
 
 
 def original_publication_date(body: str, headline: str) -> date | None:
@@ -179,7 +228,8 @@ def run(*, config_path=Path("sources.json"), target_day=date(2026, 10, 17),
     output = {
         "mode": "official_ministry_optin_qa",
         "official_index": "HOLD", "index_article_links": 0,
-        "sample_origin": "separately_reviewed_original_url_NOT_feed_discovery",
+        "sample_origin": "official_NewsList_card_discovery_only",
+        "index_repeat_confirmed": False,
         "sample_status": "HOLD", "sample_verified_screenshots": 0,
         "sample_word_images_verified": False,
         "sample_publication_date_cairo": None,
@@ -203,21 +253,30 @@ def run(*, config_path=Path("sources.json"), target_day=date(2026, 10, 17),
                         route.continue_() if allowed_official_resource(route.request.url)
                         else route.abort()))
                     page = context.new_page()
+                    links = []
                     try:
-                        response = page.goto(
-                            listing_url, wait_until="domcontentloaded", timeout=24000)
-                        if response is not None and response.status == 200:
-                            page.wait_for_timeout(1500)
-                            links = index_articles(page.content())
-                            output["index_article_links"] = len(links)
-                            output["official_index"] = "FOUND" if links else "HOLD"
+                        first = discover_official_newslist(context.request)
+                        second = discover_official_newslist(context.request)
+                        links = first
+                        output["index_article_links"] = len(first)
+                        output["index_repeat_confirmed"] = bool(
+                            first and sample_url in first and sample_url in second
+                        )
+                        output["official_index"] = (
+                            "FOUND" if output["index_repeat_confirmed"] else "HOLD"
+                        )
                     except Exception:
                         output["index_failure"] = "unavailable_or_unreadable"
                     image = Path(temp) / "verified.jpg"
-                    # A known publisher story proves READ/CAPTURE, not discovery.
+                    # The original URL MUST come from the live official
+                    # NewsList card list. The reference sample cannot be
+                    # silently injected into the discovered candidates.
                     try:
-                        receipt = _read_original(
-                            page, sample_url, config["keywords"], target_day, image)
+                        if sample_url not in links:
+                            receipt = {"status": "HOLD", "reason": "article_not_discovered"}
+                        else:
+                            receipt = _read_original(
+                                page, sample_url, config["keywords"], target_day, image)
                     except Exception:
                         receipt = {"status": "HOLD", "reason": "original_page_probe_failed"}
                     output["sample_status"] = receipt["status"]
@@ -240,7 +299,7 @@ def run(*, config_path=Path("sources.json"), target_day=date(2026, 10, 17),
                             "sources": [{"feed_id": "mped-official",
                                          "status": "ok", "verified_links": 1,
                                          "error_type": None}],
-                            "limitations": "اختبار رابط معروف مسبقًا وليس اكتشافًا آليًا أو تقرير إنتاج.",
+                            "limitations": "رابط استُخرج من استجابة NewsList الرسمية؛ اختبار فقط وليس تقرير إنتاج.",
                         }
                         word = Path(temp) / "official-qa.docx"
                         render_docx(report, word)
