@@ -117,6 +117,28 @@ class Gate27WordImageIntegrityTests(unittest.TestCase):
             self.assertEqual(outcome["status"], "HOLD")
             self.assertFalse(list(folder.glob("*.docx")))
 
+    def test_swapped_article_screenshots_are_hold_even_with_same_byte_digests(self):
+        """Matching the screenshot SET is insufficient: pictures must match articles."""
+        def swap_evidence_placements(report, word):
+            altered = copy.deepcopy(report)
+            rows = altered["articles"]
+            self.assertEqual(len(rows), 2)
+            rows[0]["evidence_image_path"], rows[1]["evidence_image_path"] = (
+                rows[1]["evidence_image_path"], rows[0]["evidence_image_path"]
+            )
+            render_docx(altered, word)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            with patch("cloud_proof_report.render_docx",
+                       side_effect=swap_evidence_placements):
+                outcome = build(folder)
+            self.assertEqual(outcome["screenshots_verified"], 2)
+            self.assertEqual(outcome["status"], "HOLD")
+            self.assertEqual(outcome["failure"], "word_evidence_integrity_failed")
+            self.assertFalse(outcome["word_created"])
+            self.assertFalse(list(folder.glob("*.docx")))
+
     def test_failed_same_day_retry_does_not_leave_previous_final_word(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
