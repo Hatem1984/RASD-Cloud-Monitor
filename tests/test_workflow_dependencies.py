@@ -24,14 +24,14 @@ TEST_REQUIREMENTS = "python -m pip install -r requirements-test.txt"
 
 
 class WorkflowDependenciesContractTests(unittest.TestCase):
-    def test_single_manifest_contains_all_three_current_offline_libraries(self):
+    def test_single_manifest_contains_current_offline_and_owner_crypto_libraries(self):
         entries = (ROOT / "requirements-test.txt").read_text(encoding="utf-8").splitlines()
         packages = set()
         for line in entries:
             line = line.strip()
             if line and not line.startswith("#"):
                 packages.add(re.split(r"[<>=!~]", line, maxsplit=1)[0].casefold())
-        self.assertEqual(packages, {"pillow", "python-docx"})
+        self.assertEqual(packages, {"pillow", "python-docx", "cryptography"})
 
     def test_every_workflow_uses_the_same_test_dependencies(self):
         for name in WORKFLOWS:

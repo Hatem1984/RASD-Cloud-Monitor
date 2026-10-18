@@ -2,3 +2,4 @@
 # Excludes Playwright browser binaries; install Chromium only where needed.
 Pillow>=10,<13
 python-docx>=1.1,<2
+cryptography>=42,<50  # Encrypt/decrypt owner-only stage-2 proof artifact; no secret key on CI
