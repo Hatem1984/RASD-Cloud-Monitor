@@ -1,0 +1,116 @@
+name: RASD Ministry official + RSS — manual strict Word owner review (NO Gmail)
+
+on:
+  workflow_dispatch:
+    inputs:
+      day:
+        description: "Cairo calendar window: prior full day, or current partial day"
+        type: choice
+        required: true
+        default: yesterday
+        options:
+          - yesterday
+          - today
+
+# Approved original sources ONLY: Ministry official NewsList, Hapi and
+# Al Masry Al Youm native publisher RSS, exact saved four Ministry phrases.
+# NO mail, R2/private object store, cron, paid services, or public plaintext
+# Word/photo/PDF/raster artifact. Owner RSA encrypted review JSON only.
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-unified-ministry-manual-owner-review
+  cancel-in-progress: false
+
+jobs:
+  owner-manual-word:
+    if: github.ref == 'refs/heads/main' && github.actor == 'Hatem1984'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install original publisher browser, Word QA, and owner encryption dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2" "cryptography>=42,<50"
+          python -m playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libreoffice-writer poppler-utils fonts-dejavu-core fonts-noto-core
+      - name: Validate offline source/date/Word/privacy gate
+        run: python -m unittest discover -s tests -v
+      - name: Collect genuine Ministry and RSS original pages, generate Word or HOLD
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+          RASD_MAIL_ENABLED: "false"
+          RASD_SCHEDULER_ENABLED: "false"
+        run: |
+          set -euo pipefail
+          mode="${{ inputs.day }}"
+          if [ "$mode" = "yesterday" ]; then
+            target="$(TZ=Africa/Cairo date -d yesterday +%Y-%m-%d)"
+          elif [ "$mode" = "today" ]; then
+            target="$(TZ=Africa/Cairo date +%Y-%m-%d)"
+          else
+            echo "::error::Invalid day choice"
+            exit 2
+          fi
+          folder="$RUNNER_TEMP/rasd-unified-private"
+          mkdir -p "$folder"
+          python unified_ministry_word.py --target-day "$target" --output-dir "$folder" \
+            | tee "$RUNNER_TEMP/rasd-unified-owner-audit.json"
+          python - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          from word_render_audit import rendered_word_preflight
+          from gate43_owner_encrypted_review import pack_owner_review
+          root = Path(os.environ["RUNNER_TEMP"])
+          report_dir = root / "rasd-unified-private"
+          audit = json.loads((root / "rasd-unified-owner-audit.json").read_text().splitlines()[0])
+          assert audit["mode"] == "stage2_ministry_unified_word_ephemeral_qa"
+          assert audit["source_added_to_production"] is False
+          assert audit["email_sent"] is False
+          assert audit["scheduler_enabled"] is False
+          assert audit["private_storage_used"] is False
+          assert audit["final_report_published"] is False
+          assert audit["production_sources_changed"] is False
+          assert audit["keywords_changed"] is False
+          assert audit["production_15_item_cap_intact"] is True
+          words = list(report_dir.glob("RASD-Unified-*.docx"))
+          rendered = False
+          if audit["status"] == "READY_QA_ONLY":
+              assert audit["all_sources_healthy"] and audit["word_images_verified"]
+              assert audit["official_pagination_complete"]
+              assert audit["screenshots_verified"] == audit["selected_unique_articles"]
+              assert audit["screenshots_missing"] == 0
+              assert len(words) == 1
+              preflight = rendered_word_preflight(
+                  words[0], expected_articles=audit["selected_unique_articles"])
+              assert preflight["status"] == "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW"
+              rendered = True
+              print("RASD_REAL_MINISTRY_WORD_OWNER_REVIEW_ENCRYPTED_ONLY; HUMAN_REVIEW_PENDING")
+          else:
+              assert audit["status"] == "HOLD" and not words
+              print("::warning::RASD_SOURCE_OR_PROOF_HOLD; NO_WORD")
+          receipt = pack_owner_review(
+              report_dir, audit, root / "rasd-g43-owner-encrypted.json",
+              render_passed=rendered,
+          )
+          assert receipt["encrypted"] and not receipt["plaintext_artifact"]
+          assert not receipt["email_sent"]
+          print("RASD_OWNER_ENCRYPTED_ARTIFACT_READY; HAS_GENUINE_WORD=" +
+                str(receipt["owner_review_word_included"]))
+          PY
+      - name: Upload ONLY RSA/AES-GCM ciphertext for local owner review
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-g43-owner-encrypted-${{ github.run_id }}
+          path: ${{ runner.temp }}/rasd-g43-owner-encrypted.json
+          retention-days: 1
+          if-no-files-found: error
