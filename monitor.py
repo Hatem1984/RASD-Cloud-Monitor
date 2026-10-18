@@ -220,7 +220,7 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
                 record["error"] = type(exc).__name__
                 record["http_status"] = (
                     exc.code if isinstance(exc, HTTPError)
-                    and exc.code in {400, 401, 403, 404, 408, 429,
+                    and exc.code in {301, 302, 303, 307, 308, 400, 401, 403, 404, 408, 429,
                                      500, 502, 503, 504}
                     else None
                 )
