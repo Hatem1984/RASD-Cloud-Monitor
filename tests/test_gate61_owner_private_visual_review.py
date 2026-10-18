@@ -83,6 +83,23 @@ class LocalPrivateOwnerReviewTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "incomplete_cairo_calendar_day"):
                 inspect_private_review(folder, incomplete)
 
+    def test_healthy_original_rss_with_zero_items_is_not_an_outage(self):
+        # A well-formed empty publisher RSS is a healthy feed; the first-party
+        # Ministry archive must still show a verifiable original index link.
+        with tempfile.TemporaryDirectory() as temp:
+            folder, _, _ = fixture(temp)
+            path = folder / "rasd-owner-review-audit.json"
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["source_health"][0]["verified_links"] = 0
+            data["source_health"][1]["verified_links"] = 0
+            path.write_text(json.dumps(data), encoding="utf-8")
+            verified = inspect_private_review(folder, DAY)
+            self.assertEqual(verified["original_source_count"], 3)
+            data["source_health"][2]["verified_links"] = 0
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "original_sources_not_healthy"):
+                inspect_private_review(folder, DAY)
+
     def test_wrong_day_and_missing_document_fail(self):
         with tempfile.TemporaryDirectory() as temp:
             folder, word, _ = fixture(temp)
