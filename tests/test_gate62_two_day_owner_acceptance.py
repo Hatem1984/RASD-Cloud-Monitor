@@ -147,7 +147,7 @@ class Stage2TwoDayOwnerLocalAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             left, right = self.fixture_pair(Path(temp))
             with self.assertRaisesRegex(ValueError, "private_review_audit_not_qualified"):
-                verify_two_completed_days(left, DAY1, right, DAY1 + timedelta(days=2))
+                verify_two_completed_days(left, DAY1, right, DAY1 - timedelta(days=1))
 
     def test_private_attestation_future_or_pre_complete_day_timestamp_rejected(self):
         for bad in [
