@@ -298,6 +298,32 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             libreoffice-writer poppler-utils fonts-dejavu-core fonts-noto-core
           libreoffice --version
+      - name: Gate42 — synthetic Word visual-render preflight (NOT live publisher proof)
+        if: github.ref == 'refs/heads/gate42-word-layout-and-live-windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, "tests")
+          from test_gate42_word_image_layout import fixture_image, minimal_report
+          from daily_report import render_docx
+          from word_render_audit import rendered_word_preflight
+          with tempfile.TemporaryDirectory(prefix="rasd-synthetic-render-only-") as scratch:
+              root = Path(scratch)
+              tall = root / "synthetic-tall.jpg"
+              wide = root / "synthetic-wide.jpg"
+              fixture_image(tall, 1200, 4700)
+              fixture_image(wide, 1200, 900)
+              output = root / "synthetic-layout.docx"
+              render_docx(minimal_report([tall, wide]), output)
+              audit = rendered_word_preflight(output, expected_articles=2)
+              assert audit["status"] == "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW"
+              assert audit["human_visual_review"] is False
+              assert audit["ephemeral_render_destroyed"] is True
+              print("SYNTHETIC_WORD_RENDER_QA_ONLY; " + str(audit))
+          PY
       - name: Gate42 — yesterday and today genuine original publisher Word + rendered page QA
         if: github.ref == 'refs/heads/gate42-word-layout-and-live-windows'
         env:
