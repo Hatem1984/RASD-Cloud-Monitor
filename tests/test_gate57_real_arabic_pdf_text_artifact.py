@@ -34,7 +34,7 @@ class ArabicDoubleAlefPDFRegressionTests(unittest.TestCase):
         )])
         self.assertEqual(
             _verify_headlines_in_independent_pdf_extractions(
-                doc, layout_text="وزارة التخطيط", raw_text=(
+                doc, layout_text="وزارة التخطيط بيانات", raw_text=(
                     "واالقتصاد االستثمار تستعرض التخطيط وزارة"),
                 expected_articles=1),
             "raw",
