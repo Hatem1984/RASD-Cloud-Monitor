@@ -187,6 +187,14 @@ class UnifiedOriginalPublisherWordTests(unittest.TestCase):
             self.assertEqual(result["selected_unique_articles"], 1)
             self.assertEqual(result["status"], "READY_QA_ONLY")
 
+    def test_official_index_snapshot_change_holds_without_partial_word(self):
+        FakeDriver.list_changed = True
+        with tempfile.TemporaryDirectory() as tmp:
+            result = execute(tmp)
+            self.assertEqual(result["status"], "HOLD")
+            self.assertIn("official_index_unavailable", result["failures"])
+            self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
+
     def test_no_articles_is_hold_not_an_empty_final_word(self):
         FakeDriver.offday = {OFFICIAL}
         with tempfile.TemporaryDirectory() as tmp:
