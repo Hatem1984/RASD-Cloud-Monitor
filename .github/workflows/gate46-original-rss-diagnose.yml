@@ -62,3 +62,58 @@ jobs:
                     ";links=" + str(row["verified_links"]))
           print("RSS_DIAGNOSTIC_NO_MAIL_NO_WORD_NO_SCHEDULE")
           PY
+      - name: Probe only publisher-owned RSS candidate response type; no headline text
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from urllib.request import Request, build_opener
+          from urllib.error import HTTPError, URLError
+          import xml.etree.ElementTree as ET
+          from monitor import RejectRedirect
+          URLS = (
+              ("original", "https://www.almasryalyoum.com/rss/rssfeeds"),
+              ("section3", "https://www.almasryalyoum.com/rss/rssfeeds?sectionId=3"),
+              ("section12", "https://www.almasryalyoum.com/rss/rssfeed?sectionid=12"),
+          )
+          opener = build_opener(RejectRedirect())
+          for label, url in URLS:
+              try:
+                  with opener.open(Request(url, headers={
+                      "User-Agent": "RASD-Cloud-Public-Monitor/0.1",
+                      "Accept": "application/rss+xml,application/xml,text/xml,*/*",
+                  }), timeout=18) as response:
+                      code = response.status
+                      content_type = response.headers.get_content_type()
+                      raw = response.read(1_500_001)
+                      if response.geturl() != url or len(raw) > 1_500_000:
+                          raise ValueError("unsafe_response")
+                  start = raw.lstrip()[:400].lower()
+                  html = start.startswith((b"<!doctype html", b"<html"))
+                  try:
+                      node = ET.fromstring(raw)
+                      root = node.tag.rsplit("}", 1)[-1].lower()
+                      count = len(node.findall("./channel/item")) if root == "rss" else 0
+                      xml_ok = root == "rss"
+                  except ET.ParseError:
+                      root = "INVALID_XML"
+                      count = 0
+                      xml_ok = False
+                  print("RSS_NATIVE_CANDIDATE=" + label +
+                        ";status=" + str(code) +
+                        ";content_type=" + str(content_type) +
+                        ";bytes=" + str(len(raw)) +
+                        ";html_page=" + str(html) +
+                        ";rss_root=" + str(xml_ok) +
+                        ";items=" + str(count))
+              except HTTPError as exc:
+                  print("RSS_NATIVE_CANDIDATE=" + label +
+                        ";http_error=" + str(exc.code) +
+                        ";no_redirect_followed=True")
+              except (URLError, ValueError, TimeoutError):
+                  print("RSS_NATIVE_CANDIDATE=" + label +
+                        ";status=UNAVAILABLE;no_redirect_followed=True")
+          print("RSS_NATIVE_DIAGNOSTIC_ONLY_NO_CONFIG_OR_SEND")
+          PY
