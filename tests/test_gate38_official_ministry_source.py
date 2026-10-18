@@ -119,6 +119,20 @@ class OriginalMinistrySourceOfflineTests(unittest.TestCase):
         self.assertIsNone(original_publication_date(
             "صفحة أخرى بتاريخ 17 أكتوبر 2026", HEADLINE))
 
+    def test_date_immediately_before_article_heading_is_accepted_not_footer(self):
+        day = "17 أكتوبر 2026"
+        self.assertEqual(original_publication_date(
+            "الرئيسية " + day + "\n" + HEADLINE +
+            "\nأخبار الوزارة ذات الصلة", HEADLINE), date(2026, 10, 17))
+        # Repeated title in source HTML must not replace a publisher date
+        # with crawler clock or an unrelated footer date.
+        self.assertEqual(original_publication_date(
+            "العنوان: " + HEADLINE + "\n" + day +
+            "\n" + HEADLINE + "\nخبر الوزارة", HEADLINE),
+            date(2026, 10, 17))
+        self.assertIsNone(original_publication_date(
+            "31 فبراير 2026\n" + HEADLINE, HEADLINE))
+
     def test_official_page_gets_genuine_page_jpeg_bound_into_one_word(self):
         with tempfile.TemporaryDirectory() as tmp:
             shot = Path(tmp) / "original.jpg"
