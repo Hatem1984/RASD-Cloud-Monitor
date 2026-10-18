@@ -192,8 +192,10 @@ def build_unified_word(
         try:
             with official_driver_factory() as driver:
                 links = driver.discover()
-                if len(links) != len(set(links)) or len(links) > 35 or not links:
-                    raise ValueError("invalid_official_index")
+                corroboration = driver.discover()
+                if (links != corroboration or len(links) != len(set(links))
+                        or len(links) > 35 or not links):
+                    raise ValueError("invalid_or_unstable_official_index")
                 if any(canonical_official_article(url) != url for url in links):
                     raise ValueError("unapproved_official_article_link")
                 result["official_index_urls"] = len(links)
