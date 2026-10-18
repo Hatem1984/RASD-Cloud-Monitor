@@ -316,6 +316,20 @@ def build_unified_word(
                 if not pagination_complete:
                     hold("official_pagination_depth_exceeded")
                 result["official_pagination_complete"] = pagination_complete
+        except ValueError as exc:
+            # Only whitelisted, internally generated source failure types
+            # are logged; no URLs, source HTML, account data or freeform error
+            # strings enter the PUBLIC CI audit.
+            safe_source_codes = {
+                "official_newslist_origin_timeout",
+                "official_newslist_origin_transient_http",
+                "official_newslist_redirect_forbidden",
+                "official_newslist_http_or_type_invalid",
+                "official_newslist_size_invalid",
+                "official_newslist_encoding_invalid",
+            }
+            code = str(exc)
+            hold(code if code in safe_source_codes else "official_index_unavailable")
         except Exception:
             hold("official_index_unavailable")
         health.append({
