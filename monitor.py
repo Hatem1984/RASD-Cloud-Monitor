@@ -197,7 +197,9 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
         record = {"feed_id": feed["id"], "status": "failed",
                   "verified_links": 0, "headline_matches": 0,
                   "description_matches": 0}
+        prior_malformed_sha = None
         for attempt in range(2):
+            data = None
             try:
                 data = fetch(feed["url"], config["max_feed_bytes"])
                 count, matches = parse_rss(data, feed, config["keywords"], checked,
@@ -217,8 +219,35 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
                 break
             except Exception as exc:
                 # Report only bounded machine-readable diagnostics; never
-                # propagate server body, URL parameters, or exception text.
+                # propagate server body, URL parameters or exception text.
                 record["error"] = type(exc).__name__
+                if isinstance(exc, ET.ParseError) and isinstance(data, bytes):
+                    # Numeric Expat error code/position and two-read digest
+                    # equality are safe diagnostics. NEVER include raw XML,
+                    # item text, article URLs, publisher response snippets,
+                    # arbitrary exception string or full payload SHA.
+                    code = getattr(exc, "code", None)
+                    line, column = getattr(exc, "position", (0, 0))
+                    record["xml_error_code"] = (
+                        code if type(code) is int and 1 <= code <= 99 else None)
+                    record["xml_error_line"] = (
+                        line if type(line) is int and 0 <= line <= 100_000
+                        else None)
+                    record["xml_error_column"] = (
+                        column if type(column) is int and 0 <= column <= 100_000
+                        else None)
+                    record["malformed_rss_length"] = len(data)
+                    prefix = data.lstrip()[:128].lower()
+                    record["xml_input_looked_like_html"] = prefix.startswith(
+                        (b"<html", b"<!doctype html"))
+                    record["xml_input_looked_like_rss"] = prefix.startswith(
+                        (b"<?xml", b"<rss"))
+                    digest = hashlib.sha256(data).digest()
+                    if attempt == 1 and prior_malformed_sha is not None:
+                        record["identical_bad_xml_on_retry"] = (
+                            digest == prior_malformed_sha)
+                    elif attempt == 0:
+                        prior_malformed_sha = digest
                 record["http_status"] = (
                     exc.code if isinstance(exc, HTTPError)
                     and exc.code in {301, 302, 303, 307, 308, 400, 401, 403, 404, 408, 429,
