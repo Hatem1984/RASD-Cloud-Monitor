@@ -177,8 +177,30 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
         delay.assert_called_once_with(1.25)
         self.assertEqual(result["sources"][1]["status"], "failed")
         self.assertEqual(result["sources"][1]["error"], "ParseError")
+        self.assertTrue(result["sources"][1]["xml_input_looked_like_rss"])
+        self.assertFalse(result["sources"][1]["xml_input_looked_like_html"])
+        self.assertTrue(result["sources"][1]["identical_bad_xml_on_retry"])
+        self.assertIsInstance(result["sources"][1]["xml_error_code"], int)
+        self.assertGreaterEqual(result["sources"][1]["xml_error_line"], 1)
+        self.assertGreater(result["sources"][1]["malformed_rss_length"], 0)
         self.assertEqual(result["planning_headline_matches"], 1)
         self.assertTrue(result["sources"][1]["rss_parse_retry_delayed"])
+
+    def test_second_different_bad_xml_records_not_identical_without_response_text(self):
+        calls = {"masry": 0}
+        def fetch_broken(url, limit):
+            if "almasryalyoum" not in url:
+                return feed_xml(HAPI_URL)
+            calls["masry"] += 1
+            return (b"<rss><channel><item>" if calls["masry"] == 1
+                    else b"<rss><channel><other>")
+        with patch("monitor.sleep") as delay:
+            result = inspect(CONFIG, fetch=fetch_broken, now=CURRENT)
+        self.assertEqual(calls["masry"], 2)
+        self.assertFalse(result["sources"][1]["identical_bad_xml_on_retry"])
+        self.assertEqual(result["sources"][1]["error"], "ParseError")
+        delay.assert_called_once_with(1.25)
+        self.assertNotIn("rss_payload", result["sources"][1])
 
     def test_xml_retry_never_repairs_malformed_publisher_items(self):
         calls = {"masry": 0}
