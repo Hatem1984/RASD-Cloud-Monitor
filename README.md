@@ -1,5 +1,7 @@
 # RASD | رصد — Cloud News Monitor
 
+**Gate 34 (18 October 2026): protected, manual READ-ONLY private evidence restore workflow is prepared.** The new isolated restore worker uses a separate owner-reviewed environment and scoped read-only R2 credentials, revalidating an existing Word and all original publisher screenshots without uploads, mail or scheduling. **It has passed Fake-S3 tests only; no real R2 bucket, credentials or storage authorization has been provisioned.** See [Gate 34 instructions](GATE34_PROTECTED_READONLY_RESTORE.md).
+
 **Gate 33 (18 October 2026): safe private evidence restore verification, offline only.** A read-only recovery verifier checks a content-addressed private manifest, full Word/JPEG GET bytes and hashes, article order and restored DOCX screenshot relationships. It refuses corrupted, missing or foreign objects. The Fake-S3 restore drill is **not** a real R2 deployment or live recovery. See [Gate 33](GATE33_PRIVATE_RESTORE_DRILL.md).
 
 **Gate 32 (18 October 2026): independent private Word archive evidence revalidation.** The archive now rejects swapped article screenshots and duplicate DOCX media before the first S3-compatible PUT. Offline fake-S3 only; real private storage is still unprovisioned. See [Gate 32](GATE32_PRIVATE_ARCHIVE_WORD_REVALIDATION.md).
