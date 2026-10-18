@@ -50,9 +50,10 @@ jobs:
           RASD_GATE11_SEND_APPROVED: ""
           RASD_MAIL_ENABLED: "false"
           RASD_SCHEDULER_ENABLED: "false"
+          RASD_STAGE2_WINDOW_MODE: ${{ inputs.day }}
         run: |
           set -euo pipefail
-          mode="${{ inputs.day }}"
+          mode="$RASD_STAGE2_WINDOW_MODE"
           if [ "$mode" = "yesterday" ]; then
             target="$(TZ=Africa/Cairo date -d yesterday +%Y-%m-%d)"
           elif [ "$mode" = "today" ]; then
@@ -70,6 +71,9 @@ jobs:
           from pathlib import Path
           from word_render_audit import rendered_word_preflight
           from gate43_owner_encrypted_review import pack_owner_review
+          from gate58_manual_acceptance import stage2_manual_machine_verdict
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
           root = Path(os.environ["RUNNER_TEMP"])
           report_dir = root / "rasd-unified-private"
           audit = json.loads((root / "rasd-unified-owner-audit.json").read_text().splitlines()[0])
@@ -111,13 +115,60 @@ jobs:
           assert receipt["owner_review_pages_encrypted"] is rendered
           assert receipt["owner_review_page_count"] >= int(rendered)
           assert not receipt["email_sent"]
+          assert (root / "rasd-g43-owner-encrypted.json").is_file()
+          verdict = stage2_manual_machine_verdict(
+              audit, receipt,
+              requested_window=os.environ["RASD_STAGE2_WINDOW_MODE"],
+              today_cairo=datetime.now(ZoneInfo("Africa/Cairo")).date(),
+          )
+          (root / "rasd-stage2-manual-machine-verdict").write_text(
+              verdict, encoding="ascii",
+          )
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+              summary.write("### Stage 2 genuine Word machine acceptance\n\n")
+              summary.write(f"- Cairo date: {audit['target_date_cairo']}\n")
+              summary.write(f"- Window: {os.environ['RASD_STAGE2_WINDOW_MODE']}\n")
+              summary.write(f"- Machine verdict: **{verdict}**\n")
+              summary.write(f"- All original sources healthy: {audit['all_sources_healthy']}\n")
+              summary.write(f"- Owner-encrypted Word: {receipt['owner_review_word_included']}\n")
+              summary.write("- Human page-by-page review: **PENDING**\n")
+              summary.write("- Delivery, scheduling and remote storage: **DISABLED**\n")
           print("RASD_OWNER_ENCRYPTED_ARTIFACT_READY; HAS_GENUINE_WORD=" +
                 str(receipt["owner_review_word_included"]))
+          print("RASD_STAGE2_MANUAL_MACHINE_VERDICT=" + verdict)
           PY
       - name: Upload ONLY RSA/AES-GCM ciphertext for local owner review
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: rasd-g43-owner-encrypted-${{ github.run_id }}
           path: ${{ runner.temp }}/rasd-g43-owner-encrypted.json
           retention-days: 1
-          if-no-files-found: error
+          if-no-files-found: ignore
+      - name: Reject HOLD and partial-day reports as complete-day acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/rasd-g43-owner-encrypted.json"
+          verdict="$RUNNER_TEMP/rasd-stage2-manual-machine-verdict"
+          if [ ! -s "$evidence" ] || [ ! -s "$verdict" ]; then
+            echo "::error::RASD_STAGE2_NO_VALID_OWNER_EVIDENCE_OR_VERDICT"
+            exit 1
+          fi
+          case "$(cat "$verdict")" in
+            READY_QA_ONLY)
+              echo "RASD_STAGE2_COMPLETE_CAIRO_DAY_MACHINE_ACCEPTED_HUMAN_REVIEW_PENDING"
+              ;;
+            PARTIAL_QA_ONLY)
+              echo "::error::RASD_STAGE2_PARTIAL_DAY_NOT_COMPLETE_DAY_ACCEPTANCE"
+              exit 1
+              ;;
+            HOLD)
+              echo "::error::RASD_STAGE2_SOURCE_OR_REPORT_HOLD_NOT_ACCEPTED"
+              exit 1
+              ;;
+            *)
+              echo "::error::RASD_STAGE2_INVALID_MACHINE_VERDICT"
+              exit 1
+              ;;
+          esac
