@@ -132,7 +132,7 @@ jobs:
               summary.write(f"- All original sources healthy: {audit['all_sources_healthy']}\n")
               summary.write(f"- Owner-encrypted Word: {receipt['owner_review_word_included']}\n")
               summary.write("- Human page-by-page review: **PENDING**\n")
-              summary.write("- Gmail, cron, R2: **DISABLED**\n")
+              summary.write("- Delivery, scheduling and remote storage: **DISABLED**\n")
           print("RASD_OWNER_ENCRYPTED_ARTIFACT_READY; HAS_GENUINE_WORD=" +
                 str(receipt["owner_review_word_included"]))
           print("RASD_STAGE2_MANUAL_MACHINE_VERDICT=" + verdict)
