@@ -100,7 +100,7 @@ jobs:
           print("GATE57_ENCRYPTED_OWNER_EVIDENCE; WORD_INCLUDED=" + str(ready))
           PY
       - name: Upload encrypted owner-only artifact even on a correctly blocked source
-        if: ${{ always() && hashFiles('gate57-no-such-file') == '' }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: rasd-gate57-owner-ciphertext-${{ github.run_id }}
