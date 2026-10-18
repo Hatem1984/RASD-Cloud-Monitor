@@ -87,6 +87,19 @@ class OfficialNewsListDiscoveryTests(unittest.TestCase):
         self.assertEqual(kwargs["headers"]["Referer"],
                          "https://mped.gov.eg/News?id=57&lang=ar")
 
+    def test_page_two_uses_only_bounded_real_publisher_page_parameter(self):
+        url = "https://mped.gov.eg/News/NewsList?lang=ar&pageNum=2&typeId=0"
+        transport = MockHTTP(MockResponse(url=url))
+        discovered = discover_official_newslist(
+            transport, page_number=2)
+        self.assertEqual(discovered[0], SAMPLE)
+        self.assertEqual(transport.calls[0][0], (url,))
+        self.assertEqual(transport.calls[0][1]["max_redirects"], 0)
+        for page in (0, -1, 5, 500, True, "2"):
+            with self.subTest(page=page):
+                with self.assertRaisesRegex(ValueError, "official_page_number_invalid"):
+                    discover_official_newslist(transport, page_number=page)
+
     def test_failed_or_foreign_response_fails_closed(self):
         for response in (
             MockResponse(status=403),
