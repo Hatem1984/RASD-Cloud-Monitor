@@ -53,7 +53,7 @@ jobs:
           RASD_STAGE2_WINDOW_MODE: ${{ inputs.day }}
         run: |
           set -euo pipefail
-          mode="${{ inputs.day }}"
+          mode="$RASD_STAGE2_WINDOW_MODE"
           if [ "$mode" = "yesterday" ]; then
             target="$(TZ=Africa/Cairo date -d yesterday +%Y-%m-%d)"
           elif [ "$mode" = "today" ]; then
