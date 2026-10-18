@@ -1,5 +1,7 @@
 # RASD | رصد — Cloud News Monitor
 
+**Gate 30 (18 October 2026): operational README corrected to actual Word-only workflows, artifact names and live acceptance limits.** This documentation hardening changes no publishing code, Gmail configuration, secrets, private data, or scheduling.
+
 **Gate 29 (18 October 2026): DOCX package ambiguity now fail-closed.** Duplicate ZIP part names and explicitly external screenshot image relationships are rejected even when authentic JPEG digests are present. See [Gate 29 integrity evidence](GATE29_DOCX_PACKAGE_INTEGRITY.md). No new real mail, scheduler, paid service, or production approval.
 
 **Gate 28 (18 October 2026): per-article Word screenshot binding hardened.** A new offline regression proved Gate 27's unordered media hash check could accept two genuine publisher-page screenshots swapped between different articles. The final Word now requires each drawing's exact JPEG digest in the corresponding article order; swapped evidence becomes `HOLD` with no final report. See [Gate 28 acceptance](GATE28_ARTICLE_IMAGE_BINDING.md). This change does not authorize Gmail, scheduling, paid services, or multi-source production release.
@@ -10,44 +12,43 @@
 
 **Cloud-only:** GitHub-hosted workers do not depend on the owner's laptop. APK/EXE and long-running server architecture are planned, not yet deployed. No live Gmail or automatic schedules authorized.
 
-**Historical note:** Gate 12/13 acceptance and older lines below describing PDF document generation refer to the pre-Gate19 implementation and are superseded by the Word-only policy above. Historical evidence is kept for audit continuity.
+**Historical note:** Gate 12/13 previously included PDF, but that implementation is superseded; historical gate files remain available as audit records, not current operating instructions.
 
 
-**Status (13 October 2026): Staging / verified public-news cloud workflows; Gmail production delivery NOT enabled.**
+**Status (18 October 2026): Staging, Word-only; source-wide acceptance, protected Gmail and automatic scheduling NOT enabled.**
 
 RASD tracks **public Ministry of Planning-related headlines** from reviewed Egyptian publisher-owned RSS feeds. The public runner is hosted by GitHub Actions. All sensitive mail delivery state remains in the separate PRIVATE `Hatem1984/RASD-Pilot` repository; no user credentials or private mail receipts are committed here.
 
-## Implemented and cloud-verified
+## Current implementation and evidence
 
-| Capability | Status | Evidence and caveat |
+| Capability | Present status | Acceptance limit |
 | --- | --- | --- |
-| Public original-source RSS | Verified | Hapi + Al Masry Al Youm. Both are real native publisher feeds; temporary outages are exposed as `DEGRADED`, not concealed. |
-| Browser screenshot QA | Verified for historical **QA-only** public publisher page | [Gate 10](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/38331637986). A genuinely new eligible RSS article screenshot still needs a live-match test. |
-| Public observation state | Verified | Isolated public `rasd-public-state` branch, URL hashes only; three known successful runs. **Observation is not delivery.** |
-| Private Gmail delivery control | Implementation and simulated E2E verified | SHA-checked private ledger, pinned recipient, at-most-one automated submission attempt, manual HOLD on uncertainty, per-run owner approval. **No real Gmail credentials or delivery yet.** |
-| Private authentication-only preflight | Mock-tested | Manual protected environment required; real account access not yet configured. |
-| Arabic Word + PDF | Cloud document generation and open/structure checks passed | See [Gate 12 guide](GATE12_DAILY_REPORT.md). Current genuine public RSS data, 24h Cairo report window, no invented headlines; source limitations explicit. |
-| Downloadable CI report | Available | Successful report CI uploads a **1-day** public-source-only ZIP with DOCX and PDF after both files pass structural validation. |
-| Unattended cron/email | **OFF** | No production schedule and no real SMTP send; both require separate acceptance and consent. |
+| Native publisher RSS | Read-only cloud CI verified for Hapi and Al Masry Al Youm | Transient feed or page failures remain visible; **source health is not full-story evidence**. [18 October run](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/39102185284) found both feeds healthy but zero eligible headlines. |
+| Original publisher screenshot | Original Shorouk page captured in a **single-source opt-in review** | [Gate 26](RASD_GATE26_DELIVERY_ACCEPTANCE.md) does **not** approve complete production multi-source coverage. |
+| Word **preview** | Arabic RSS-only `.docx`, explicitly marked **مسودة** | Downloadable public preview is **not** a final screenshot-verified report. |
+| Final Word evidence | Strict original screenshot required for **every** included article | [Gate 27](GATE27_WORD_EVIDENCE_INTEGRITY.md), [Gate 28](GATE28_ARTICLE_IMAGE_BINDING.md), and [Gate 29](GATE29_DOCX_PACKAGE_INTEGRITY.md) enforce JPEG contents, per-article binding and valid DOCX package structure. Any failure → `HOLD`, no final Word. |
+| Private evidence archive | Code and isolated offline simulations only | No owner-provisioned production object store, retention or restoration acceptance. |
+| Private ledger/Gmail | Manual protected paths implemented and simulated | No approved hosted Gmail authentication preflight or live SMTP/inbox acceptance. |
+| Automatic scheduling | **OFF** | No daily cron, automatic mail, or paid service authorized. |
+| Android/Windows clients | Not deployed | Cloud API and distributable applications remain future scope. |
 
-## Current workflows
+## Current workflows — separate preview, proof and transport
 
-1. [Public RSS manual dry run](.github/workflows/manual-probe.yml) — original publisher feed probes only.
-2. [Public state acceptance](.github/workflows/stateful-manual.yml) — public URL-hash state, manual only.
-3. [Publisher screenshot QA](.github/workflows/capture-manual.yml) — public verified articles; historical fixture explicitly QA-only.
-4. [Gate 11 branch CI](.github/workflows/gate11-ci.yml) — offline security regressions, live RSS read-only scan, and document-generation QA. Push-triggered on **named QA branches only**, NOT scheduled mail.
-5. [Gate 11 Gmail protected bridge](.github/workflows/gate11-manual.yml) — defaults to `dry_run`; optional protected `preflight`; `send` is blocked until account-level environment secrets, fresh manual confirmation and reviewer approval exist.
-6. [Arabic Word + PDF manual digest](.github/workflows/report-manual.yml) — creates DOCX/PDF and a **1-day** GitHub artifact from one RSS observation, no mail or private ledger access.
-7. [Protected daily Word/PDF Gmail delivery](.github/workflows/digest-mail-manual.yml) — manual-only; code and private-ledger anti-replay fully simulated, but **no real SMTP or inbox delivery performed**. See [Gate 13](GATE13_DAILY_EMAIL.md).
+- [Main/QA read-only CI](.github/workflows/gate11-ci.yml): offline tests, real publisher feed checks and **Word-only preview**. Push on `main` and `gate*` branches; **not** a daily report scheduler.
+- [RSS manual probe](.github/workflows/manual-probe.yml), [public URL-hash state](.github/workflows/stateful-manual.yml) and [capture QA](.github/workflows/capture-manual.yml): historical/development observations, not email delivery.
+- [Word-only RSS preview](.github/workflows/report-manual.yml): manual `.docx` with **مسودة**; no required screenshot evidence, no private credentials, no mail.
+- [Strict multi-source Word proof](.github/workflows/proof-report-manual.yml): manual original-publisher screenshot attempts; if coverage/images incomplete, `HOLD` and redacted manifest only.
+- [Opt-in Shorouk strict proof](.github/workflows/gate26-strict-word-optin.yml): source-limited review, encrypted owner artifact; **not** production multi-publisher release.
+- [Owner-encrypted sample QA](.github/workflows/gate25-owner-encrypted.yml) and [private proof manual QA](.github/workflows/private-proof-manual.yml): separate opt-in paths; no secret/real Gmail enablement.
+- [Protected Gate11 bridge](.github/workflows/gate11-manual.yml) and [manual daily Word Gmail transport](.github/workflows/digest-mail-manual.yml): manual only, require owner-controlled GitHub environment, account credentials and separately authorized test; **not yet live-accepted**.
 
-## Manual Word/PDF download
+## Download a Word preview (NOT a final report)
 
-1. Open [RASD Arabic daily Word and PDF](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/workflows/report-manual.yml).
-2. Use **Run workflow** on `main` (requires the owner's GitHub session).
-3. When the run succeeds, download the `rasd-daily-public-word-pdf` artifact under the run's **Artifacts** section. The ZIP contains one `.docx` and one `.pdf`.
-4. For code-branch QA, a successful latest Gate 11 CI run publishes a separate `rasd-public-report-ci` artifact using only original public headlines. **CI packages are not proof of daily scheduled report delivery.**
+1. Open [RASD Word-only preview workflow](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/workflows/report-manual.yml) and select **Run workflow** on `main`.
+2. After a successful run, download the `rasd-daily-word-preview` artifact. Its ZIP includes only the `RASD-Preview-*.docx` preview, not verified article screenshots.
+3. Development branch/main CI publishes a separate `rasd-word-preview-ci` artifact (also Word-only, one-day retention). A successful CI preview is **not** a final report or evidence of daily scheduled delivery.
 
-An empty report means **no qualifying RSS headline was found in the sources and window checked**, not that no relevant ministry news exists on the internet. Source outages appear as `DEGRADED`. The PDF and Word use a shared observation and sort newest verified headlines **across both publishers before selecting a maximum of 15**.
+A preview containing zero matching articles means none met the checked publisher feeds, filters and time window. It does **not** establish that no relevant news exists elsewhere. A strict final Word may be issued only after every included publisher-page screenshot has been captured, verified and linked to the correct article; otherwise it stays `HOLD`.
 
 ## Strict security and delivery boundary
 
@@ -59,10 +60,10 @@ An empty report means **no qualifying RSS headline was found in the sources and 
 
 ## Acceptance still OPEN
 
-**Gate 11 — real protected Gmail:** The owner must configure `rasd-gmail-manual-approval` and the four eligible protected credentials in GitHub directly, then approve preflight. A later separately authorized live-mail test must prove SMTP, private acceptance receipt, Gmail Sent/Inbox image attachment, and safe re-run. Details: [Gate 11 secure setup](GATE11_SECURE_SETUP.md).
+1. **Full source coverage and genuine current-article evidence:** source-complete Word for the owner-approved production publishers, with no failed feed or screenshot; [source qualification issue #23](https://github.com/Hatem1984/RASD-Cloud-Monitor/issues/23). Shorouk remains separately opt-in.
+2. **Real private evidence archive:** privately controlled storage/keys, SHA-256 read-back, retention, recovery drill, and explicit cost/security review; existing R2/S3 code is not production provisioning.
+3. **Gate 11 / Gate 13 real Gmail acceptance:** [protected environment setup](GATE11_SECURE_SETUP.md), no-send authentication preflight, fresh separately approved manual send, correct private ledger receipt, Gmail Sent/Inbox reconciliation and safe replay test. No Gmail automation is authorized merely by completing code CI.
+4. **Owner-approved schedule and operational monitoring:** retries, incident notification, release criteria and cost bounds; currently OFF.
+5. **Full product scope if required:** authenticated API and working Android/Windows clients; currently not deployed.
 
-**Gate 12 — manual downloadable artifact:** cloud construction and real document QA are verified. A dedicated `report-manual.yml` GitHub `workflow_dispatch` download still requires owner initiation. Daily scheduled production and Gmail report delivery are **not** enabled.
-
-**Gate 13 — manual daily report to Gmail:** DOCX+PDF attachment builder, private SHA state reservation, Cairo-day deduplication and per-run consent are implemented and offline-tested. Actual live protected job still awaits the same Gate 11 credential/reviewer setup and separate live-send authorization; no real message has been sent.
-
-Use [Acceptance log](ACCEPTANCE_LOG.md) as the dated, audited source of verified results. Avoid interpreting passing unit tests as real Gmail delivery.
+Historical Gate 12/13 PDF-era descriptions are archived in [Gate 12](GATE12_DAILY_REPORT.md), [Gate 13](GATE13_DAILY_EMAIL.md) and the [dated acceptance log](ACCEPTANCE_LOG.md); they are **not** instructions for active reporting. Passing offline unit tests or source read-only scans never authorizes real Gmail sending or production release.
