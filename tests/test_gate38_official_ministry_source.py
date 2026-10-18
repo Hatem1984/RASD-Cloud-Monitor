@@ -147,6 +147,25 @@ class OriginalMinistrySourceOfflineTests(unittest.TestCase):
             self.assertTrue(word_images_match_capture_digests(
                 word, [{"status": "verified", "sha256": receipt["sha256"]}]))
 
+    def test_genuine_full_page_fallback_rechecks_jpeg_instead_of_bypass(self):
+        class FirstFrameBlank(FakePage):
+            modes = []
+            def screenshot(self, path, type, quality, full_page, timeout):
+                self.modes.append(full_page)
+                if not full_page:
+                    Image.new("RGB", (1200, 900), "white").save(
+                        path, format="JPEG", quality=quality)
+                else:
+                    super().screenshot(path, type, quality, full_page, timeout)
+        with tempfile.TemporaryDirectory() as work:
+            page = FirstFrameBlank()
+            destination = Path(work) / "verified.jpg"
+            result = _read_original(
+                page, SAMPLE, ["وزير التخطيط"], date(2026, 10, 17), destination)
+            self.assertEqual(page.modes, [False, True])
+            self.assertEqual(result["status"], "verified")
+            self.assertTrue(destination.is_file())
+
     def test_wrong_day_generic_headline_blocked_before_screenshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             shot = Path(tmp) / "blocked.jpg"
