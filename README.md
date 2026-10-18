@@ -1,5 +1,9 @@
 # RASD | رصد — Cloud News Monitor
 
+**Gate 32 (18 October 2026): independent private Word archive evidence revalidation.** The archive now rejects swapped article screenshots and duplicate DOCX media before the first S3-compatible PUT. Offline fake-S3 only; real private storage is still unprovisioned. See [Gate 32](GATE32_PRIVATE_ARCHIVE_WORD_REVALIDATION.md).
+
+**Gate 31 (18 October 2026): real cloud Word evidence acceptance, source/window-limited.** [GitHub Actions run 39103073215, attempt 2](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/39103073215) verified **one currently eligible article**, its one genuine publisher-page screenshot inside its final Word (1/1), zero missing, both feeds healthy, with no public Word/photo artifact, email or schedule. This does not prove sustained source-wide reliability or production delivery.
+
 **Gate 30 (18 October 2026): operational README corrected to actual Word-only workflows, artifact names and live acceptance limits.** This documentation hardening changes no publishing code, Gmail configuration, secrets, private data, or scheduling.
 
 **Gate 29 (18 October 2026): DOCX package ambiguity now fail-closed.** Duplicate ZIP part names and explicitly external screenshot image relationships are rejected even when authentic JPEG digests are present. See [Gate 29 integrity evidence](GATE29_DOCX_PACKAGE_INTEGRITY.md). No new real mail, scheduler, paid service, or production approval.

@@ -9,10 +9,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from zipfile import ZipFile, BadZipFile
-from docx import Document
 from datetime import date
 from pathlib import Path
+
+from cloud_proof_report import word_images_match_capture_digests
 
 MAX_FILE_BYTES = 50_000_000
 MAX_SCREENSHOT_BYTES = 8_000_000
@@ -115,17 +115,16 @@ class PrivateEvidenceArchive:
         total_bytes += len(word_bytes)
         if total_bytes > MAX_BATCH_BYTES:
             raise ValueError("private_archive_batch_budget_exceeded")
-        try:
-            with ZipFile(word) as package:
-                media_digests = {
-                    _sha(package.read(name)) for name in package.namelist()
-                    if name.startswith("word/media/") and not name.endswith("/")
-                }
-            if (not {digest for _, digest, _ in staged}.issubset(media_digests) or
-                    len(Document(word).inline_shapes) < count):
-                raise RuntimeError("private_archive_embedded_screenshot_mismatch")
-        except (BadZipFile, ValueError):
-            raise RuntimeError("private_archive_word_format_invalid") from None
+        # Revalidate at the independent PRIVATE storage boundary, even if
+        # the caller already accepted this Word. A digest SET comparison
+        # would accept genuine JPEGs swapped between different articles.
+        # Resolve every displayed DOCX image relationship and enforce the
+        # exact ordered publisher capture digests; also reject duplicate ZIP
+        # member names, orphan parts and external image relationships.
+        receipts = [{"status": "verified", "sha256": digest}
+                    for _, digest, _ in staged]
+        if not word_images_match_capture_digests(word, receipts):
+            raise RuntimeError("private_archive_embedded_screenshot_mismatch")
 
         # Only now is remote storage allowed. The commit marker still
         # uploads last, and every object is checked by a full GET readback.
