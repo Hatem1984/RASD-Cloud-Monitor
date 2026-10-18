@@ -300,7 +300,11 @@ def build_unified_word(
                         }
                         receipts[identifier] = {"id": identifier, "source": OFFICIAL_NAME,
                                                  "status": "verified", "sha256": digest}
-                    if page_dates and max(page_dates) < target_day:
+                    # A chronological archive cutoff is only certifiable
+                    # when EVERY original card on this whole page yielded an
+                    # explicit publisher-owned publication day. Any unreadable
+                    # card must not be silently bypassed as "older".
+                    if len(page_dates) == len(links) and max(page_dates) < target_day:
                         pagination_complete = True
                         result["official_pagination_termination"] = "OLDER_THAN_TARGET"
                         break
