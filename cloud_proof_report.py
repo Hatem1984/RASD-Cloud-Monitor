@@ -65,9 +65,13 @@ def word_images_match_capture_digests(word: Path, entries: list[dict]) -> bool:
                      if name.startswith("word/media/") and not name.endswith("/")}
             if len(targets) != len(set(targets)) or media != set(targets):
                 return False
-            observed = sorted(hashlib.sha256(archive.read(name)).hexdigest()
-                              for name in targets)
-            return observed == sorted(captured)
+            # render_docx writes one drawing immediately after each article
+            # in the same order as its independently captured evidence row.
+            # Comparing only sorted digest sets would accept two authentic
+            # screenshots swapped between different article paragraphs.
+            observed = [hashlib.sha256(archive.read(name)).hexdigest()
+                        for name in targets]
+            return observed == captured
     except (OSError, KeyError, ValueError, TypeError, zipfile.BadZipFile, ET.ParseError):
         return False
 
