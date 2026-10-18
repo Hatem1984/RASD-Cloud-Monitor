@@ -1,0 +1,47 @@
+name: RASD Gate 34 — protected private restore READ ONLY (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      restore_confirmation:
+        description: "Type CONFIRM_ONE_READONLY_RASD_RESTORE for ONE owner-authorized restore test"
+        required: true
+        type: string
+
+# No push, cron, email or release trigger. The owner's separate environment
+# must be protected and populated with a bucket-scoped READ-ONLY R2 key.
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-private-restore-manual
+  cancel-in-progress: false
+
+jobs:
+  restore-private-evidence:
+    if: github.ref == 'refs/heads/main' && github.actor == 'Hatem1984' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: rasd-evidence-private-restore-approval
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline test dependencies and S3 read-only SDK
+        run: python -m pip install -r requirements-test.txt "boto3>=1.35,<2"
+      - name: Run all offline security tests before any remote access
+        run: python -m unittest discover -s tests -v
+      - name: Verify existing private Word and publisher JPEGs using GET only
+        env:
+          RASD_RESTORE_RUN_CONFIRMATION: ${{ inputs.restore_confirmation }}
+          RASD_R2_RESTORE_APPROVED: ${{ secrets.RASD_R2_RESTORE_APPROVED }}
+          RASD_R2_RESTORE_ACCOUNT_ID: ${{ secrets.RASD_R2_RESTORE_ACCOUNT_ID }}
+          RASD_R2_RESTORE_BUCKET: ${{ secrets.RASD_R2_RESTORE_BUCKET }}
+          RASD_R2_RESTORE_ACCESS_KEY_ID: ${{ secrets.RASD_R2_RESTORE_ACCESS_KEY_ID }}
+          RASD_R2_RESTORE_SECRET_ACCESS_KEY: ${{ secrets.RASD_R2_RESTORE_SECRET_ACCESS_KEY }}
+          RASD_R2_RESTORE_MANIFEST_DATE: ${{ secrets.RASD_R2_RESTORE_MANIFEST_DATE }}
+          RASD_R2_RESTORE_MANIFEST_SHA256: ${{ secrets.RASD_R2_RESTORE_MANIFEST_SHA256 }}
+        run: python private_restore_worker.py
+      # No upload-artifact step: no Word, JPEG, private names or manifest hashes
+      # are exported to this PUBLIC GitHub repository.
