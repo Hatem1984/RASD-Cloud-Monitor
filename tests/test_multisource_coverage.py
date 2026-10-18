@@ -186,7 +186,7 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
             if "almasryalyoum" not in url:
                 return feed_xml(HAPI_URL)
             calls["masry"] += 1
-            return b"<rss><channel><item><title>وزارة التخطيط & fake</title></item></channel></rss>"
+            return "<rss><channel><item><title>وزارة التخطيط & fake</title></item></channel></rss>".encode("utf-8")
         with patch("monitor.sleep") as delay:
             result = inspect(CONFIG, fetch=still_bad, now=CURRENT)
         self.assertEqual(calls["masry"], 2)
