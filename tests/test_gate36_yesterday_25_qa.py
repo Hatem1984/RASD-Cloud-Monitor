@@ -60,13 +60,20 @@ def fetch_factory(rows, *, fail_source=None):
 
 def synthetic_capture(url, publisher, destination):
     # Draw varied high-contrast synthetic test fixtures; never actual pages.
-    seed = sum(url.encode()) % 70
+    from hashlib import sha256
+    pixels = sha256(url.encode("utf-8")).digest()
     img = Image.new("RGB", (1200, 900), "white")
     draw = ImageDraw.Draw(img)
-    draw.rectangle((0, 0, 1199, 200), fill=(10+seed, 32, 85))
+    draw.rectangle((0, 0, 1199, 200), fill=(10+pixels[0] % 70, 32, 85))
     for y in range(220, 870, 27):
         draw.rectangle((35, y, 1150, y + 16),
-                       fill=(30 + y % 50, 44 + seed % 20, 65))
+                       fill=(30 + y % 50, 44 + pixels[1] % 20, 65))
+    # Each synthetic article gets distinct original-publisher fixture bytes.
+    # Accidental image deduplication would correctly fail strict DOCX checks.
+    for n, value in enumerate(pixels):
+        x = 50 + 33 * n
+        draw.rectangle((x, 770, x + 22, 780 + value // 2),
+                       fill=(value, 30 + n * 3, 160))
     img.save(destination, quality=90)
     return {"ok": True, "actual_url": url, "title": URLS[url]}
 
