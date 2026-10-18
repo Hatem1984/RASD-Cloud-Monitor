@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import json
 import tempfile
 import warnings
 import zipfile
@@ -12,6 +13,7 @@ from PIL import Image, ImageDraw
 from docx import Document
 
 from private_evidence_archive import PrivateEvidenceArchive
+from private_evidence_restore import restore_verified_bundle
 from hashlib import sha256
 from unittest.mock import patch
 
@@ -131,6 +133,91 @@ class PrivateArchiveTests(unittest.TestCase):
                 self.store.publish_ready(
                     report=ready_report(), word=word, evidence=evidence)
         self.assertFalse(self.client.objects)
+
+    def test_offline_private_restore_rechecks_original_word_and_jpeg_bytes(self):
+        with tempfile.TemporaryDirectory() as work:
+            word, evidence = self.proof(Path(work))
+            receipt = self.store.publish_ready(
+                report=ready_report(), word=word, evidence=evidence)
+            original_object_count = len(self.client.objects)
+            restored = restore_verified_bundle(
+                self.store, manifest_key=receipt["manifest_key"],
+                expected_manifest_sha256=receipt["manifest_sha256"],
+                include_bytes=True)
+            self.assertEqual(restored["status"], "PRIVATE_RESTORE_VERIFIED")
+            self.assertEqual(restored["articles"], 1)
+            self.assertEqual(restored["screenshots_verified"], 1)
+            self.assertEqual(restored["word_bytes"], word.read_bytes())
+            self.assertEqual(restored["screenshots"][0]["jpeg_bytes"],
+                             evidence[0][1].read_bytes())
+            self.assertEqual(len(Document(io.BytesIO(restored["word_bytes"])).inline_shapes), 1)
+            self.assertEqual(len(self.client.objects), original_object_count)
+            summary = restore_verified_bundle(
+                self.store, manifest_key=receipt["manifest_key"],
+                expected_manifest_sha256=receipt["manifest_sha256"])
+            self.assertNotIn("word_bytes", summary)
+            self.assertNotIn("screenshots", summary)
+
+    def test_restore_rejects_mutated_manifest_commit_marker(self):
+        with tempfile.TemporaryDirectory() as work:
+            word, images = self.proof(Path(work))
+            receipt = self.store.publish_ready(
+                report=ready_report(), word=word, evidence=images)
+            key = receipt["manifest_key"]
+            raw = self.client.objects[key]
+            self.client.objects[key] = raw[:-1] + b" "
+            with self.assertRaisesRegex(
+                    RuntimeError, "private_restore_manifest_digest_mismatch"):
+                restore_verified_bundle(
+                    self.store, manifest_key=key,
+                    expected_manifest_sha256=receipt["manifest_sha256"])
+
+    def test_restore_rejects_mutated_word_or_missing_screenshot(self):
+        with tempfile.TemporaryDirectory() as work:
+            word, images = self.proof(Path(work))
+            receipt = self.store.publish_ready(
+                report=ready_report(), word=word, evidence=images)
+            args = {"manifest_key": receipt["manifest_key"],
+                    "expected_manifest_sha256": receipt["manifest_sha256"]}
+            word_key = next(k for k in self.client.objects if k.endswith(".docx"))
+            original = self.client.objects[word_key]
+            self.client.objects[word_key] = original[:-1] + bytes([original[-1] ^ 1])
+            with self.assertRaisesRegex(
+                    RuntimeError, "private_restore_object_digest_mismatch"):
+                restore_verified_bundle(self.store, **args)
+            self.client.objects[word_key] = original
+            image_key = next(k for k in self.client.objects if k.endswith(".jpg"))
+            del self.client.objects[image_key]
+            with self.assertRaisesRegex(
+                    RuntimeError, "private_restore_object_unavailable"):
+                restore_verified_bundle(self.store, **args)
+
+    def test_restore_rejects_unapproved_manifest_path_before_network(self):
+        with self.assertRaisesRegex(
+                RuntimeError, "private_restore_manifest_identity_mismatch"):
+            restore_verified_bundle(
+                self.store,
+                manifest_key="public/2026-10-14/manifests/" + "a" * 64 + ".json",
+                expected_manifest_sha256="a" * 64)
+        self.assertFalse(self.client.objects)
+
+    def test_restore_rejects_forged_manifest_path_even_with_matching_hash(self):
+        with tempfile.TemporaryDirectory() as work:
+            word, images = self.proof(Path(work))
+            receipt = self.store.publish_ready(
+                report=ready_report(), word=word, evidence=images)
+            manifest = json.loads(self.client.objects[receipt["manifest_key"]])
+            manifest["word"]["key"] = "../other-project/reports/not-rasd.docx"
+            raw = (json.dumps(manifest, sort_keys=True, separators=(",", ":"))
+                   + "\n").encode()
+            digest = sha256(raw).hexdigest()
+            key = "rasd/v1/2026-10-14/manifests/" + digest + ".json"
+            self.client.objects[key] = raw
+            with self.assertRaisesRegex(
+                    RuntimeError, "private_restore_invalid_manifest"):
+                restore_verified_bundle(
+                    self.store, manifest_key=key,
+                    expected_manifest_sha256=digest)
 
     def test_hold_cannot_upload_any_object(self):
         with tempfile.TemporaryDirectory() as work:
