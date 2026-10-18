@@ -246,6 +246,50 @@ jobs:
               assert not words, "HOLD must not leave partial Word"
               print("::warning::GATE40_UNIFIED_MINISTRY_WORD_HOLD: no incomplete final Word or delivery")
           PY
+      - name: Gate41 — real multi-page official archive cutoff and all-source Word QA
+        if: github.ref == 'refs/heads/gate41-official-paginated-coverage'
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/rasd-stage2-paginated"
+          python unified_ministry_word.py --target-day 2026-10-17 \
+            --output-dir "$RUNNER_TEMP/rasd-stage2-paginated" \
+            | tee "$RUNNER_TEMP/rasd-stage2-paginated-audit.log"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from docx import Document
+          root = Path(os.environ["RUNNER_TEMP"])
+          audit = json.loads((root / "rasd-stage2-paginated-audit.log").read_text().splitlines()[0])
+          words = list((root / "rasd-stage2-paginated").glob("*.docx"))
+          assert audit["mode"] == "stage2_ministry_unified_word_ephemeral_qa"
+          assert audit["production_sources_changed"] is False
+          assert audit["keywords_changed"] is False
+          assert audit["source_added_to_production"] is False
+          assert audit["email_sent"] is False
+          assert audit["scheduler_enabled"] is False
+          assert audit["private_storage_used"] is False
+          assert audit["final_report_published"] is False
+          assert audit["production_15_item_cap_intact"] is True
+          if audit["status"] == "READY_QA_ONLY":
+              assert audit["official_pages_checked"] >= 2
+              assert audit["official_pagination_complete"] is True
+              assert audit["official_pagination_termination"] in ("EMPTY_PAGE", "OLDER_THAN_TARGET")
+              assert audit["all_sources_healthy"] is True
+              assert audit["screenshots_verified"] == audit["selected_unique_articles"]
+              assert audit["screenshots_missing"] == 0
+              assert audit["word_images_verified"] is True
+              assert len(words) == 1
+              assert len(Document(words[0]).inline_shapes) == audit["selected_unique_articles"]
+              print("GATE41_PAGINATED_ORIGINAL_MINISTRY_WORD_SHA_VERIFIED_QA_ONLY")
+          else:
+              assert audit["status"] == "HOLD"
+              assert not words
+              print("::error::GATE41_PAGINATION_HOLD: incomplete archive boundary / original screenshots")
+              raise SystemExit(2)
+          PY
       - name: Create read-only Arabic Word preview (no images, not final proof)
         env:
           RASD_GATE11_SEND_APPROVED: ""
