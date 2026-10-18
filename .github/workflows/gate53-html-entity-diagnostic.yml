@@ -1,0 +1,62 @@
+name: Gate53 — classify only publisher XML named-entity at parse failure (read-only)
+
+on:
+  push:
+    branches:
+      - gate53-publisher-entity-integrity
+
+permissions:
+  contents: read
+
+jobs:
+  native-publisher-entity-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Probe original approved RSS for standards-defined entities (no news body)
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, re, html.entities, xml.etree.ElementTree as ET
+          from pathlib import Path
+          from monitor import read_feed
+          conf=json.loads(Path("sources.json").read_text(encoding="utf-8"))
+          assert [r["id"] for r in conf["feeds"]]==["hapi","almasryalyoum"]
+          approved={"amp","lt","gt","quot","apos"}
+          for f in conf["feeds"]:
+              try:
+                  raw=read_feed(f["url"],conf["max_feed_bytes"])
+                  node=ET.fromstring(raw)
+                  print("GATE53_SOURCE="+f["id"]+" root="+str(node.tag=="rss")+
+                        " valid_xml=True" + " bytes="+str(len(raw)))
+              except ET.ParseError as exc:
+                  code=getattr(exc,"code",0)
+                  line,col=getattr(exc,"position",(0,0))
+                  rows=raw.splitlines()
+                  nearby=rows[line-1] if 0<line<=len(rows) else b""
+                  # The names of known standard HTML entities are NOT
+                  # article content; never print surrounding RSS bytes.
+                  candidates=re.findall(rb"&([A-Za-z][A-Za-z0-9]{1,30});",nearby)
+                  known=[n.decode("ascii") for n in candidates if
+                         (n.decode("ascii")+";") in html.entities.html5
+                         and n.decode("ascii") not in approved]
+                  unknown_count=sum(1 for n in candidates
+                      if n.decode("ascii") not in approved
+                      and (n.decode("ascii")+";") not in html.entities.html5)
+                  print("GATE53_SOURCE="+f["id"]+
+                        " parse_error_code="+str(code)+
+                        " line="+str(line)+" col="+str(col)+
+                        " original_bytes="+str(len(raw))+
+                        " standard_html_entities_on_fault_line="+",".join(sorted(set(known))[:12])+
+                        " unknown_named_entities_on_fault_line="+str(unknown_count))
+              except Exception:
+                  print("GATE53_SOURCE="+f["id"]+" unavailable_or_blocked=True")
+          print("GATE53_SAFE_ENTITY_NAMES_ONLY_NO_HEADLINE_OR_ARTICLE_TEXT")
+          PY
