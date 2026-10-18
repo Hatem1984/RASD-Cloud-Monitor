@@ -1,0 +1,75 @@
+name: Gate54 — first-party RSS request header variants (safe metadata-only)
+
+on:
+  push:
+    branches:
+      - gate54-publisher-rss-request-variants
+
+permissions:
+  contents: read
+
+jobs:
+  publisher-native-feed-variants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compare bounded native publisher GET variants without content or credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,time,xml.etree.ElementTree as ET
+          from pathlib import Path
+          from urllib.request import build_opener,Request
+          from urllib.error import HTTPError,URLError
+          from monitor import RejectRedirect,APPROVED_FEED_URLS
+          cfg=json.loads(Path("sources.json").read_text(encoding="utf-8"))
+          target=next(feed for feed in cfg["feeds"] if feed["id"]=="almasryalyoum")
+          assert target["url"] in APPROVED_FEED_URLS
+          user_agent="RASD-Cloud-Public-Monitor/0.1"
+          variants=[
+            ("baseline",{"User-Agent":user_agent}),
+            ("xml_accept",{"User-Agent":user_agent,
+                           "Accept":"application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.1"}),
+            ("fresh",{"User-Agent":user_agent,"Cache-Control":"no-cache","Pragma":"no-cache"}),
+            ("xml_accept_fresh",{"User-Agent":user_agent,
+                           "Accept":"application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.1",
+                           "Cache-Control":"no-cache","Pragma":"no-cache"}),
+          ]
+          seen=[]
+          for label,headers in variants:
+              try:
+                  req=Request(target["url"],headers=headers)
+                  with build_opener(RejectRedirect()).open(req,timeout=18) as rsp:
+                      if rsp.status!=200 or rsp.geturl()!=target["url"]:
+                          raise ValueError("bad_source_identity")
+                      payload=rsp.read(cfg["max_feed_bytes"]+1)
+                      if len(payload)>cfg["max_feed_bytes"]:
+                          raise ValueError("bad_source_size")
+                  digest=hashlib.sha256(payload).digest()
+                  prev_equals=[name for name,h in seen if h==digest]
+                  seen.append((label,digest))
+                  try:
+                      root=ET.fromstring(payload)
+                      valid=(root.tag=="rss" and root.find("channel") is not None)
+                      count=len(root.findall("./channel/item")) if valid else 0
+                      xml_code=0
+                  except ET.ParseError as err:
+                      valid=False
+                      count=0
+                      xml_code=getattr(err,"code",0)
+                  print("GATE54_VARIANT="+label+" status=200 rss_valid="+str(valid)+
+                        " item_count="+str(count)+" xml_error_code="+str(xml_code)+
+                        " bytes="+str(len(payload))+
+                        " identical_to_earlier="+",".join(prev_equals))
+              except HTTPError as err:
+                  print("GATE54_VARIANT="+label+" http_status="+str(err.code))
+              except (URLError,TimeoutError,ValueError,RuntimeError):
+                  print("GATE54_VARIANT="+label+" source_rejected_or_unavailable=true")
+              time.sleep(0.4)
+          print("GATE54_NO_ORIGINAL_CONTENT_PRINTED_NO_CONFIG_CHANGE_NO_WORD_NO_EMAIL")
+          PY
