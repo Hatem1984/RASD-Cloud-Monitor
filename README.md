@@ -1,5 +1,7 @@
 # RASD | رصد — Cloud News Monitor
 
+**Gate 33 (18 October 2026): safe private evidence restore verification, offline only.** A read-only recovery verifier checks a content-addressed private manifest, full Word/JPEG GET bytes and hashes, article order and restored DOCX screenshot relationships. It refuses corrupted, missing or foreign objects. The Fake-S3 restore drill is **not** a real R2 deployment or live recovery. See [Gate 33](GATE33_PRIVATE_RESTORE_DRILL.md).
+
 **Gate 32 (18 October 2026): independent private Word archive evidence revalidation.** The archive now rejects swapped article screenshots and duplicate DOCX media before the first S3-compatible PUT. Offline fake-S3 only; real private storage is still unprovisioned. See [Gate 32](GATE32_PRIVATE_ARCHIVE_WORD_REVALIDATION.md).
 
 **Gate 31 (18 October 2026): real cloud Word evidence acceptance, source/window-limited.** [GitHub Actions run 39103073215, attempt 2](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/39103073215) verified **one currently eligible article**, its one genuine publisher-page screenshot inside its final Word (1/1), zero missing, both feeds healthy, with no public Word/photo artifact, email or schedule. This does not prove sustained source-wide reliability or production delivery.
