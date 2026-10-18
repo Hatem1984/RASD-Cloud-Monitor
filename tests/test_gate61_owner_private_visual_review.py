@@ -7,8 +7,9 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from unittest.mock import patch
 
 from docx import Document
@@ -74,6 +75,13 @@ class LocalPrivateOwnerReviewTests(unittest.TestCase):
             self.assertNotIn("http:", body)
             self.assertNotIn("https:", body)
             self.assertFalse((folder / "rasd-owner-human-review-attestation.json").exists())
+
+    def test_current_or_future_cairo_day_can_never_receive_full_day_attestation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder, _, _ = fixture(temp)
+            incomplete = datetime.now(ZoneInfo("Africa/Cairo")).date()
+            with self.assertRaisesRegex(ValueError, "incomplete_cairo_calendar_day"):
+                inspect_private_review(folder, incomplete)
 
     def test_wrong_day_and_missing_document_fail(self):
         with tempfile.TemporaryDirectory() as temp:
