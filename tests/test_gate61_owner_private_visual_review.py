@@ -87,7 +87,7 @@ class LocalPrivateOwnerReviewTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             folder, word, _ = fixture(temp)
             with self.assertRaisesRegex(ValueError, "private_review_audit_not_qualified"):
-                inspect_private_review(folder, date(2026, 10, 18))
+                inspect_private_review(folder, date(2026, 10, 16))
             (folder / word.name).unlink()
             with self.assertRaisesRegex(ValueError, "private_review_word_missing"):
                 inspect_private_review(folder, DAY)
