@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import io
 import tempfile
+import warnings
+import zipfile
 import unittest
 from pathlib import Path
 
@@ -83,6 +85,52 @@ class PrivateArchiveTests(unittest.TestCase):
             same = self.store.publish_ready(report=ready_report(), word=word, evidence=images)
             self.assertEqual(same["manifest_key"], result["manifest_key"])
             self.assertEqual(len(self.client.objects), 3)
+
+    def test_swapped_original_article_images_fail_before_first_remote_put(self):
+        """Genuine JPEGs attached to wrong articles must never be archived."""
+        with tempfile.TemporaryDirectory() as work:
+            folder = Path(work)
+            word, evidence = self.proof(folder)
+            second = folder / "second.jpg"
+            screenshot(second)
+            with Image.open(second) as picture:
+                paint = ImageDraw.Draw(picture)
+                paint.rectangle((200, 300, 600, 650), fill=(240, 20, 30))
+                picture.save(second, quality=90)
+            second_proof = ("b" * 24, second, sha256(second.read_bytes()).hexdigest())
+            # The Word contains exactly the correct JPEG byte set, but the
+            # pictures are reversed relative to the independently captured
+            # article evidence order.
+            doc = Document()
+            doc.add_paragraph("Article one")
+            doc.add_picture(str(second))
+            doc.add_paragraph("Article two")
+            doc.add_picture(str(evidence[0][1]))
+            doc.save(word)
+            report = ready_report()
+            report["articles"] = 2
+            with self.assertRaisesRegex(
+                    RuntimeError, "private_archive_embedded_screenshot_mismatch"):
+                self.store.publish_ready(
+                    report=report, word=word, evidence=evidence + [second_proof])
+        self.assertFalse(self.client.objects)
+
+    def test_duplicate_docx_media_zip_member_fails_before_first_remote_put(self):
+        with tempfile.TemporaryDirectory() as work:
+            word, evidence = self.proof(Path(work))
+            with zipfile.ZipFile(word) as package:
+                image = next(name for name in package.namelist()
+                             if name.startswith("word/media/"))
+                payload = package.read(image)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                with zipfile.ZipFile(word, "a") as package:
+                    package.writestr(image, payload)
+            with self.assertRaisesRegex(
+                    RuntimeError, "private_archive_embedded_screenshot_mismatch"):
+                self.store.publish_ready(
+                    report=ready_report(), word=word, evidence=evidence)
+        self.assertFalse(self.client.objects)
 
     def test_hold_cannot_upload_any_object(self):
         with tempfile.TemporaryDirectory() as work:
