@@ -257,12 +257,17 @@ class UnifiedOriginalPublisherWordTests(unittest.TestCase):
             self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
 
     def test_source_pages_out_of_chronological_order_hold(self):
-        FakeDriver.pages = {1: [OFFICIAL2], 2: [OFFICIAL]}
+        third = "https://mped.gov.eg/singlenews?id=7264&lang=ar"
+        # Page1 still has a 17 October article, hence pagination
+        # continues; page2 improperly jumps from the 16th back to the 17th.
+        FakeDriver.pages = {1: [OFFICIAL, OFFICIAL2], 2: [third]}
         FakeDriver.offday = {OFFICIAL2}
-        FakeDriver.urls = [OFFICIAL2, OFFICIAL]
+        FakeDriver.urls = [OFFICIAL, OFFICIAL2, third]
         with tempfile.TemporaryDirectory() as tmp:
             result = execute(tmp)
             self.assertEqual(result["status"], "HOLD")
+            self.assertIn("official_archive_not_reverse_chronological",
+                          result["failures"])
             self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
 
     def test_uncertified_depth_limit_holds_not_partial_report(self):
