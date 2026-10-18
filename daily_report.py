@@ -181,6 +181,8 @@ def _word_hyperlink(paragraph, url, label="فتح الخبر في موقع ال�
 def render_docx(report: dict, destination: Path) -> None:
     from docx import Document
     from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from PIL import Image
 
     doc = Document()
     section = doc.sections[0]
@@ -271,7 +273,21 @@ def render_docx(report: dict, destination: Path) -> None:
                 evidence_note = doc.add_paragraph()
                 _rtl(evidence_note)
                 evidence_note.add_run("لقطة موثقة من صفحة الناشر الأصلية").italic = True
-                doc.add_picture(article["evidence_image_path"], width=Inches(5.6))
+                # A genuine publisher full-page JPEG may be very tall. An
+                # unconstrained 5.6-inch-wide image can exceed the printable
+                # page height and become clipped in Word/LibreOffice. Preserve
+                # aspect ratio and bound BOTH physical dimensions.
+                with Image.open(article["evidence_image_path"]) as image:
+                    width_px, height_px = image.size
+                if width_px <= 0 or height_px <= 0:
+                    raise ValueError("publisher_image_dimensions_invalid")
+                aspect = height_px / width_px
+                width_in = min(5.6, 6.2 / aspect)
+                height_in = width_in * aspect
+                doc.add_picture(
+                    article["evidence_image_path"],
+                    width=Inches(width_in), height=Inches(height_in))
+                doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
     p = doc.add_paragraph()
     _rtl(p)
     p.add_run("حالة المصادر").bold = True

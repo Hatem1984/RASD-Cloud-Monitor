@@ -127,12 +127,33 @@ def discover_official_newslist(request_context, *, max_articles=35,
     if type(page_number) is not int or not 1 <= page_number <= 4:
         raise ValueError("official_page_number_invalid")
     url = NEWSLIST.replace("pageNum=1", f"pageNum={page_number}")
-    response = request_context.get(
-        url, timeout=20000, max_redirects=0,
-        headers={"Accept": "text/html", "Referer": INDEX},
-    )
-    if (response.status != 200 or response.url != url
-            or "text/html" not in response.headers.get("content-type", "")):
+    # One bounded retry only on transient origin transport failures. Do
+    # NOT retry 403/429/captcha, redirects, changed host, malformed markup,
+    # untrusted content types, or an empty official publisher result.
+    from time import sleep
+    for attempt in range(2):
+        try:
+            response = request_context.get(
+                url, timeout=20000, max_redirects=0,
+                headers={"Accept": "text/html", "Referer": INDEX},
+            )
+        except Exception as exc:
+            if type(exc).__name__ not in ("TimeoutError", "ConnectionError"):
+                raise
+            if attempt == 0:
+                sleep(1)
+                continue
+            raise ValueError("official_newslist_origin_timeout") from None
+        if response.url != url:
+            raise ValueError("official_newslist_redirect_forbidden")
+        if response.status in (502, 503, 504):
+            if attempt == 0:
+                sleep(1)
+                continue
+            raise ValueError("official_newslist_origin_transient_http") from None
+        break
+    if (response.status != 200 or
+            "text/html" not in response.headers.get("content-type", "")):
         raise ValueError("official_newslist_http_or_type_invalid")
     data = response.body()
     if not data or len(data) > 1_500_000:

@@ -300,13 +300,36 @@ def build_unified_word(
                         }
                         receipts[identifier] = {"id": identifier, "source": OFFICIAL_NAME,
                                                  "status": "verified", "sha256": digest}
-                    if page_dates and max(page_dates) < target_day:
+                    # A chronological archive cutoff is only certifiable
+                    # when EVERY original card on this whole page yielded an
+                    # explicit publisher-owned publication day. Any unreadable
+                    # card must not be silently bypassed as "older" or masked
+                    # by a later (possibly empty) publisher page.
+                    if len(page_dates) != len(links):
+                        hold("official_page_missing_valid_article_dates")
+                        result["official_pagination_termination"] = "UNVERIFIABLE_PAGE"
+                        break
+                    if max(page_dates) < target_day:
                         pagination_complete = True
                         result["official_pagination_termination"] = "OLDER_THAN_TARGET"
                         break
                 if not pagination_complete:
                     hold("official_pagination_depth_exceeded")
                 result["official_pagination_complete"] = pagination_complete
+        except ValueError as exc:
+            # Only whitelisted, internally generated source failure types
+            # are logged; no URLs, source HTML, account data or freeform error
+            # strings enter the PUBLIC CI audit.
+            safe_source_codes = {
+                "official_newslist_origin_timeout",
+                "official_newslist_origin_transient_http",
+                "official_newslist_redirect_forbidden",
+                "official_newslist_http_or_type_invalid",
+                "official_newslist_size_invalid",
+                "official_newslist_encoding_invalid",
+            }
+            code = str(exc)
+            hold(code if code in safe_source_codes else "official_index_unavailable")
         except Exception:
             hold("official_index_unavailable")
         health.append({
@@ -362,8 +385,9 @@ def build_unified_word(
                 "limitations": (
                     "هذا اختبار مصادر مصرية أصلية: حابي، المصري اليوم، والموقع "
                     "الرسمي لوزارة التخطيط. أخبار الوزارة الرسمية ذات تاريخ "
-                    "يوم فقط دون ساعة مختلقة. قائمة الوزارة من أول صفحة "
-                    "NewsList فقط؛ ليست أرشيفًا شاملًا. عناوين ناشرين مختلفين "
+                    "يوم فقط دون ساعة مختلقة. تُفحص صفحات NewsList الرسمية "
+                    "تتابعيًا حتى الوصول إلى حدّ تاريخي موثق، وبحدّ أربع صفحات "
+                    "للتجربة؛ ليس هذا أرشيفًا شاملًا لكل الناشرين. عناوين ناشرين مختلفين "
                     "قد تتناول نفس الحدث؛ العدد عدد روابط مستقلة وليس "
                     "عدد أحداث مستقلة. لا إرسال بريد ولا نشر عام."
                 ),

@@ -31,7 +31,7 @@ jobs:
 
   real-public-feed-dry-run:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -289,6 +289,85 @@ jobs:
               assert not words
               print("::warning::GATE41_PAGINATION_HOLD: external source unavailable or evidence incomplete; no Word. CI safety behavior correct, real acceptance NOT approved.")
           PY
+      - name: Gate42 — install private render tools (only QA branch, no artifact)
+        if: github.ref == 'refs/heads/gate42-word-layout-and-live-windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libreoffice-writer poppler-utils fonts-dejavu-core fonts-noto-core
+          libreoffice --version
+      - name: Gate42 — synthetic Word visual-render preflight (NOT live publisher proof)
+        if: github.ref == 'refs/heads/gate42-word-layout-and-live-windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, "tests")
+          from test_gate42_word_image_layout import fixture_image, minimal_report
+          from daily_report import render_docx
+          from word_render_audit import rendered_word_preflight
+          with tempfile.TemporaryDirectory(prefix="rasd-synthetic-render-only-") as scratch:
+              root = Path(scratch)
+              tall = root / "synthetic-tall.jpg"
+              wide = root / "synthetic-wide.jpg"
+              fixture_image(tall, 1200, 4700)
+              fixture_image(wide, 1200, 900)
+              output = root / "synthetic-layout.docx"
+              render_docx(minimal_report([tall, wide]), output)
+              audit = rendered_word_preflight(output, expected_articles=2)
+              assert audit["status"] == "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW"
+              assert audit["human_visual_review"] is False
+              assert audit["ephemeral_render_destroyed"] is True
+              print("SYNTHETIC_WORD_RENDER_QA_ONLY; " + str(audit))
+          PY
+      - name: Gate42 — yesterday and today genuine original publisher Word + rendered page QA
+        if: github.ref == 'refs/heads/gate42-word-layout-and-live-windows'
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        shell: bash
+        run: |
+          set -euo pipefail
+          for day in "$(TZ=Africa/Cairo date -d yesterday +%Y-%m-%d)" \
+                     "$(TZ=Africa/Cairo date +%Y-%m-%d)"; do
+            folder="$RUNNER_TEMP/rasd-g42-$day"
+            mkdir -p "$folder"
+            python unified_ministry_word.py --target-day "$day" --output-dir "$folder" \
+              | tee "$RUNNER_TEMP/rasd-g42-$day.json"
+            python - "$day" "$folder" <<'PY'
+          import json, subprocess, sys
+          from pathlib import Path
+          target = sys.argv[1]
+          folder = Path(sys.argv[2])
+          audit = json.loads((folder.parent / ("rasd-g42-" + target + ".json")).read_text().splitlines()[0])
+          assert audit["mode"] == "stage2_ministry_unified_word_ephemeral_qa"
+          assert audit["email_sent"] is False and audit["scheduler_enabled"] is False
+          assert audit["source_added_to_production"] is False
+          assert audit["private_storage_used"] is False
+          assert audit["final_report_published"] is False
+          assert audit["keywords_changed"] is False and audit["production_sources_changed"] is False
+          words = list(folder.glob("*.docx"))
+          if audit["status"] == "READY_QA_ONLY":
+              assert audit["all_sources_healthy"]
+              assert audit["official_pagination_complete"]
+              assert audit["word_images_verified"]
+              assert audit["screenshots_missing"] == 0
+              assert len(words) == 1
+              subprocess.run([
+                  sys.executable, "word_render_audit.py", str(words[0]),
+                  "--articles", str(audit["selected_unique_articles"]),
+              ], check=True)
+              print("GATE42_REAL_WORD_RENDER_PREFLIGHT_OK; NOT HUMAN APPROVAL; DATE=" + target)
+          else:
+              assert audit["status"] == "HOLD"
+              assert not words, "Never retain a partial Word"
+              print("::warning::GATE42_SOURCE_OR_EVIDENCE_HOLD; NO_WORD; DATE=" + target)
+          PY
+          done
+          echo "Two independent local Cairo dates checked; today is a partial-day window, not a full-day delivery acceptance."
       - name: Create read-only Arabic Word preview (no images, not final proof)
         env:
           RASD_GATE11_SEND_APPROVED: ""

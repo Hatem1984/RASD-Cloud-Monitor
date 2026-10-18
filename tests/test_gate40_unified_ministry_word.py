@@ -205,6 +205,23 @@ class UnifiedOriginalPublisherWordTests(unittest.TestCase):
             self.assertIn("official_index_unavailable", result["failures"])
             self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
 
+    def test_original_archive_date_cutoff_requires_every_card_dated(self):
+        # An undated page item must not be misreported as having a proven
+        # OLDER_THAN_TARGET cutoff, even when every other item is old.
+        FakeDriver.pages = {1: [OFFICIAL2, OFFICIAL], 2: []}
+        FakeDriver.urls = [OFFICIAL2, OFFICIAL]
+        FakeDriver.offday = {OFFICIAL2}
+        FakeDriver.blocked = {OFFICIAL}
+        with tempfile.TemporaryDirectory() as tmp:
+            result = execute(tmp, include_rss=False)
+            self.assertEqual(result["status"], "HOLD")
+            self.assertFalse(result["official_pagination_complete"])
+            self.assertEqual(
+                result["official_pagination_termination"], "UNVERIFIABLE_PAGE")
+            self.assertIn("official_page_missing_valid_article_dates",
+                          result["failures"])
+            self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
+
     def test_no_articles_is_hold_not_an_empty_final_word(self):
         FakeDriver.offday = {OFFICIAL}
         with tempfile.TemporaryDirectory() as tmp:
