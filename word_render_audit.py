@@ -74,12 +74,38 @@ def _verify_original_headlines_in_pdf(doc, pdf_text: str, count: int) -> None:
         if not re.match(r"^\s*\d{1,2}\.\s+", paragraph.text):
             continue
         seen += 1
-        important = sorted(
-            _arabic_headline_tokens(paragraph.text), key=len, reverse=True)
-        if len(important) < 2 or not set(important[:2]).issubset(visible):
+        important = _arabic_headline_tokens(paragraph.text)
+        # Verify EVERY meaningful Arabic token from this complete title.
+        # Previously checking only the two longest words could approve
+        # another story sharing "وزارة التخطيط" while omitting its subject.
+        # Never combine fragments across distinct PDF extraction modes.
+        if len(important) < 2 or not important.issubset(visible):
             raise ValueError("qa_rendered_original_headline_missing")
     if seen != count:
         raise ValueError("qa_original_report_headline_count_mismatch")
+
+
+def _verify_headlines_in_independent_pdf_extractions(
+    doc, *, layout_text: str, raw_text: str, expected_articles: int,
+) -> str:
+    """Both extraction modes operate on the SAME private rendered PDF.
+
+    A Poppler layout export can mis-group RTL Arabic glyphs. The raw mode
+    can preserve source word grouping differently. Require at least one
+    FULL, independently extracted article-heading token validation.
+    NEVER accept missing titles, replace original text or expose publisher
+    words in logs; only return the name of the successful mode.
+    """
+    try:
+        _verify_original_headlines_in_pdf(
+            doc, layout_text, expected_articles)
+        return "layout"
+    except ValueError as exc:
+        if str(exc) != "qa_rendered_original_headline_missing":
+            raise
+    _verify_original_headlines_in_pdf(
+        doc, raw_text, expected_articles)
+    return "raw"
 
 
 def rendered_word_preflight(
@@ -112,8 +138,20 @@ def rendered_word_preflight(
         # layout conversion, independently of Word's XML text presence.
         pdf_text = _run(["pdftotext", "-layout", str(pdf), "-"],
                         timeout=45).stdout
-        _verify_original_headlines_in_pdf(
-            doc, pdf_text, expected_articles)
+        # Both independent Poppler extraction modes read the same private
+        # PDF: never combine partial matches across modes to falsely pass.
+        try:
+            _verify_original_headlines_in_pdf(
+                doc, pdf_text, expected_articles)
+            verified_text_mode = "layout"
+        except ValueError as exc:
+            if str(exc) != "qa_rendered_original_headline_missing":
+                raise
+            pdf_raw = _run(["pdftotext", "-raw", str(pdf), "-"],
+                           timeout=45).stdout
+            verified_text_mode = _verify_headlines_in_independent_pdf_extractions(
+                doc, layout_text=pdf_text, raw_text=pdf_raw,
+                expected_articles=expected_articles)
         # Use higher-resolution local page raster for a human reviewer
         # when pages are staged for the encrypted owner-only package.
         # Mechanical-only smoke checks keep their lighter 950px render.
@@ -158,6 +196,7 @@ def rendered_word_preflight(
             "rendered_page_count": len(pages),
             "article_image_count": len(doc.inline_shapes),
             "arabic_headlines_rendered": expected_articles,
+            "arabic_text_extraction_mode": verified_text_mode,
             "publisher_screenshot_minimum_word_width_inches": 3.0,
             "minimum_page_ink_ratio": min(coverage),
             "maximum_page_ink_ratio": max(coverage),
