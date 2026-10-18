@@ -65,7 +65,7 @@ def pack_owner_review(
                     item.name != f"page-{i:03d}.png"):
                 raise ValueError("owner_review_page_name_invalid")
             payload = item.read_bytes()
-            if (not payload.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+            if (not payload.startswith(b"\x89PNG\r\n\x1a\n")
                     or not 5000 <= len(payload) <= 9_000_000):
                 raise ValueError("owner_review_page_not_valid_png")
             with Image.open(io.BytesIO(payload)) as im:
@@ -176,8 +176,8 @@ def unpack_owner_review(payload: Path, private_key: Path, destination: Path) -> 
                     name in valid or
                     (name.startswith("RASD-Unified-")
                      and name.endswith(".docx") and "/" not in name
-                     and "\\\\" not in name and ".." not in name) or
-                    re.fullmatch(r"review-pages/page-[0-9]{3}\\.png", name)
+                     and "\\" not in name and ".." not in name) or
+                    re.fullmatch(r"review-pages/page-[0-9]{3}\.png", name)
                 ) for name in members)):
             raise ValueError("unexpected_review_archive_member")
         if sum(info.file_size for info in package.infolist()) > 100_000_000:
