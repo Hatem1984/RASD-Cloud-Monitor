@@ -25,3 +25,11 @@ Every dated original article is inspected before ending the scan. An older-than-
 ## Final acceptance boundaries
 
 This Gate 41 paginated QA is proven for the real Oct17 publisher inventory; it does **not** prove exhaustive historical coverage of every news event across the web. **Visual inspection of a rendered complete Word page** and independent live daily windows remain unapproved. Stage2 production release stays OPEN. The saved four Ministry keywords and two RSS sources remain unchanged.
+
+## Follow-up source-stability incident
+
+A later independent hosted run [39117275922](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/39117275922) verified the **same two-page/20-link original Ministry date boundary**, but the unrelated Al Masry Al Youm original RSS feed failed to respond. Safe outcome was **HOLD with no Word**, even though the official Ministry screenshot was valid. This does not invalidate the earlier successful source-proven Word QA, but it explicitly prevents claiming continuous production coverage or Stage 2 = 100%. Later CI distinguishes a safe external outage/HOLD from a code regression; both outcomes remain visible in redacted logs.
+
+## Public CI evidence privacy repair
+
+Inspection revealed legacy manual Actions flows that publicly uploaded an original-publisher JPEG folder or an unencrypted Arabic Word preview; Stage 2 privacy hardening now removes these upload steps in capture-manual.yml and report-manual.yml, as well as the automatic branch CI preview upload. Publisher JPEGs and Word remain only in the runner's short-lived work directory. The separately reviewed owner-encrypted JSON-only pilot and sanitized JSON manifest uploads are preserved. Static regression tests reject future unencrypted Word/photo artifact paths.
