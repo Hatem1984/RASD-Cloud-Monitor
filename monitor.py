@@ -194,14 +194,20 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
     ids = set()
     for feed in config["feeds"]:
         record = {"feed_id": feed["id"], "status": "failed",
-                  "verified_links": 0, "headline_matches": 0}
+                  "verified_links": 0, "headline_matches": 0,
+                  "description_matches": 0}
         for attempt in range(2):
             try:
                 data = fetch(feed["url"], config["max_feed_bytes"])
                 count, matches = parse_rss(data, feed, config["keywords"], checked,
                                            config["recent_hours"])
-                record.update(status="ok", verified_links=count,
-                              headline_matches=len(matches))
+                record.update(
+                    status="ok", verified_links=count,
+                    headline_matches=len(matches),
+                    description_matches=sum(
+                        row.get("match_origin") == "publisher_description"
+                        for row in matches),
+                )
                 record.pop("error", None)
                 for entry in matches:
                     if entry["id"] not in ids:
@@ -226,14 +232,21 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
         "checked_at_utc": checked.isoformat(),
         "public_verified_publisher_links": sum(s["verified_links"] for s in sources),
         "planning_headline_matches": len(discovered),
+        "native_description_matches": sum(
+            row.get("match_origin") == "publisher_description"
+            for row in discovered),
+        "rss_feed_is_exhaustive_archive": False,
         "sources": sources,
         "matched_public_articles": discovered[:article_limit],
         "email_sent": False,
         "scheduler_enabled": False,
         "state_persistence_enabled": False,
-        "limitations": ("Native RSS headline-only monitoring of reviewed sources; "
-                        "no comprehensive media coverage. This read-only scan "
-                        "does not persist cross-run deduplication."),
+        "limitations": ("Publisher-owned RSS title and short-description matching "
+                        "against the exact saved Ministry of Planning terms. "
+                        "RSS feeds expose a rolling/current inventory, NOT a complete "
+                        "historical or whole-web archive. Date is the original "
+                        "timezone-aware publisher timestamp, never fetch time. "
+                        "Read-only scan does not persist cross-run deduplication."),
     }
 
 
