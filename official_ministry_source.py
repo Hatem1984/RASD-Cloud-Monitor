@@ -142,22 +142,26 @@ def original_publication_date(body: str, headline: str) -> date | None:
         return None
     title = " ".join(headline.split())
     normalized = " ".join(body.split())
-    at = normalized.find(title)
-    if at < 0:
+    # Some original publisher templates place the day immediately ABOVE the
+    # article title, others below, and some repeat the heading in a subheader.
+    # Examine bounded regions next to EVERY exact heading occurrence (max 4).
+    # Accept only one consistent real calendar date; never use footer dates.
+    positions = [m.start() for m in re.finditer(re.escape(title), normalized)][:4]
+    if not positions:
         return None
-    # Date must be close to original article heading; no nav/footer inference.
-    nearby = normalized[at + len(title):at + len(title) + 280]
     pattern = r"(?<!\d)([0-9٠-٩]{1,2})\s+(" + "|".join(MONTHS) + r")\s+([0-9٠-٩]{4})(?!\d)"
-    dates = re.findall(pattern, nearby)
-    if len(dates) != 1:
-        return None
-    dd, mm, yy = dates[0]
-    try:
-        parsed = date(int(yy.translate(ARABIC_DIGITS)),
-                      MONTHS[mm], int(dd.translate(ARABIC_DIGITS)))
-        return parsed if 2020 <= parsed.year <= 2100 else None
-    except ValueError:
-        return None
+    found = set()
+    for at in positions:
+        nearby = (normalized[max(0, at - 110):at]
+                  + " " + normalized[at + len(title):at + len(title) + 380])
+        for dd, mm, yy in re.findall(pattern, nearby):
+            try:
+                found.add(date(int(yy.translate(ARABIC_DIGITS)),
+                               MONTHS[mm], int(dd.translate(ARABIC_DIGITS))))
+            except ValueError:
+                return None
+    return next(iter(found)) if len(found) == 1 and (
+        2020 <= next(iter(found)).year <= 2100) else None
 
 
 def _read_original(page, url: str, keywords: list[str], target_day: date, image: Path):
