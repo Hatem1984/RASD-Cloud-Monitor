@@ -229,6 +229,16 @@ def build_unified_word(
                             link, keywords=config["keywords"],
                             target_day=target_day, image=destination)
                         status = outcome.get("status")
+                        if status == "HOLD":
+                            safe_issue = outcome.get("reason")
+                            hold(safe_issue if safe_issue in (
+                                "official_article_unavailable",
+                                "official_article_redirect",
+                                "official_content_unavailable",
+                                "official_publication_day_missing",
+                                "official_page_validation_failed",
+                            ) else "official_original_page_rejected")
+                            continue
                         day_string = outcome.get("published_date_cairo")
                         try:
                             observed_day = date.fromisoformat(day_string)
