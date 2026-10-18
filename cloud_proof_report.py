@@ -37,6 +37,11 @@ def word_images_match_capture_digests(word: Path, entries: list[dict]) -> bool:
         return False
     try:
         with zipfile.ZipFile(word) as archive:
+            # Duplicate OPC part names have undefined/consumer-specific
+            # resolution, even if archive.read() happens to find good bytes.
+            members = archive.namelist()
+            if len(members) != len(set(members)):
+                return False
             if archive.testzip() is not None:
                 return False
             rels = ET.fromstring(archive.read("word/_rels/document.xml.rels"))
@@ -45,6 +50,10 @@ def word_images_match_capture_digests(word: Path, entries: list[dict]) -> bool:
             for rel in rels:
                 if not rel.attrib.get("Type", "").endswith("/image"):
                     continue
+                # An external relationship can point to a media-looking
+                # relative path; Word may then load a different resource.
+                if rel.attrib.get("TargetMode", "Internal") != "Internal":
+                    return False
                 target = rel.attrib.get("Target", "")
                 if (not target.startswith("media/") or
                         "/" in target[len("media/"):] or
