@@ -8,18 +8,13 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qsl
 
 from official_ministry_source import (
     INDEX, allowed_official_resource, index_articles,
 )
 
-LISTINGS = (
-    INDEX,
-    "https://mped.gov.eg/home?lang=ar",
-    "https://mped.gov.eg/?lang=ar",
-    "https://mped.gov.eg/News?lang=en",
-)
+LISTINGS = (INDEX,)
 MAX_LINKS = 35
 
 
@@ -43,10 +38,30 @@ def probe() -> dict:
                 ignore_https_errors=False)
             blocked_hosts = Counter()
             first_party_ajax_paths = Counter()
+            official_xhr_requests = []
+            official_xhr_responses = []
+            def collect_response(response):
+                if urlsplit(response.url).path.casefold() == "/news/newslist":
+                    official_xhr_responses.append(response)
+            context.on("response", collect_response)
             def audit_request(req):
                 if (allowed_official_resource(req.url)
                         and req.resource_type in ("fetch", "xhr")):
                     first_party_ajax_paths[urlsplit(req.url).path] += 1
+                    if urlsplit(req.url).path.casefold() == "/news/newslist":
+                        raw = req.post_data or ""
+                        try:
+                            names = sorted(set(k for k, _ in parse_qsl(raw)))
+                        except Exception:
+                            names = []
+                        official_xhr_requests.append({
+                            "method": req.method, "body_field_names": names[:25],
+                            "content_type": (req.headers.get("content-type", "")
+                                             .split(";", 1)[0]),
+                            "query_field_names": sorted(
+                                set(k for k, _ in parse_qsl(
+                                    urlsplit(req.url).query)))[:25],
+                        })
             context.on("request", audit_request)
             def route_check(route):
                 url = route.request.url
@@ -82,6 +97,25 @@ def probe() -> dict:
                 except Exception:
                     row["render_result"] = "page_error"
                 out["listings"].append(row)
+            out["official_newslist_requests"] = official_xhr_requests[:4]
+            out["official_newslist_responses"] = []
+            for response in official_xhr_responses[:4]:
+                record = {"status": response.status,
+                          "content_type": response.headers.get("content-type", "").split(";", 1)[0]}
+                try:
+                    body = response.body()
+                    record["bytes"] = len(body)
+                    record["article_link_indicators"] = body.lower().count(b"singlenews")
+                    if len(body) < 700_000 and "json" in record["content_type"]:
+                        d = json.loads(body)
+                        record["json_root_type"] = type(d).__name__
+                        record["json_keys"] = sorted(d.keys())[:25] if isinstance(d, dict) else []
+                        record["json_array_size"] = len(d) if isinstance(d, list) else 0
+                    else:
+                        record["looks_like_no_results"] = "لا يوجد نتائج" in body.decode("utf-8", "replace")
+                except Exception:
+                    record["inspect_status"] = "unavailable"
+                out["official_newslist_responses"].append(record)
             out["third_party_requests_blocked"] = sum(blocked_hosts.values())
             out["third_party_host_counts"] = dict(blocked_hosts.most_common(12))
             out["first_party_ajax_paths"] = dict(first_party_ajax_paths.most_common(12))
