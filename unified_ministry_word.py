@@ -303,8 +303,13 @@ def build_unified_word(
                     # A chronological archive cutoff is only certifiable
                     # when EVERY original card on this whole page yielded an
                     # explicit publisher-owned publication day. Any unreadable
-                    # card must not be silently bypassed as "older".
-                    if len(page_dates) == len(links) and max(page_dates) < target_day:
+                    # card must not be silently bypassed as "older" or masked
+                    # by a later (possibly empty) publisher page.
+                    if len(page_dates) != len(links):
+                        hold("official_page_missing_valid_article_dates")
+                        result["official_pagination_termination"] = "UNVERIFIABLE_PAGE"
+                        break
+                    if max(page_dates) < target_day:
                         pagination_complete = True
                         result["official_pagination_termination"] = "OLDER_THAN_TARGET"
                         break
