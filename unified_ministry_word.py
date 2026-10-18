@@ -174,10 +174,6 @@ def build_unified_word(
     # have a verifiable original publisher identity and date. No silent loss.
     inspected = inspect(config, fetch=fetch, now=checked, article_limit=200,
                         require_complete_items=True)
-    if inspected["matched_article_pool_truncated"]:
-        # Otherwise eligible article #201 may vanish BEFORE the 15-item
-        # final document cap is checked; never accept a partial source pool.
-        hold("rss_candidate_pool_exceeded_no_truncation")
     health = [{
         "feed_id": row["feed_id"], "status": row["status"],
         "verified_links": row["verified_links"],
@@ -395,6 +391,11 @@ def build_unified_word(
         })
         rows = sorted(selected.values(), key=lambda x: x["_sort"], reverse=True)
         result["selected_unique_articles"] = len(rows)
+        if inspected["matched_article_pool_truncated"]:
+            # Report completeness and source health are separate: a verified
+            # Ministry source must not be marked failed just because the RSS
+            # matching pool overflowed. HOLD before any Word is finalized.
+            hold("rss_candidate_pool_exceeded_no_truncation")
         if len(rows) > MAX_ARTICLES:
             hold("above_15_article_production_cap_no_truncation")
         # Never silently suppress eligible report articles, including when a
