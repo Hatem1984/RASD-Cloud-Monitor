@@ -10,7 +10,9 @@ import hashlib
 import html
 import re
 import json
+import unicodedata
 from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -57,8 +59,69 @@ def article_id(url: str) -> str:
     return hashlib.sha256(canonical_url(url).encode("utf-8")).hexdigest()[:24]
 
 
+# Keep saved Ministry phrases unchanged. Normalize native RSS TYPOGRAPHY only
+# for matching: Arabic diacritics/tatweel and common Alef variants. Do not
+# introduce broad 'اقتصاد' or 'تنمية' keywords on the owner's behalf.
+_ARABIC_DIACRITICS = re.compile(r"[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u0640]")
+_ARABIC_ALEF = str.maketrans({"أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا"})
+_DC_DATE = "{http://purl.org/dc/elements/1.1/}date"
+
+
+def _native_text(raw: str) -> str:
+    """Strip publisher RSS HTML tags and entities; no HTML becomes evidence."""
+    value = html.unescape(raw)
+    value = re.sub(r"<[^>]*>", " ", value)
+    return " ".join(value.split())
+
+
+def _matchable_arabic(value: str) -> str:
+    value = unicodedata.normalize("NFKC", _native_text(value))
+    value = _ARABIC_DIACRITICS.sub("", value).translate(_ARABIC_ALEF)
+    return " ".join(value.casefold().split())
+
+
+def _ministry_term_present(value: str, saved_keywords: list[str]) -> bool:
+    text = _matchable_arabic(value)
+    return any(
+        bool(re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", text))
+        for keyword in saved_keywords if (phrase := _matchable_arabic(keyword))
+    )
+
+
+def _publisher_timestamp(node) -> tuple[datetime, str] | None:
+    """Never invent timezone or treat RSS fetch time as publication time.
+
+    Prefer publisher-owned RSS pubDate; support a standards-based Dublin
+    Core dc:date only when pubDate is completely absent. If a supplied
+    pubDate is malformed, refuse instead of silently switching identities.
+    """
+    original = (node.findtext("pubDate") or "").strip()
+    if original:
+        try:
+            timestamp = parsedate_to_datetime(original)
+        except (ValueError, TypeError, OverflowError, IndexError):
+            return None
+        if timestamp is None or timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            return None
+        return timestamp, original
+    dc = (node.findtext(_DC_DATE) or "").strip()
+    if not dc:
+        return None
+    try:
+        timestamp = datetime.fromisoformat(dc.replace("Z", "+00:00"))
+    except (ValueError, TypeError, OverflowError):
+        return None
+    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+        return None
+    return timestamp, format_datetime(timestamp)
+
+
 def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hours=72) -> tuple[int, list[dict]]:
-    """Only process well-formed RSS with publisher-owned HTTPS article links."""
+    """Match saved Ministry phrases in native publisher title OR excerpt.
+
+    RSS is a bounded CURRENT feed, not a full publisher archive. Only
+    explicitly timezone-aware publication dates may become report stories.
+    """
     if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
         raise ValueError("DTD_or_entity_forbidden")
     root = ET.fromstring(data)
@@ -68,7 +131,6 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("naive_monitor_clock_forbidden")
     now = now.astimezone(timezone.utc)
-    keywords = [x.casefold() for x in keywords if x.strip()]
     eligible, matched, ids = 0, [], set()
     for node in root.findall("./channel/item"):
         title = (node.findtext("title") or "").strip()[:300]
@@ -76,37 +138,30 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
         if not title or not is_publisher_link(url, feed["allowed_article_hosts"]):
             continue
         eligible += 1
-        # Shorouk's native Economy RSS may mention the ministry only in its
-        # short item description. This is still publisher-owned RSS text, not
-        # aggregator discovery, and is used only for this reviewed feed.
-        search_text = title
-        if feed["id"] == "shorouk":
-            raw_description = (node.findtext("description") or "")[:3500]
-            short_description = html.unescape(re.sub(
-                r"<[^>]*>", " ", raw_description))
-            search_text += " " + short_description
-        if not any(k in search_text.casefold() for k in keywords):
+        # Publisher-owned description may contain a saved phrase absent in
+        # the headline. It is never substituted for a source-page screenshot.
+        description = _native_text((node.findtext("description") or "")[:3500])[:850]
+        title_match = _ministry_term_present(title, keywords)
+        description_match = _ministry_term_present(description, keywords)
+        if not title_match and not description_match:
             continue
-        published = (node.findtext("pubDate") or "").strip()
-        if feed["id"] == "shorouk" and not published:
-            continue  # No unverifiable timestamp for this newly admitted feed.
-        if published:
-            try:
-                stamp = parsedate_to_datetime(published)
-                if stamp.tzinfo is None:
-                    stamp = stamp.replace(tzinfo=timezone.utc)
-                if not (now - timedelta(hours=recent_hours) <= stamp.astimezone(timezone.utc)
-                        <= now + timedelta(hours=4)):
-                    continue
-            except (ValueError, TypeError, OverflowError):
-                continue
+        dated = _publisher_timestamp(node)
+        if dated is None:
+            continue
+        timestamp, published = dated
+        if not (now - timedelta(hours=recent_hours) <= timestamp.astimezone(timezone.utc)
+                <= now + timedelta(minutes=30)):
+            continue
         item_id = article_id(url)
         if item_id in ids:
             continue
         ids.add(item_id)
-        matched.append({"id": item_id, "source": feed["name"],
-                        "headline": title, "url": url, "published": published or None,
-                        "publisher_excerpt": short_description[:850] if feed["id"] == "shorouk" else ""})
+        matched.append({
+            "id": item_id, "source": feed["name"],
+            "headline": title, "url": url, "published": published,
+            "publisher_excerpt": description,
+            "match_origin": "title" if title_match else "publisher_description",
+        })
     return eligible, matched
 
 
@@ -139,14 +194,20 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
     ids = set()
     for feed in config["feeds"]:
         record = {"feed_id": feed["id"], "status": "failed",
-                  "verified_links": 0, "headline_matches": 0}
+                  "verified_links": 0, "headline_matches": 0,
+                  "description_matches": 0}
         for attempt in range(2):
             try:
                 data = fetch(feed["url"], config["max_feed_bytes"])
                 count, matches = parse_rss(data, feed, config["keywords"], checked,
                                            config["recent_hours"])
-                record.update(status="ok", verified_links=count,
-                              headline_matches=len(matches))
+                record.update(
+                    status="ok", verified_links=count,
+                    headline_matches=len(matches),
+                    description_matches=sum(
+                        row.get("match_origin") == "publisher_description"
+                        for row in matches),
+                )
                 record.pop("error", None)
                 for entry in matches:
                     if entry["id"] not in ids:
@@ -171,14 +232,21 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
         "checked_at_utc": checked.isoformat(),
         "public_verified_publisher_links": sum(s["verified_links"] for s in sources),
         "planning_headline_matches": len(discovered),
+        "native_description_matches": sum(
+            row.get("match_origin") == "publisher_description"
+            for row in discovered),
+        "rss_feed_is_exhaustive_archive": False,
         "sources": sources,
         "matched_public_articles": discovered[:article_limit],
         "email_sent": False,
         "scheduler_enabled": False,
         "state_persistence_enabled": False,
-        "limitations": ("Native RSS headline-only monitoring of reviewed sources; "
-                        "no comprehensive media coverage. This read-only scan "
-                        "does not persist cross-run deduplication."),
+        "limitations": ("Publisher-owned RSS title and short-description matching "
+                        "against the exact saved Ministry of Planning terms. "
+                        "RSS feeds expose a rolling/current inventory, NOT a complete "
+                        "historical or whole-web archive. Date is the original "
+                        "timezone-aware publisher timestamp, never fetch time. "
+                        "Read-only scan does not persist cross-run deduplication."),
     }
 
 
