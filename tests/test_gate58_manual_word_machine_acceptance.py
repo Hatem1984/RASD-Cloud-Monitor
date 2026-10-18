@@ -131,6 +131,8 @@ class Stage2ManualMachineAcceptanceTests(unittest.TestCase):
         self.assertIn("RASD_MAIL_ENABLED: \"false\"", workflow)
         self.assertIn("RASD_SCHEDULER_ENABLED: \"false\"", workflow)
         self.assertIn("RASD_STAGE2_WINDOW_MODE:", workflow)
+        self.assertIn('mode="$RASD_STAGE2_WINDOW_MODE"', workflow)
+        self.assertNotIn('mode="${{ inputs.day }}"', workflow)
         self.assertIn("stage2_manual_machine_verdict(", workflow)
         self.assertIn("requested_window=os.environ", workflow)
         self.assertIn('datetime.now(ZoneInfo("Africa/Cairo")).date()', workflow)
