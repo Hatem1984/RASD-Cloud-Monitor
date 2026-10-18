@@ -302,6 +302,9 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
         "checked_at_utc": checked.isoformat(),
         "public_verified_publisher_links": sum(s["verified_links"] for s in sources),
         "planning_headline_matches": len(discovered),
+        # The preview is intentionally bounded; the full Word must inspect
+        # this flag and HOLD rather than silently omit match #201 onward.
+        "matched_article_pool_truncated": len(discovered) > article_limit,
         "native_description_matches": sum(
             row.get("match_origin") == "publisher_description"
             for row in discovered),
