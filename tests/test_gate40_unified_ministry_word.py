@@ -283,6 +283,28 @@ class UnifiedOriginalPublisherWordTests(unittest.TestCase):
             self.assertIn("official_pagination_depth_exceeded", result["failures"])
             self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
 
+    def test_two_independent_cairo_target_days_do_not_include_other_days(self):
+        class DatedOneDayDriver(FakeDriver):
+            def inspect(self, url, *, keywords, target_day, image):
+                return {"status": "OUT_OF_WINDOW",
+                        "published_date_cairo": "2026-10-17"}
+        for target, run_clock in (
+            (date(2026, 10, 16), datetime(2026, 10, 17, 9, tzinfo=timezone.utc)),
+            (date(2026, 10, 18), datetime(2026, 10, 18, 9, tzinfo=timezone.utc)),
+        ):
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / "sources.json"
+                source.write_text(json.dumps(PROFILE, ensure_ascii=False))
+                result = build_unified_word(
+                    source, Path(tmp) / "out", target_day=target, now=run_clock,
+                    fetch=lambda url, limit: feed(url, limit, include_rss=False),
+                    official_driver_factory=DatedOneDayDriver,
+                    capture=capture)
+                self.assertEqual(result["status"], "HOLD")
+                self.assertEqual(result["selected_unique_articles"], 0)
+                self.assertEqual(result["screenshots_verified"], 0)
+                self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
+
     def test_disallowed_profile_or_naive_clock_aborts_before_any_network(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(ValueError, "unified_clock_must_be_aware"):
