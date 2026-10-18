@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import hmac
+from io import BytesIO
 import json
 import re
 import smtplib
@@ -20,7 +21,7 @@ from pathlib import Path
 from docx import Document
 
 from daily_report import CAIRO
-from cloud_proof_report import build_proof_report
+from cloud_proof_report import build_proof_report, word_images_match_capture_digests
 from delivery_bridge import PrivateGitHubLedger, gmail_submit
 from gate11_runner import credentials
 
@@ -47,13 +48,13 @@ def verify_word(word: Path, date: str, expected_images: int) -> bytes:
         raise ValueError("report_file_identity_mismatch")
     if not word.is_file():
         raise ValueError("report_attachment_missing")
-    if not 3000 <= word.stat().st_size <= MAX_ATTACHMENT_BYTES:
-        raise ValueError("report_attachment_size_invalid")
     content = word.read_bytes()
+    if not 3000 <= len(content) <= MAX_ATTACHMENT_BYTES:
+        raise ValueError("report_attachment_size_invalid")
     if not content.startswith(b"PK"):
         raise ValueError("report_attachment_format_invalid")
     try:
-        doc = Document(word)
+        doc = Document(BytesIO(content))
         if (not doc.paragraphs or
                 type(expected_images) is not int or expected_images < 1 or
                 len(doc.inline_shapes) != expected_images):
@@ -115,6 +116,13 @@ def deliver_digest(report: dict, *, date: str, key: str, word: Path,
         # Identity must be derived from the report day, never arbitrary input.
         raise ValueError("digest_date_identity_mismatch")
     attachment = verify_word(word, date, report.get("articles", 0))
+    # Validate the EXACT bytes that would be submitted to Gmail.
+    # Image counts alone can accept altered JPEGs or swaps between articles.
+    receipts = report.get("entries")
+    if (not isinstance(receipts, list) or
+            len(receipts) != report.get("articles") or
+            not word_images_match_capture_digests(BytesIO(attachment), receipts)):
+        raise ValueError("digest_word_evidence_integrity_failed")
     message = build_digest_message(report, date, key, attachment, sender)
     action = ledger.reserve(key, sender)  # commits and re-reads BEFORE SMTP
     if action != "reserved":
