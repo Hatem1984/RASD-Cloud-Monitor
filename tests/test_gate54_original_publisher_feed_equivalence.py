@@ -51,7 +51,13 @@ class OriginalPublisherShadowEquivalenceTests(unittest.TestCase):
         self.assertTrue(same["snapshot_no_loss"])
         self.assertFalse(same["production_source_switch_allowed"])
         self.assertFalse(require_two_valid_independent_snapshots([same]))
-        self.assertTrue(require_two_valid_independent_snapshots([same,same]))
+        self.assertFalse(require_two_valid_independent_snapshots([same,same]))
+        first = audit_shadow_equivalence(
+            sample([4,5]), sample([4,5,6]), observation_run_id="39132021893")
+        second = audit_shadow_equivalence(
+            sample([4,5]), sample([4,5,6]), observation_run_id="39132270253")
+        self.assertTrue(require_two_valid_independent_snapshots([first,second]))
+        self.assertFalse(require_two_valid_independent_snapshots([first,first]))
 
     def test_same_article_original_publisher_date_change_is_not_equivalent(self):
         bad = audit_shadow_equivalence(sample([4,5]), sample([4,5],altered=4))
