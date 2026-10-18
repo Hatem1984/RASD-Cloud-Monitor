@@ -31,6 +31,25 @@ class ArabicTitleIndependentPDFModesTests(unittest.TestCase):
                         self.doc, layout_text="وزارة التخطيط نص مختلف",
                         raw_text=raw, expected_articles=1)
 
+    def test_two_matching_publisher_title_words_cannot_replace_full_headline(self):
+        # "وزارة" and "التخطيط" cannot substitute for the entire
+        # original headline. All title tokens must survive ONE extraction.
+        truncated = "وزارة التخطيط نص مختلف تمامًا"
+        with self.assertRaisesRegex(
+                ValueError, "qa_rendered_original_headline_missing"):
+            _verify_headlines_in_independent_pdf_extractions(
+                self.doc, layout_text=truncated, raw_text=truncated,
+                expected_articles=1)
+
+    def test_split_headline_across_layout_and_raw_is_rejected(self):
+        # Neither extraction alone displays all essential original words.
+        with self.assertRaisesRegex(
+                ValueError, "qa_rendered_original_headline_missing"):
+            _verify_headlines_in_independent_pdf_extractions(
+                self.doc, layout_text="وزارة التخطيط تستعرض",
+                raw_text="مؤشرات الاقتصاد الوطني والتقارير",
+                expected_articles=1)
+
     def test_missing_article_heading_rejected_even_if_text_layer_has_arabic(self):
         doc=SimpleNamespace(paragraphs=[
             SimpleNamespace(text="مستند من دون عنوان خبر معتمد"),
