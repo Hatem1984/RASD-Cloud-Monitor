@@ -138,6 +138,40 @@ jobs:
               print("GATE31_FULL_SOURCE_EPHEMERAL_WORD_PROOF_VERIFIED; "
                     "NO_PUBLIC_DOCX; NO_EMAIL; NO_SCHEDULE", flush=True)
           PY
+      - name: Gate38 — official Ministry original page + archive discovery QA (branch-only, no mail)
+        if: github.ref == 'refs/heads/gate38-official-ministry-original-source'
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python official_ministry_source.py | tee "$RUNNER_TEMP/rasd-g38-redacted.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          rows = (Path(os.environ["RUNNER_TEMP"]) /
+                  "rasd-g38-redacted.json").read_text().splitlines()
+          audit = json.loads(rows[0])
+          assert audit["mode"] == "official_ministry_optin_qa"
+          assert audit["production_feed_changed"] is False
+          assert audit["keywords_changed"] is False
+          assert audit["source_added_to_production"] is False
+          assert audit["final_report_published"] is False
+          assert audit["email_sent"] is False
+          assert audit["scheduler_enabled"] is False
+          assert audit["private_archive_used"] is False
+          assert audit["sample_verified_screenshots"] in (0, 1)
+          if audit["status"] != "READY_SOURCE_QA_ONLY":
+              print("::warning::GATE38 SOURCE HOLD — official index and full "
+                    "original-page proof have not BOTH passed. No source promoted.")
+          else:
+              assert audit["official_index"] == "FOUND"
+              assert audit["sample_verified_screenshots"] == 1
+              assert audit["sample_word_images_verified"] is True
+              print("GATE38 official source QUALIFIED FOR REVIEW ONLY; "
+                    "production promotion separately gated")
+          PY
       - name: Create read-only Arabic Word preview (no images, not final proof)
         env:
           RASD_GATE11_SEND_APPROVED: ""
