@@ -35,6 +35,21 @@ python gate43_owner_encrypted_review.py --decrypt --payload "C:\\RASD-Review\\ra
 
 6. Review every page of the decrypted **actual original report Word**, checking Arabic RTL shaping, the title, source/date, one genuine screenshot for each article, readability, page breaks/clipping, and absence of unsupported extra articles. Mark `human_visual_review` separately; the encrypted audit purposely marks it `false` until a real reviewer has examined it.
 
+### Gate 50 — encrypted, individually reviewable Word page pictures
+
+When a **new** real report passes source-date/JPEG SHA/Word rendering checks, the same encrypted owner-only JSON artifact now includes:
+
+- `RASD-Unified-YYYY-MM-DD.docx`: exact Word that passed independent picture SHA checks;
+- `review-pages/page-001.png`, `page-002.png`, etc.: **all** actual rendered Word pages, in sequence, inside the same ciphertext (not GitHub plaintext attachments);
+- `rasd-owner-review-pages-manifest.json`: a SHA-256 fingerprint and byte count for **each** rendered page;
+- `rasd-owner-review-audit.json`: limited source health and count audit, with `human_visual_review=false` until an actual reviewer signs off.
+
+The local `--decrypt` command above creates the `review-pages` folder automatically after every filename and SHA check passes. Open `page-001.png` through the last page on your **local computer** and check that Arabic titles are complete/right-to-left, publisher screenshot legible, source and original publication day accurate, no cropped words, and no unexpected blank or duplicate pages. Cross-check the exact Word itself. The approval remains a **separate explicit human decision**, not something automatically derived from correct decryption or successful page rendering.
+
+**Security:** never upload the decrypted Word, images, review manifest, or private key to a public GitHub repository. Previous encrypted artifacts created before Gate 50 do **not** gain page PNGs retroactively; download a new successful owner-initiated report to use this feature. When the collector returns HOLD, the ciphertext contains audit-only data and **no Word, PDF, publisher photo or page preview**. PDF is *temporary rendering machinery only*; Word remains the sole report deliverable.
+
+
+
 The encryption package is not itself proof the whole project is production-ready. The original email delivery, storage and scheduling approval gates remain closed.
 
 ## Required completion evidence — Stage 2 remains OPEN until fulfilled

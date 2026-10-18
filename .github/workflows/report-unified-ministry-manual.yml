@@ -91,8 +91,11 @@ jobs:
               assert audit["screenshots_missing"] == 0
               assert len(words) == 1
               preflight = rendered_word_preflight(
-                  words[0], expected_articles=audit["selected_unique_articles"])
+                  words[0], expected_articles=audit["selected_unique_articles"],
+                  review_pages_dir=root / "rasd-private-review-pages")
               assert preflight["status"] == "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW"
+              assert preflight["private_owner_review_pages_staged"] is True
+              assert preflight["rendered_page_count"] >= 1
               rendered = True
               print("RASD_REAL_MINISTRY_WORD_OWNER_REVIEW_ENCRYPTED_ONLY; HUMAN_REVIEW_PENDING")
           else:
@@ -101,8 +104,12 @@ jobs:
           receipt = pack_owner_review(
               report_dir, audit, root / "rasd-g43-owner-encrypted.json",
               render_passed=rendered,
+              review_pages_dir=(root / "rasd-private-review-pages"
+                                if rendered else None),
           )
           assert receipt["encrypted"] and not receipt["plaintext_artifact"]
+          assert receipt["owner_review_pages_encrypted"] is rendered
+          assert receipt["owner_review_page_count"] >= int(rendered)
           assert not receipt["email_sent"]
           print("RASD_OWNER_ENCRYPTED_ARTIFACT_READY; HAS_GENUINE_WORD=" +
                 str(receipt["owner_review_word_included"]))

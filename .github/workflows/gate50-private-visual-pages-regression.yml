@@ -1,0 +1,81 @@
+name: Gate50 — protected Word page render and owner encryption (synthetic test)
+
+on:
+  push:
+    branches:
+      - gate50-encrypted-visual-pages-owner-review
+
+permissions:
+  contents: read
+
+jobs:
+  local-private-render-and-crypto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install private render and local encryption QA tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements-test.txt
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libreoffice-writer poppler-utils fonts-dejavu-core fonts-noto-core
+      - name: Render synthetic Word, encrypt full page set, safely decrypt and compare
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, "tests")
+          from test_gate42_word_image_layout import fixture_image, minimal_report
+          from test_gate43_owner_encrypted_review import _keys, audit
+          from daily_report import render_docx
+          from word_render_audit import rendered_word_preflight
+          from gate43_owner_encrypted_review import pack_owner_review, unpack_owner_review
+
+          with tempfile.TemporaryDirectory(prefix="rasd-g50-encrypted-only-") as tmp:
+              root=Path(tmp)
+              public, private = _keys(root)  # Synthetic test-only private key; never production key
+              report=root/"private-report"
+              report.mkdir()
+              images=[]
+              for i, dimensions in enumerate(((1200,900),(1200,1600)),1):
+                  p=root/f"synthetic-{i}.jpg"
+                  fixture_image(p,*dimensions)
+                  images.append(p)
+              original=report/"RASD-Unified-2026-10-17.docx"
+              render_docx(minimal_report(images),original)
+              original_bytes=original.read_bytes()
+              pages=root/"review-staging"
+              render=rendered_word_preflight(original,expected_articles=2,review_pages_dir=pages)
+              assert render["status"]=="RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW"
+              assert render["private_owner_review_pages_staged"] is True
+              assert render["human_visual_review"] is False
+              ciphertext=root/"owner-only-ciphertext.json"
+              receipt=pack_owner_review(report,audit("READY_QA_ONLY"),ciphertext,public,
+                                        render_passed=True,review_pages_dir=pages)
+              assert receipt["owner_review_page_count"]==render["rendered_page_count"]
+              assert receipt["owner_review_pages_encrypted"] is True
+              assert b"review-pages/page-001.png" not in ciphertext.read_bytes()
+              recovered=root/"decrypted-local-owner"
+              members=unpack_owner_review(ciphertext,private,recovered)
+              assert (recovered/original.name).read_bytes()==original_bytes
+              manifest=json.loads((recovered/"rasd-owner-review-pages-manifest.json").read_text())
+              assert len(manifest["pages"])==receipt["owner_review_page_count"]
+              for row in manifest["pages"]:
+                  png=(recovered/row["name"]).read_bytes()
+                  assert hashlib.sha256(png).hexdigest()==row["sha256"]
+              assert not (root/"production-artifacts").exists()
+              print("GATE50_PRIVATE_RENDER_AND_OWNER_PAGE_ENCRYPTION_PASS")
+              print("GATE50_SYNTHETIC_RENDERED_PAGES="+str(render["rendered_page_count"]))
+              print("GATE50_HUMAN_REVIEW_NOT_CLAIMED")
+          PY
+          echo "No public plaintext Word/JPEG/PNG/PDF and no owner private key uploaded."

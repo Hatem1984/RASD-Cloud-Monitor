@@ -10,6 +10,8 @@ import base64
 import io
 import json
 import os
+import hashlib
+import re
 import zipfile
 from pathlib import Path
 
@@ -25,6 +27,7 @@ def pack_owner_review(
     public_key_path: Path = Path("gate26_owner_review_pubkey.pem"),
     *,
     render_passed: bool = False,
+    review_pages_dir: Path | None = None,
 ) -> dict:
     """Use only existing original-SHA-verified Word, never unreviewed draft."""
     output_dir = Path(output_dir)
@@ -43,6 +46,40 @@ def pack_owner_review(
             audit.get("scheduler_enabled") is not False or
             audit.get("source_added_to_production") is not False):
         raise ValueError("owner_review_safety_flag_invalid")
+    page_receipts = []
+    if review_pages_dir is not None:
+        if not ready or not render_passed:
+            raise ValueError("review_pages_forbidden_on_hold")
+        folder = Path(review_pages_dir)
+        if not folder.is_dir() or folder.is_symlink():
+            raise ValueError("owner_review_pages_directory_invalid")
+        pages = sorted(folder.iterdir())
+        if not 1 <= len(pages) <= max(
+            3, int(audit.get("selected_unique_articles", 0)) * 4 + 3,
+        ):
+            raise ValueError("owner_review_page_count_invalid")
+        total_bytes = 0
+        from PIL import Image
+        for i, item in enumerate(pages, 1):
+            if (not item.is_file() or item.is_symlink() or
+                    item.name != f"page-{i:03d}.png"):
+                raise ValueError("owner_review_page_name_invalid")
+            payload = item.read_bytes()
+            if (not payload.startswith(b"\x89PNG\r\n\x1a\n")
+                    or not 5000 <= len(payload) <= 9_000_000):
+                raise ValueError("owner_review_page_not_valid_png")
+            with Image.open(io.BytesIO(payload)) as im:
+                if im.format != "PNG" or im.width < 550 or im.height < 550:
+                    raise ValueError("owner_review_page_dimensions_invalid")
+                im.verify()
+            total_bytes += len(payload)
+            if total_bytes > 70_000_000:
+                raise ValueError("owner_review_total_page_bytes_exceeded")
+            page_receipts.append({
+                "name": f"review-pages/{item.name}",
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "bytes": len(payload),
+            })
     sanitized = {
         key: value for key, value in audit.items()
         if key in {
@@ -60,6 +97,8 @@ def pack_owner_review(
     sanitized["human_visual_review"] = False
     sanitized["production_delivery_approved"] = False
     sanitized["owner_review_word_included"] = bool(ready)
+    sanitized["owner_review_pages_encrypted"] = bool(page_receipts)
+    sanitized["owner_review_page_count"] = len(page_receipts)
     with io.BytesIO() as buffer:
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as package:
             package.writestr(
@@ -68,6 +107,17 @@ def pack_owner_review(
             )
             if ready:
                 package.write(documents[0], arcname=documents[0].name)
+                if page_receipts:
+                    package.writestr(
+                        "rasd-owner-review-pages-manifest.json",
+                        json.dumps({"version": 1, "pages": page_receipts},
+                                   sort_keys=True),
+                    )
+                    for item in page_receipts:
+                        package.write(
+                            Path(review_pages_dir) / Path(item["name"]).name,
+                            arcname=item["name"],
+                        )
         raw = buffer.getvalue()
     key = os.urandom(32)
     nonce = os.urandom(12)
@@ -92,6 +142,8 @@ def pack_owner_review(
         "encrypted": True, "plaintext_artifact": False,
         "owner_review_word_included": ready, "human_visual_review": False,
         "email_sent": False, "file_size_bytes": destination.stat().st_size,
+        "owner_review_pages_encrypted": bool(page_receipts),
+        "owner_review_page_count": len(page_receipts),
     }
 
 
@@ -111,17 +163,51 @@ def unpack_owner_review(payload: Path, private_key: Path, destination: Path) -> 
         base64.b64decode(content["ciphertext"]), AAD)
     dest = Path(destination)
     dest.mkdir(parents=True, exist_ok=True)
+    if len(raw) > 100_000_000:
+        raise ValueError("owner_review_decrypted_archive_too_large")
     with zipfile.ZipFile(io.BytesIO(raw)) as package:
         members = package.namelist()
-        if len(members) != len(set(members)) or any(
-            "/" in name or "\\" in name or name.startswith(".")
-            or name not in ("rasd-owner-review-audit.json",)
-            and not (name.startswith("RASD-Unified-") and name.endswith(".docx"))
-            for name in members
-        ):
+        names = set(members)
+        valid = {"rasd-owner-review-audit.json",
+                 "rasd-owner-review-pages-manifest.json"}
+        if (len(members) != len(names) or
+                "rasd-owner-review-audit.json" not in names or
+                any(not (
+                    name in valid or
+                    (name.startswith("RASD-Unified-")
+                     and name.endswith(".docx") and "/" not in name
+                     and "\\" not in name and ".." not in name) or
+                    re.fullmatch(r"review-pages/page-[0-9]{3}\.png", name)
+                ) for name in members)):
             raise ValueError("unexpected_review_archive_member")
+        if sum(info.file_size for info in package.infolist()) > 100_000_000:
+            raise ValueError("owner_review_zip_bomb_rejected")
+        pages = sorted(name for name in names if name.startswith("review-pages/"))
+        has_manifest = "rasd-owner-review-pages-manifest.json" in names
+        if bool(pages) != has_manifest:
+            raise ValueError("owner_review_page_manifest_missing")
+        if pages:
+            manifest = json.loads(package.read(
+                "rasd-owner-review-pages-manifest.json"))
+            receipts = manifest.get("pages")
+            if (manifest.get("version") != 1 or
+                    not isinstance(receipts, list) or
+                    len(receipts) != len(pages) or not 1 <= len(pages) <= 63):
+                raise ValueError("owner_review_page_manifest_invalid")
+            for name, receipt in zip(pages, receipts):
+                data = package.read(name)
+                if (receipt.get("name") != name or
+                        receipt.get("bytes") != len(data) or
+                        receipt.get("sha256") != hashlib.sha256(data).hexdigest()):
+                    raise ValueError("owner_review_page_integrity_mismatch")
+        extracted = {}
         for name in members:
-            (dest / name).write_bytes(package.read(name))
+            extracted[name] = package.read(name)
+    # Materialize only after every member and SHA has passed validation.
+    for name, content in extracted.items():
+        target = dest / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
     return members
 
 
