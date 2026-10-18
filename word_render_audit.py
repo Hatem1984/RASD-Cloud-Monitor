@@ -74,9 +74,12 @@ def _verify_original_headlines_in_pdf(doc, pdf_text: str, count: int) -> None:
         if not re.match(r"^\s*\d{1,2}\.\s+", paragraph.text):
             continue
         seen += 1
-        important = sorted(
-            _arabic_headline_tokens(paragraph.text), key=len, reverse=True)
-        if len(important) < 2 or not set(important[:2]).issubset(visible):
+        important = _arabic_headline_tokens(paragraph.text)
+        # Verify EVERY meaningful Arabic token from this complete title.
+        # Previously checking only the two longest words could approve
+        # another story sharing "وزارة التخطيط" while omitting its subject.
+        # Never combine fragments across distinct PDF extraction modes.
+        if len(important) < 2 or not important.issubset(visible):
             raise ValueError("qa_rendered_original_headline_missing")
     if seen != count:
         raise ValueError("qa_original_report_headline_count_mismatch")
