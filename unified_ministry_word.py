@@ -213,7 +213,23 @@ def build_unified_word(
                     if status == "EXCLUDED_NON_MATCHING_TERM":
                         continue
                     if status != "verified" or outcome.get("id") != identifier:
-                        hold("official_article_unverifiable")
+                        safe_codes = {
+                            "official_url_invalid", "official_article_unavailable",
+                            "official_article_redirect", "official_content_unavailable",
+                            "official_publication_day_missing",
+                            "official_page_validation_failed", "invalid_article_url",
+                            "publisher_page_unavailable", "publisher_redirect_changed_identity",
+                            "missing_original_headline", "official_page_content_unavailable",
+                            "saved_ministry_keywords_missing",
+                            "publisher_date_mismatch_or_missing",
+                            "original_headline_not_visible", "screenshot_too_small",
+                            "visual_qa_blank_or_low_content", "visual_qa_too_small_dimensions",
+                            "invalid_jpeg_signature",
+                        }
+                        reason = outcome.get("reason", "other")
+                        if reason not in safe_codes:
+                            reason = "other"
+                        hold("official_" + reason)
                         continue
                     digest = outcome.get("sha256")
                     if (not isinstance(digest, str) or len(digest) != 64
