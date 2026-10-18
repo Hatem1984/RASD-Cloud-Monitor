@@ -188,6 +188,41 @@ def build_unified_word(
                 301, 302, 303, 307, 308, 400, 401, 403, 404, 408, 429, 500, 502, 503, 504,
             } else None
         ),
+        # Safe bounded parser diagnostics only; never log the publisher
+        # XML, RSS items, URLs, server text, or raw exception messages.
+        "xml_error_code": (
+            row.get("xml_error_code") if row["status"] != "ok"
+            and type(row.get("xml_error_code")) is int
+            and 1 <= row["xml_error_code"] <= 99 else None
+        ),
+        "xml_error_line": (
+            row.get("xml_error_line") if row["status"] != "ok"
+            and type(row.get("xml_error_line")) is int
+            and 0 <= row["xml_error_line"] <= 100_000 else None
+        ),
+        "xml_error_column": (
+            row.get("xml_error_column") if row["status"] != "ok"
+            and type(row.get("xml_error_column")) is int
+            and 0 <= row["xml_error_column"] <= 100_000 else None
+        ),
+        "malformed_rss_length": (
+            row.get("malformed_rss_length") if row["status"] != "ok"
+            and type(row.get("malformed_rss_length")) is int
+            and 0 <= row["malformed_rss_length"] <= config["max_feed_bytes"]
+            else None
+        ),
+        "xml_input_looked_like_html": (
+            row.get("xml_input_looked_like_html") if row["status"] != "ok"
+            and type(row.get("xml_input_looked_like_html")) is bool else None
+        ),
+        "xml_input_looked_like_rss": (
+            row.get("xml_input_looked_like_rss") if row["status"] != "ok"
+            and type(row.get("xml_input_looked_like_rss")) is bool else None
+        ),
+        "identical_bad_xml_on_retry": (
+            row.get("identical_bad_xml_on_retry") if row["status"] != "ok"
+            and type(row.get("identical_bad_xml_on_retry")) is bool else None
+        ),
     } for row in inspected["sources"]]
     with tempfile.TemporaryDirectory(prefix="rasd-g40-unified-") as temp:
         selected = {}
