@@ -130,6 +130,7 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
         self.assertEqual(calls["masry"], 1)
         self.assertEqual([x["status"] for x in result["sources"]], ["ok", "failed"])
         self.assertEqual(result["sources"][1]["error"], "HTTPError")
+        self.assertEqual(result["sources"][1]["http_status"], 429)
         self.assertEqual(result["planning_headline_matches"], 1)
         self.assertFalse(result["email_sent"])
         self.assertFalse(result["scheduler_enabled"])
