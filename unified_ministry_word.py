@@ -229,7 +229,7 @@ def build_unified_word(
                         reason = outcome.get("reason", "other")
                         if reason not in safe_codes:
                             reason = "other"
-                        hold("official_" + reason)
+                        hold(reason if reason.startswith("official_") else "official_" + reason)
                         continue
                     digest = outcome.get("sha256")
                     if (not isinstance(digest, str) or len(digest) != 64
