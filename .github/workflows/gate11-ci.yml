@@ -172,6 +172,13 @@ jobs:
               print("GATE38 official source QUALIFIED FOR REVIEW ONLY; "
                     "production promotion separately gated")
           PY
+      - name: Gate39 — probe official publisher index and home listing without delivery
+        if: github.ref == 'refs/heads/gate39-official-homepage-discovery'
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          python official_source_probe.py
       - name: Create read-only Arabic Word preview (no images, not final proof)
         env:
           RASD_GATE11_SEND_APPROVED: ""
