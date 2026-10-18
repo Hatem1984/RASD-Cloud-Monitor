@@ -45,18 +45,25 @@ _ARABIC_ALEF_FOR_RENDER = str.maketrans(
     {"أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا"})
 
 
-def _arabic_headline_tokens(text: str) -> set[str]:
-    # The PDF text layer from LibreOffice/Poppler can contain Arabic
-    # presentation-form glyphs and lam-alef ligatures instead of their
-    # underlying Unicode spelling. NFKC converts them back to words.
-    # Harakat/tatweel and Alef variants are typographic differences, not
-    # different source headline identities. This affects QA comparisons
-    # ONLY: never modify Word, original article, source pubDate or JPEG.
+def _arabic_headline_tokens(
+    text: str, *, pdf_extraction: bool = False,
+) -> set[str]:
+    # Compare typographic variants ONLY in rendered PDF QA. Never rewrite
+    # publisher titles, Word document text, dates, links, or screenshot bytes.
     normalized = unicodedata.normalize("NFKC", text)
     normalized = _ARABIC_TASHKEEL_AND_TATWEEL.sub(
         "", normalized).translate(_ARABIC_ALEF_FOR_RENDER)
-    return set(re.findall(r"[\u0621-\u064a\u066e-\u06d3]{3,}",
-                          normalized))
+    tokens = set(re.findall(r"[\u0621-\u064a\u066e-\u06d3]{3,}",
+                            normalized))
+    if not pdf_extraction:
+        return tokens
+    # Reproducible LibreOffice/Poppler Arabic text-layer artifact:
+    # source "الاقتصادية" -> pdftotext "االقتصادية", and
+    # source "والاقتصاد" -> pdftotext "واالقتصاد".
+    # Allow ONLY one duplicated initial Alef immediately before "ال",
+    # optionally after one common Arabic proclitic. The rest of each FULL
+    # original title token must still be present in a single PDF extraction.
+    return {re.sub(r"^([وفبكل]?)اال", r"\1ال", token) for token in tokens}
 
 
 def _verify_original_headlines_in_pdf(doc, pdf_text: str, count: int) -> None:
@@ -66,9 +73,9 @@ def _verify_original_headlines_in_pdf(doc, pdf_text: str, count: int) -> None:
     It never OCRs a private publisher screenshot or copies article content
     into CI logs; failures are generic, never show the source paragraph.
     """
-    if len(_arabic_headline_tokens(pdf_text)) < 3:
+    visible = _arabic_headline_tokens(pdf_text, pdf_extraction=True)
+    if len(visible) < 3:
         raise ValueError("qa_rendered_arabic_text_layer_missing")
-    visible = _arabic_headline_tokens(pdf_text)
     seen = 0
     for paragraph in doc.paragraphs:
         if not re.match(r"^\s*\d{1,2}\.\s+", paragraph.text):
