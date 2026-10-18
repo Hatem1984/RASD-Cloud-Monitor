@@ -391,6 +391,11 @@ def build_unified_word(
         })
         rows = sorted(selected.values(), key=lambda x: x["_sort"], reverse=True)
         result["selected_unique_articles"] = len(rows)
+        if inspected["matched_article_pool_truncated"]:
+            # Report completeness and source health are separate: a verified
+            # Ministry source must not be marked failed just because the RSS
+            # matching pool overflowed. HOLD before any Word is finalized.
+            hold("rss_candidate_pool_exceeded_no_truncation")
         if len(rows) > MAX_ARTICLES:
             hold("above_15_article_production_cap_no_truncation")
         # Never silently suppress eligible report articles, including when a
