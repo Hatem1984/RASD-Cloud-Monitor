@@ -66,7 +66,10 @@ def _verify_original_headlines_in_pdf(doc, pdf_text: str, count: int) -> None:
         raise ValueError("qa_original_report_headline_count_mismatch")
 
 
-def rendered_word_preflight(word: Path, *, expected_articles: int) -> dict:
+def rendered_word_preflight(
+    word: Path, *, expected_articles: int,
+    review_pages_dir: Path | None = None,
+) -> dict:
     if (not isinstance(expected_articles, int) or isinstance(expected_articles, bool)
             or not 1 <= expected_articles <= 15):
         raise ValueError("qa_article_count_invalid")
@@ -112,6 +115,24 @@ def rendered_word_preflight(word: Path, *, expected_articles: int) -> dict:
                 if not 0.002 <= ink <= 0.80:
                     raise ValueError("qa_blank_or_unreadable_rendered_page")
                 coverage.append(round(ink, 4))
+        # Copy only already-validated, private raster images. Neither the
+        # Word nor the intermediate PDF is exposed by this helper.
+        # The caller MUST encrypt this folder into the owner's package and
+        # MUST NOT publish it as plaintext in GitHub Actions.
+        if review_pages_dir is not None:
+            destination = Path(review_pages_dir)
+            if destination.exists():
+                raise ValueError("qa_review_pages_destination_already_exists")
+            destination.mkdir(parents=True)
+            try:
+                for index, source in enumerate(pages, 1):
+                    target = destination / f"page-{index:03d}.png"
+                    shutil.copyfile(source, target)
+            except Exception:
+                for item in destination.iterdir():
+                    item.unlink()
+                destination.rmdir()
+                raise
         return {
             "status": "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW",
             "rendered_page_count": len(pages),
@@ -122,6 +143,7 @@ def rendered_word_preflight(word: Path, *, expected_articles: int) -> dict:
             "maximum_page_ink_ratio": max(coverage),
             "ephemeral_render_destroyed": True,
             "publisher_image_or_pdf_uploaded": False,
+            "private_owner_review_pages_staged": review_pages_dir is not None,
             "human_visual_review": False,
         }
 
