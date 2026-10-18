@@ -156,10 +156,43 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
                 return feed_xml(HAPI_URL)
             calls["masry"] += 1
             return b"not valid xml" if calls["masry"] == 1 else feed_xml(MASRY_URL)
-        result = inspect(CONFIG, fetch=fetch_once_bad, now=CURRENT)
+        with patch("monitor.sleep") as delay:
+            result = inspect(CONFIG, fetch=fetch_once_bad, now=CURRENT)
+        delay.assert_called_once_with(1.25)
         self.assertEqual(calls["masry"], 2)
+        self.assertTrue(result["sources"][1]["rss_parse_retry_delayed"])
         self.assertEqual([s["status"] for s in result["sources"]], ["ok", "ok"])
         self.assertEqual(result["planning_headline_matches"], 2)
+
+    def test_second_invalid_original_xml_remains_failed_and_no_missing_story_fabricated(self):
+        calls = {"masry": 0}
+        def malformed_both_times(url, limit):
+            if "almasryalyoum" not in url:
+                return feed_xml(HAPI_URL)
+            calls["masry"] += 1
+            return b"<?xml version='1.0'?><rss><channel><item>"
+        with patch("monitor.sleep") as delay:
+            result = inspect(CONFIG, fetch=malformed_both_times, now=CURRENT)
+        self.assertEqual(calls["masry"], 2)
+        delay.assert_called_once_with(1.25)
+        self.assertEqual(result["sources"][1]["status"], "failed")
+        self.assertEqual(result["sources"][1]["error"], "ParseError")
+        self.assertEqual(result["planning_headline_matches"], 1)
+        self.assertTrue(result["sources"][1]["rss_parse_retry_delayed"])
+
+    def test_xml_retry_never_repairs_malformed_publisher_items(self):
+        calls = {"masry": 0}
+        def still_bad(url, limit):
+            if "almasryalyoum" not in url:
+                return feed_xml(HAPI_URL)
+            calls["masry"] += 1
+            return "<rss><channel><item><title>وزارة التخطيط & fake</title></item></channel></rss>".encode("utf-8")
+        with patch("monitor.sleep") as delay:
+            result = inspect(CONFIG, fetch=still_bad, now=CURRENT)
+        self.assertEqual(calls["masry"], 2)
+        self.assertEqual(result["sources"][1]["status"], "failed")
+        self.assertEqual(result["planning_headline_matches"], 1)
+        delay.assert_called_once_with(1.25)
 
     def test_transient_timeout_recovers_without_double_count(self):
         calls = {"masry": 0}

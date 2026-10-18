@@ -1,0 +1,96 @@
+name: Gate51 — publisher-owned RSS response diagnosis (redacted, no delivery)
+
+on:
+  push:
+    branches:
+      - gate51-publisher-xml-reliability
+
+permissions:
+  contents: read
+
+jobs:
+  native-rss-xml-diagnosis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check only the existing approved originals; classify XML failure safely
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, xml.etree.ElementTree as ET
+          from pathlib import Path
+          from urllib.request import Request, build_opener
+          from urllib.error import HTTPError, URLError
+          from monitor import RejectRedirect
+          config=json.loads(Path("sources.json").read_text(encoding="utf-8"))
+          assert [x["id"] for x in config["feeds"]]==["hapi","almasryalyoum"]
+          assert config["keywords"]==[
+            "وزارة التخطيط","وزير التخطيط","وزيرة التخطيط",
+            "التخطيط والتنمية الاقتصادية"
+          ]
+          def one(feed, which, headers):
+              url=feed["url"]
+              opener=build_opener(RejectRedirect())
+              try:
+                  with opener.open(Request(url,headers=headers),timeout=18) as conn:
+                      status=conn.status
+                      if status!=200 or conn.geturl()!=url:
+                          raise ValueError("bad_original_response_identity")
+                      content_type=conn.headers.get_content_type()
+                      charset=conn.headers.get_content_charset()
+                      raw=conn.read(config["max_feed_bytes"]+1)
+                  if len(raw)>config["max_feed_bytes"]:
+                      raise ValueError("original_rss_bounded_read_overflow")
+                  head=raw.lstrip()[:250].lower()
+                  html=head.startswith((b"<html",b"<!doctype html"))
+                  first_xml=head.startswith((b"<?xml",b"<rss"))
+                  root_tag="INVALID_XML"
+                  items=0
+                  parse_class="OK"
+                  try:
+                      node=ET.fromstring(raw)
+                      root_tag=node.tag.rsplit("}",1)[-1].lower()
+                      items=len(node.findall("./channel/item"))
+                  except ET.ParseError as err:
+                      # Fixed whitelist of stock XML failure classes only.
+                      allowed={
+                        "not well-formed (invalid token)":"invalid_xml_token",
+                        "mismatched tag":"mismatched_tags",
+                        "no element found":"truncated_xml",
+                        "unclosed token":"unclosed_xml_token",
+                        "syntax error":"xml_syntax_error",
+                        "undefined entity":"undefined_entity",
+                        "junk after document element":"extra_document",
+                        "unclosed CDATA section":"broken_cdata",
+                        "XML or text declaration not at start of entity":"xml_declaration_position",
+                      }
+                      parse_class=allowed.get(str(err).split(": line")[0],"other_xml_error")
+                  print("ORIGINAL_RSS_CHECK source="+feed["id"]+
+                        " probe="+which+" status="+str(status)+
+                        " mime="+str(content_type)+" charset_known="+str(bool(charset))+
+                        " bytes="+str(len(raw))+
+                        " html="+str(html)+" xml_prefix="+str(first_xml)+
+                        " root="+root_tag+" items="+str(items)+
+                        " parse_class="+parse_class)
+              except HTTPError as err:
+                  print("ORIGINAL_RSS_CHECK source="+feed["id"]+
+                        " probe="+which+" http_status="+str(err.code))
+              except (URLError,TimeoutError,ValueError,RuntimeError):
+                  print("ORIGINAL_RSS_CHECK source="+feed["id"]+
+                        " probe="+which+" transport_or_identity=HOLD")
+          for feed in config["feeds"]:
+              one(feed,"current-native-agent",
+                  {"User-Agent":"RASD-Cloud-Public-Monitor/0.1"})
+              if feed["id"]=="almasryalyoum":
+                  one(feed,"rss-accept-header",
+                      {"User-Agent":"RASD-Cloud-Public-Monitor/0.1",
+                       "Accept":"application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.1"})
+          print("GATE51_ONLY_BOUNDED_SOURCE_METADATA_NO_NEWS_TEXT_NO_SEND")
+          PY
