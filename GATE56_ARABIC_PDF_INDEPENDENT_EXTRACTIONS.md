@@ -10,7 +10,7 @@ Date: 18 October 2026, Cairo. RASD V1 Ministry of Planning only. Exact original 
 
 ## Gate56 narrowly tests a second representation of the same private PDF
 
-After a `-layout` missing-title error only, run `pdftotext -raw` on the SAME LibreOffice-rendered PDF (never any third-party file or OCR). Require all original article heading tokens to survive in ONE complete extraction mode, either `layout` or `raw`. NEVER combine a few headline words from each view to pass a full heading, never alter original Word/JPEG/source, never ignore all missing title checks. Missing Arabic text layer, wrong article count, missing or swapped titles and broken screenshots still remain HOLD.
+After a `-layout` missing-title error only, run `pdftotext -raw` on the SAME LibreOffice-rendered PDF (never any third-party file or OCR). Require **all significant original Arabic article heading tokens**, not merely two common words, to survive in ONE complete extraction mode, either `layout` or `raw`. NEVER combine a few headline words from each view to pass a full heading, never alter original Word/JPEG/source, never ignore all missing title checks. Missing Arabic text layer, wrong article count, missing or swapped titles and broken screenshots still remain HOLD.
 
 The returned audit identifies only `arabic_text_extraction_mode` (`layout` or `raw`), not any source article text. Render images remain private to the owner RSA/AES encrypted bundle and page-by-page HUMAN review remains mandatory.
 
@@ -18,3 +18,7 @@ The returned audit identifies only `arabic_text_extraction_mode` (`layout` or `r
 
 - Branch-only real Word run `gate56-real-word-title-dual-extract.yml` either returns genuinely valid 3/3 original source + strict PDF extraction + encrypted-only owner Word with 1600px private review pages, or declines without a final Word. It is NOT human visual review.
 - Stage2 Issue #42 cannot close at 100% without owner inspecting each real decrypted Word page AND second distinct fully completed Cairo reporting date. October18 incomplete until Cairo Oct19. No Gmail, R2, cron or public Word/JPEG/PNG/PDF.
+
+## Actual first live test of this proposed gate
+
+[Original run 39133746029](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/39133746029) was SAFE `HOLD`: Hapi and the official Ministry healthy, but Al Masry returned strict XML `ParseError` (two identical malformed replies), so no Word or visual approval. Its green orchestrator outcome must not be counted as a real successful report. The stricter full-headline-token requirement was subsequently added to protect against unrelated words matching only `وزارة التخطيط`. Its own latest-head tests must pass before merging.
