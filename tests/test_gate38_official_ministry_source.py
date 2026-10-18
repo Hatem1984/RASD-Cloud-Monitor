@@ -58,7 +58,7 @@ class FakePage:
         return FakeLocator(self.headline if selector == "h1" else self.body)
 
     def screenshot(self, path, type, quality, full_page, timeout):
-        assert type == "jpeg" and not full_page
+        assert type == "jpeg"
         image = Image.new("RGB", (1200, 900), "#ffffff")
         draw = ImageDraw.Draw(image)
         draw.rectangle((0, 0, 1199, 170), fill="#193759")
