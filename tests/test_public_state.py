@@ -76,8 +76,12 @@ class PersistentStateTests(unittest.TestCase):
             apply_observations(empty_state(), SAMPLE, datetime(2026, 10, 13))
 
     def test_end_to_end_repeated_stateful_probe_no_network(self):
+        # Persistent-state replay must use a genuinely dated publisher item.
+        # Undated RSS cannot enter the strict report/delivery pipeline.
         xml = ('<rss><channel><item><title>وزير التخطيط يشارك في مؤتمر</title>'
-               '<link>' + URL + '</link></item></channel></rss>').encode()
+               '<link>' + URL + '</link>'
+               '<pubDate>Tue, 13 Oct 2026 07:00:00 GMT</pubDate>'
+               '</item></channel></rss>').encode()
         config = {
             "feeds": [{"id": "hapi", "name": "Hapi",
                        "url": "https://hapijournal.com/feed/",
