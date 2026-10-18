@@ -7,6 +7,7 @@ Nothing here registers a production feed or follows arbitrary hosts/links.
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from urllib.parse import urlsplit, parse_qsl
 
@@ -112,7 +113,23 @@ def probe() -> dict:
                         record["json_keys"] = sorted(d.keys())[:25] if isinstance(d, dict) else []
                         record["json_array_size"] = len(d) if isinstance(d, list) else 0
                     else:
-                        record["looks_like_no_results"] = "لا يوجد نتائج" in body.decode("utf-8", "replace")
+                        raw_text = body.decode("utf-8", "replace")
+                        record["looks_like_no_results"] = "لا يوجد نتائج" in raw_text
+                        record["public_markup_signals"] = {
+                            name: raw_text.casefold().count(name.casefold())
+                            for name in (
+                                "7269", "onclick", "data-id", "data-news",
+                                "singlenews", "NewsDetails", "location.href",
+                                "href=", "window.open", "newsId",
+                            )
+                        }
+                        matched = re.search(r"7269", raw_text)
+                        record["public_article_id_markup_sample"] = (
+                            raw_text[max(0, matched.start()-170):matched.end()+150]
+                            if matched else None)
+                        record["public_click_handlers"] = re.findall(
+                            r'(?:onclick|data-id|data-news)[^>]{0,140}',
+                            raw_text, flags=re.I)[:3]
                 except Exception:
                     record["inspect_status"] = "unavailable"
                 out["official_newslist_responses"].append(record)
