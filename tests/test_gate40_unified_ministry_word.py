@@ -61,6 +61,7 @@ class FakeDriver:
     offday = set()
     bad_image = set()
     list_changed = False
+    pages = None
 
     def __init__(self):
         self.calls = 0
@@ -71,21 +72,29 @@ class FakeDriver:
     def __exit__(self, *_):
         return None
 
-    def discover(self):
+    def discover_page(self, page_number):
         self.calls += 1
-        if self.list_changed and self.calls > 1:
-            return self.urls[:-1]
-        return self.urls[:]
+        result = (self.urls[:] if page_number == 1 else []
+                  if self.pages is None else
+                  self.pages.get(page_number, [])[:])
+        if self.list_changed and self.calls % 2 == 0 and page_number == 1:
+            return result[:-1]
+        return result
+
+    def discover(self):
+        return self.discover_page(1)
 
     def inspect(self, url, *, keywords, target_day, image):
         assert target_day == DAY
         if url in self.blocked:
             return {"status": "HOLD", "reason": "official_article_unavailable"}
         if url in self.offday:
-            return {"status": "OUT_OF_WINDOW"}
+            return {"status": "OUT_OF_WINDOW",
+                    "published_date_cairo": "2026-10-16"}
         if url in self.bad_image:
             return {"status": "verified", "id": article_id(url),
-                    "headline": TITLE, "sha256": "a" * 64}
+                    "headline": TITLE, "sha256": "a" * 64,
+                    "published_date_cairo": "2026-10-17"}
         digest = jpeg(image, self.urls.index(url) + 2)
         return {
             "status": "verified", "id": article_id(url),
@@ -121,6 +130,7 @@ class UnifiedOriginalPublisherWordTests(unittest.TestCase):
         FakeDriver.offday = set()
         FakeDriver.bad_image = set()
         FakeDriver.list_changed = False
+        FakeDriver.pages = None
 
     def test_combines_real_publisher_types_and_inserts_sha_verifiable_images(self):
         with tempfile.TemporaryDirectory() as tmp:
