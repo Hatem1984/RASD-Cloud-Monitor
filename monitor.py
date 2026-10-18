@@ -215,7 +215,15 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15)
                         ids.add(entry["id"])
                 break
             except Exception as exc:
+                # Report only bounded machine-readable diagnostics; never
+                # propagate server body, URL parameters, or exception text.
                 record["error"] = type(exc).__name__
+                record["http_status"] = (
+                    exc.code if isinstance(exc, HTTPError)
+                    and exc.code in {400, 401, 403, 404, 408, 429,
+                                     500, 502, 503, 504}
+                    else None
+                )
                 # One bounded retry only for transient upstream/network
                 # errors. HTTP 429 is an explicit publisher rate-limit: DO NOT
                 # retry and risk aggravating it. Respect 403, redirects, unsafe
