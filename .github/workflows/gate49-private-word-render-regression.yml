@@ -1,0 +1,71 @@
+name: Gate49 — real private Arabic Word raster acceptance regression (synthetic source only)
+
+on:
+  push:
+    branches:
+      - gate49-private-word-legibility-review
+
+permissions:
+  contents: read
+
+jobs:
+  private-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install free private Word/Arabic render tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements-test.txt
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libreoffice-writer poppler-utils fonts-dejavu-core fonts-noto-core
+      - name: Render synthetic Arabic Word privately and check headline/picture readability
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import tempfile
+          import sys
+          sys.path.insert(0, "tests")
+          from test_gate42_word_image_layout import fixture_image, minimal_report
+          from daily_report import render_docx
+          from word_render_audit import rendered_word_preflight, _review_original_picture_dimensions
+          from docx import Document
+          with tempfile.TemporaryDirectory(prefix="rasd-g49-private-") as temp:
+              root = Path(temp)
+              a, b = root / "viewport-original.jpg", root / "moderate-page.jpg"
+              fixture_image(a, 1200, 900)
+              fixture_image(b, 1200, 1500)
+              result = root / "arabic-proof.docx"
+              render_docx(minimal_report([a,b]), result)
+              output = rendered_word_preflight(result, expected_articles=2)
+              assert output["status"] == "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW"
+              assert output["arabic_headlines_rendered"] == 2
+              assert output["publisher_screenshot_minimum_word_width_inches"] == 3.0
+              assert output["human_visual_review"] is False
+              assert output["publisher_image_or_pdf_uploaded"] is False
+              print("GATE49_SYNTHETIC_ARABIC_HEADLINES_AND_PUBLISHER_SIZES_RENDERED_PRIVATELY", output["rendered_page_count"])
+              # A genuine 1200x5100 long original image must NEVER
+              # silently pass a 1.46in-wide screenshot as readable.
+              tall = root / "unreadably-long.jpg"
+              fixture_image(tall, 1200, 5100)
+              bad_docx = root / "bad-proof.docx"
+              render_docx(minimal_report([tall]), bad_docx)
+              try:
+                  _review_original_picture_dimensions(Document(bad_docx), expected_articles=1)
+              except ValueError as exc:
+                  assert str(exc) == "qa_publisher_picture_too_narrow_or_outside_page"
+                  print("GATE49_TALL_SCREENSHOT_HELD_AS_UNREADABLE")
+              else:
+                  raise AssertionError("Unreadably scaled publisher photo must be HOLD")
+          PY
+          echo "Word, publisher synthetic JPEG, temporary PDF and PNG have not been uploaded"
