@@ -98,7 +98,11 @@ def rendered_word_preflight(
                         timeout=45).stdout
         _verify_original_headlines_in_pdf(
             doc, pdf_text, expected_articles)
-        _run(["pdftoppm", "-png", "-scale-to", "950",
+        # Use higher-resolution local page raster for a human reviewer
+        # when pages are staged for the encrypted owner-only package.
+        # Mechanical-only smoke checks keep their lighter 950px render.
+        review_scale = "1600" if review_pages_dir is not None else "950"
+        _run(["pdftoppm", "-png", "-scale-to", review_scale,
               str(pdf), str(scratch / "page")], timeout=120)
         pages = sorted(scratch.glob("page-*.png"))
         if not pages or len(pages) > max(3, expected_articles * 4 + 3):
