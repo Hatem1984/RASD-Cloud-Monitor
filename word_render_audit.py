@@ -22,6 +22,50 @@ def _run(command: list[str], *, timeout=80):
                           text=True, timeout=timeout)
 
 
+def _review_original_picture_dimensions(doc, *, expected_articles: int) -> None:
+    """Fail closed on tiny pictures even if the JPEG SHA is correct.
+
+    A 1200x4800 full-page capture shrunk to 6.2 inches high becomes just
+    1.55 inches wide in Word, which is mechanically valid but unreadable.
+    Do not crop or resize/reencode evidence to 'pass' this check.
+    """
+    from docx.shared import Inches
+    if len(doc.inline_shapes) != expected_articles:
+        raise ValueError("qa_original_publisher_image_count_mismatch")
+    for shape in doc.inline_shapes:
+        if not (Inches(3.0) <= shape.width <= Inches(5.6) + 2000
+                and Inches(0.6) <= shape.height <= Inches(6.2) + 2000):
+            raise ValueError("qa_publisher_picture_too_narrow_or_outside_page")
+
+
+def _arabic_headline_tokens(text: str) -> set[str]:
+    # Match long Arabic words independent of Unicode bidi layout marks.
+    return set(re.findall(r"[\u0621-\u064a\u066e-\u06d3]{3,}", text))
+
+
+def _verify_original_headlines_in_pdf(doc, pdf_text: str, count: int) -> None:
+    """Ensure Arabic report headlines survive LibreOffice rendering.
+
+    This is a mechanical text-layer check, not human visual acceptance.
+    It never OCRs a private publisher screenshot or copies article content
+    into CI logs; failures are generic, never show the source paragraph.
+    """
+    if len(_arabic_headline_tokens(pdf_text)) < 3:
+        raise ValueError("qa_rendered_arabic_text_layer_missing")
+    visible = _arabic_headline_tokens(pdf_text)
+    seen = 0
+    for paragraph in doc.paragraphs:
+        if not re.match(r"^\s*\d{1,2}\.\s+", paragraph.text):
+            continue
+        seen += 1
+        important = sorted(
+            _arabic_headline_tokens(paragraph.text), key=len, reverse=True)
+        if len(important) < 2 or not set(important[:2]).issubset(visible):
+            raise ValueError("qa_rendered_original_headline_missing")
+    if seen != count:
+        raise ValueError("qa_original_report_headline_count_mismatch")
+
+
 def rendered_word_preflight(word: Path, *, expected_articles: int) -> dict:
     if (not isinstance(expected_articles, int) or isinstance(expected_articles, bool)
             or not 1 <= expected_articles <= 15):
@@ -29,17 +73,10 @@ def rendered_word_preflight(word: Path, *, expected_articles: int) -> dict:
     word = Path(word)
     if not word.is_file() or word.suffix.lower() != ".docx":
         raise ValueError("qa_word_not_available")
-    if not shutil.which("libreoffice") or not shutil.which("pdftoppm"):
+    if not shutil.which("libreoffice") or not shutil.which("pdftoppm") or not shutil.which("pdftotext"):
         raise RuntimeError("qa_renderer_or_poppler_not_installed")
     doc = Document(word)
-    if len(doc.inline_shapes) != expected_articles:
-        raise ValueError("qa_original_publisher_image_count_mismatch")
-    # Inspect Word's native layout constraints before conversion.
-    from docx.shared import Inches
-    for shape in doc.inline_shapes:
-        if not (Inches(0.6) <= shape.width <= Inches(5.6) + 2000
-                and Inches(0.6) <= shape.height <= Inches(6.2) + 2000):
-            raise ValueError("qa_picture_bounds_exceeded")
+    _review_original_picture_dimensions(doc, expected_articles=expected_articles)
     with tempfile.TemporaryDirectory(prefix="rasd-private-page-render-") as tmp:
         scratch = Path(tmp)
         profile = (scratch / "lo-profile").as_uri()
@@ -52,6 +89,12 @@ def rendered_word_preflight(word: Path, *, expected_articles: int) -> dict:
         if len(pdfs) != 1 or pdfs[0].stat().st_size < 5000:
             raise ValueError("qa_offline_pdf_render_failed")
         pdf = pdfs[0]
+        # Check that each source-backed Arabic headline actually survived
+        # layout conversion, independently of Word's XML text presence.
+        pdf_text = _run(["pdftotext", "-layout", str(pdf), "-"],
+                        timeout=45).stdout
+        _verify_original_headlines_in_pdf(
+            doc, pdf_text, expected_articles)
         _run(["pdftoppm", "-png", "-scale-to", "950",
               str(pdf), str(scratch / "page")], timeout=120)
         pages = sorted(scratch.glob("page-*.png"))
@@ -73,6 +116,8 @@ def rendered_word_preflight(word: Path, *, expected_articles: int) -> dict:
             "status": "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW",
             "rendered_page_count": len(pages),
             "article_image_count": len(doc.inline_shapes),
+            "arabic_headlines_rendered": expected_articles,
+            "publisher_screenshot_minimum_word_width_inches": 3.0,
             "minimum_page_ink_ratio": min(coverage),
             "maximum_page_ink_ratio": max(coverage),
             "ephemeral_render_destroyed": True,
