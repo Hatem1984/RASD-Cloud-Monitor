@@ -71,5 +71,56 @@ jobs:
               except (URLError,TimeoutError,ValueError,RuntimeError):
                   print("GATE54_VARIANT="+label+" source_rejected_or_unavailable=true")
               time.sleep(0.4)
+          # Shadow-only: compare a publisher-owned, commonly advertised
+          # singular RSS path. This MUST NOT change production sources, and a
+          # snapshot intersection does NOT certify archival equivalence.
+          from urllib.parse import urlsplit
+          from email.utils import parsedate_to_datetime
+          candidate="https://www.almasryalyoum.com/rss/rssfeed"
+          assert urlsplit(candidate).hostname=="www.almasryalyoum.com"
+          feeds=[]
+          for label,url in [("saved_full_original",target["url"]),
+                            ("publisher_singular_shadow",candidate)]:
+              try:
+                  with build_opener(RejectRedirect()).open(
+                      Request(url,headers={"User-Agent":user_agent}),timeout=18) as rsp:
+                      if rsp.status!=200 or rsp.geturl()!=url:
+                          raise ValueError("redirect_or_http")
+                      payload=rsp.read(cfg["max_feed_bytes"]+1)
+                      if len(payload)>cfg["max_feed_bytes"]:
+                          raise ValueError("oversized")
+                  root=ET.fromstring(payload)
+                  if root.tag!="rss":
+                      raise ValueError("not_rss")
+                  rows=root.findall("./channel/item")
+                  ids=set()
+                  valid_dates=0
+                  for item in rows:
+                      link=(item.findtext("link") or "").strip()
+                      loc=urlsplit(link)
+                      if loc.scheme=="https" and loc.hostname in (
+                          "www.almasryalyoum.com","almasryalyoum.com"):
+                          ids.add(hashlib.sha256(link.encode()).digest())
+                      dt=(item.findtext("pubDate") or "").strip()
+                      try:
+                          pub=parsedate_to_datetime(dt)
+                          valid_dates+=int(pub.tzinfo is not None)
+                      except Exception: pass
+                  feeds.append((label,ids))
+                  print("GATE54_SHADOW="+label+
+                        " rss_valid=True item_count="+str(len(rows))+
+                        " original_host_links="+str(len(ids))+
+                        " dated_items="+str(valid_dates))
+              except ET.ParseError as err:
+                  print("GATE54_SHADOW="+label+
+                        " rss_valid=False xml_code="+str(getattr(err,"code",0)))
+              except (HTTPError,URLError,TimeoutError,ValueError,RuntimeError) as err:
+                  print("GATE54_SHADOW="+label+
+                        " unavailable_or_redirect_rejected=True")
+          if len(feeds)==2:
+              print("GATE54_SHADOW_SNAPSHOT_LINK_OVERLAP="+
+                    str(len(feeds[0][1]&feeds[1][1]))+
+                    " current_primary_only="+str(len(feeds[0][1]-feeds[1][1]))+
+                    " alternative_only="+str(len(feeds[1][1]-feeds[0][1])))
           print("GATE54_NO_ORIGINAL_CONTENT_PRINTED_NO_CONFIG_CHANGE_NO_WORD_NO_EMAIL")
           PY
