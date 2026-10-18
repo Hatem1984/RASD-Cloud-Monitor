@@ -42,6 +42,12 @@ def probe() -> dict:
                 accept_downloads=False, service_workers="block",
                 ignore_https_errors=False)
             blocked_hosts = Counter()
+            first_party_ajax_paths = Counter()
+            def audit_request(req):
+                if (allowed_official_resource(req.url)
+                        and req.resource_type in ("fetch", "xhr")):
+                    first_party_ajax_paths[urlsplit(req.url).path] += 1
+            context.on("request", audit_request)
             def route_check(route):
                 url = route.request.url
                 if allowed_official_resource(url):
@@ -77,6 +83,8 @@ def probe() -> dict:
                     row["render_result"] = "page_error"
                 out["listings"].append(row)
             out["third_party_requests_blocked"] = sum(blocked_hosts.values())
+            out["third_party_host_counts"] = dict(blocked_hosts.most_common(12))
+            out["first_party_ajax_paths"] = dict(first_party_ajax_paths.most_common(12))
             out["discovered_original_links"] = max(
                 (x["original_article_links"] for x in out["listings"]),
                 default=0)
