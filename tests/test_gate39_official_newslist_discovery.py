@@ -114,6 +114,32 @@ class OfficialNewsListDiscoveryTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     discover_official_newslist(MockHTTP(response))
 
+    def test_transient_official_http_retries_once_without_source_escape(self):
+        class ChangingTransport:
+            def __init__(self, statuses):
+                self.statuses = statuses
+                self.calls = []
+            def get(self, url, **options):
+                self.calls.append((url, options))
+                return MockResponse(
+                    status=self.statuses[min(len(self.calls) - 1,
+                                             len(self.statuses) - 1)])
+        good = ChangingTransport([503, 200])
+        self.assertEqual(discover_official_newslist(good)[0], SAMPLE)
+        self.assertEqual(len(good.calls), 2)
+        self.assertEqual(good.calls[0][0], NEWSLIST)
+        self.assertEqual(good.calls[1][1]["max_redirects"], 0)
+        for denied in (403, 429, 302):
+            with self.subTest(status=denied):
+                blocked = ChangingTransport([denied, 200])
+                with self.assertRaises(ValueError):
+                    discover_official_newslist(blocked)
+                self.assertEqual(len(blocked.calls), 1)
+        broken = ChangingTransport([504, 504])
+        with self.assertRaisesRegex(ValueError, "official_newslist_origin_transient_http"):
+            discover_official_newslist(broken)
+        self.assertEqual(len(broken.calls), 2)
+
     def test_bounded_page_count_no_external_query_or_credential(self):
         for x in (0, -1, 36, True, "35"):
             with self.assertRaises(ValueError):
