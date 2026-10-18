@@ -10,6 +10,7 @@ import json
 import re
 import shutil
 import subprocess
+import unicodedata
 import tempfile
 from pathlib import Path
 
@@ -38,9 +39,24 @@ def _review_original_picture_dimensions(doc, *, expected_articles: int) -> None:
             raise ValueError("qa_publisher_picture_too_narrow_or_outside_page")
 
 
+_ARABIC_TASHKEEL_AND_TATWEEL = re.compile(
+    r"[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u0640]")
+_ARABIC_ALEF_FOR_RENDER = str.maketrans(
+    {"أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا"})
+
+
 def _arabic_headline_tokens(text: str) -> set[str]:
-    # Match long Arabic words independent of Unicode bidi layout marks.
-    return set(re.findall(r"[\u0621-\u064a\u066e-\u06d3]{3,}", text))
+    # The PDF text layer from LibreOffice/Poppler can contain Arabic
+    # presentation-form glyphs and lam-alef ligatures instead of their
+    # underlying Unicode spelling. NFKC converts them back to words.
+    # Harakat/tatweel and Alef variants are typographic differences, not
+    # different source headline identities. This affects QA comparisons
+    # ONLY: never modify Word, original article, source pubDate or JPEG.
+    normalized = unicodedata.normalize("NFKC", text)
+    normalized = _ARABIC_TASHKEEL_AND_TATWEEL.sub(
+        "", normalized).translate(_ARABIC_ALEF_FOR_RENDER)
+    return set(re.findall(r"[\u0621-\u064a\u066e-\u06d3]{3,}",
+                          normalized))
 
 
 def _verify_original_headlines_in_pdf(doc, pdf_text: str, count: int) -> None:
