@@ -8,12 +8,14 @@ from __future__ import annotations
 import json
 import unittest
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
 
 from gate11_runner import candidate_from_feed
-from monitor import parse_rss
+from daily_report import gather
+from monitor import inspect, parse_rss
 
 CONFIG = json.loads(Path("sources.json").read_text(encoding="utf-8"))
 NOW = datetime(2026, 10, 18, 8, 0, tzinfo=timezone.utc)
@@ -124,6 +126,30 @@ class MinistryNativeDiscoveryTests(unittest.TestCase):
                   description="وزارة التخطيط")
         n, matches = parse_rss(xml, feed, CONFIG["keywords"], now=NOW)
         self.assertEqual((n, matches), (0, []))
+
+    def test_cairo_midnight_falls_on_correct_publisher_calendar_day(self):
+        feed = CONFIG["feeds"][0]
+        cairo = ZoneInfo("Africa/Cairo")
+        current = datetime(2026, 10, 18, 10, 0, tzinfo=cairo)
+        xml = rss("لقاء اقتصادي دوري",
+                  "https://hapijournal.com/news/planning-before-midnight",
+                  description="وزير التخطيط عقد مباحثات",
+                  published="", dc_date="2026-10-17T23:58:00+03:00")
+        def fetch(url, size):
+            return xml if url == feed["url"] else (
+                b"<rss><channel></channel></rss>")
+        report = gather(CONFIG, fetch=fetch, now=current)
+        self.assertEqual(len(report["articles"]), 1)
+        self.assertTrue(report["articles"][0]["published_at_cairo"].startswith(
+            "2026-10-17 23:58"))
+        self.assertEqual(report["articles"][0]["publisher_excerpt"],
+                         "وزير التخطيط عقد مباحثات")
+        scan = inspect(CONFIG, fetch=fetch, now=current)
+        self.assertEqual(scan["native_description_matches"], 1)
+        self.assertEqual(scan["sources"][0]["description_matches"], 1)
+        self.assertFalse(scan["rss_feed_is_exhaustive_archive"])
+        self.assertFalse(scan["email_sent"])
+        self.assertFalse(scan["scheduler_enabled"])
 
     def test_unsafe_pubdate_does_not_fall_back_to_dc_date_inconsistent(self):
         feed = CONFIG["feeds"][0]
