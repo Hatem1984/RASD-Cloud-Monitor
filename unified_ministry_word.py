@@ -174,6 +174,20 @@ def build_unified_word(
     health = [{
         "feed_id": row["feed_id"], "status": row["status"],
         "verified_links": row["verified_links"],
+        # Only allowlisted transport category + HTTP status, not server text.
+        "error_type": (
+            row.get("error") if row["status"] != "ok"
+            and row.get("error") in {
+                "HTTPError", "URLError", "TimeoutError", "ValueError",
+                "ParseError", "SSLError", "OSError",
+            } else None
+        ),
+        "http_status": (
+            row.get("http_status") if row["status"] != "ok"
+            and row.get("http_status") in {
+                400, 401, 403, 404, 408, 429, 500, 502, 503, 504,
+            } else None
+        ),
     } for row in inspected["sources"]]
     with tempfile.TemporaryDirectory(prefix="rasd-g40-unified-") as temp:
         selected = {}
