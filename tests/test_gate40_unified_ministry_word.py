@@ -161,7 +161,7 @@ class UnifiedOriginalPublisherWordTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result = execute(tmp)
             self.assertEqual(result["status"], "HOLD")
-            self.assertIn("official_official_article_unavailable", result["failures"])
+            self.assertIn("official_article_unavailable", result["failures"])
             self.assertFalse(list((Path(tmp) / "out").glob("*.docx")))
 
     def test_lost_feed_fails_entire_report_even_if_official_page_works(self):
