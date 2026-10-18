@@ -14,7 +14,11 @@ class NoUnencryptedPublisherMediaArtifactsTests(unittest.TestCase):
     def test_no_action_uploads_plaintext_word_or_original_publisher_photos(self):
         for path in ROOT.glob("*.yml"):
             contents = path.read_text(encoding="utf-8")
-            for step in re.split(r"(?m)^      - name: |^      - uses: ", contents):
+            steps = re.findall(
+                r"(?ms)^      - name: .*?(?=^      - (?:name:|uses:)|\\Z)",
+                contents,
+            )
+            for step in steps:
                 if "uses: actions/upload-artifact@" not in step:
                     continue
                 with self.subTest(path=path.name):
