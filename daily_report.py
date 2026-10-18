@@ -284,11 +284,10 @@ def render_docx(report: dict, destination: Path) -> None:
                 aspect = height_px / width_px
                 width_in = min(5.6, 6.2 / aspect)
                 height_in = width_in * aspect
-                picture = doc.add_picture(
+                doc.add_picture(
                     article["evidence_image_path"],
                     width=Inches(width_in), height=Inches(height_in))
-                picture_paragraph = picture._parent
-                picture_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
     p = doc.add_paragraph()
     _rtl(p)
     p.add_run("حالة المصادر").bold = True
