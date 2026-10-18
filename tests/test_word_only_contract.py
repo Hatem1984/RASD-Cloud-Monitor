@@ -24,6 +24,20 @@ class WordOnlyContractTests(unittest.TestCase):
                 self.assertNotIn("pdf_created", source)
                 self.assertNotIn("add_attachment(\n        pdf", source)
 
+    def test_current_readme_operator_instructions_use_word_only_paths(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("rasd-daily-word-preview", readme)
+        self.assertIn("rasd-word-preview-ci", readme)
+        for obsolete in (
+            "## Manual Word/PDF download",
+            "rasd-daily-public-word-pdf",
+            "rasd-public-report-ci",
+            "[Arabic Word + PDF manual digest]",
+            "DOCX+PDF attachment builder",
+        ):
+            with self.subTest(obsolete=obsolete):
+                self.assertNotIn(obsolete, readme)
+
     def test_no_pdf_parser_runtime_dependency(self):
         packages = (ROOT / "requirements-test.txt").read_text(encoding="utf-8").lower()
         self.assertNotIn("pypdf", packages)
