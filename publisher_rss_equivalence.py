@@ -56,12 +56,19 @@ def audit_shadow_equivalence(
     *,
     original_url: str = "https://www.almasryalyoum.com/rss/rssfeeds",
     shadow_url: str = "https://www.almasryalyoum.com/rss/rssfeed",
+    observation_run_id: str | None = None,
 ) -> dict:
     """Compare one simultaneous VALID snapshot. Never imply exhaustive history.
 
     This is a data-integrity diagnostic; production only permits the
     currently approved primary URL even if the candidate passes one sample.
     """
+    if observation_run_id is not None and (
+        not isinstance(observation_run_id, str)
+        or not observation_run_id.isdecimal()
+        or not 6 <= len(observation_run_id) <= 24
+    ):
+        raise ValueError("independent_run_id_invalid")
     if original_url not in APPROVED_FEED_URLS:
         raise ValueError("primary_not_approved")
     if shadow_url != "https://www.almasryalyoum.com/rss/rssfeed":
@@ -73,6 +80,7 @@ def audit_shadow_equivalence(
     overlap = set(first) & set(second)
     changed = {key for key in overlap if first[key] != second[key]}
     return {
+        "observation_run_id": observation_run_id,
         "primary_items": len(first),
         "shadow_items": len(second),
         "intersection": len(overlap),
@@ -87,6 +95,11 @@ def audit_shadow_equivalence(
 def require_two_valid_independent_snapshots(results: list[dict]) -> bool:
     """An isolated successful snapshot is never enough to authorize swap."""
     if len(results) < 2:
+        return False
+    ids = [row.get("observation_run_id") for row in results]
+    if (any(not isinstance(value, str) or
+            not value.isdecimal() or len(value) < 6 for value in ids)
+            or len(set(ids)) != len(ids)):
         return False
     return all(
         row.get("snapshot_no_loss") is True
