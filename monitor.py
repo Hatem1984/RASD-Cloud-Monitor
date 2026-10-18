@@ -146,7 +146,7 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
             # Conflicting duplicate URLs cannot be silently resolved by
             # relevance filtering or first-wins deduplication.
             key = canonical_url(link)
-            signature = (title, dated[0].isoformat())
+            signature = (title, dated[1])
             if key in identities and identities[key] != signature:
                 raise ValueError("rss_original_duplicate_conflict")
             identities[key] = signature
