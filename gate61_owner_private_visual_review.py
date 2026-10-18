@@ -40,6 +40,10 @@ def inspect_private_review(folder: Path, day: date) -> dict:
     """Validate actual local-decrypted contents, NEVER use public CI samples."""
     if type(day) is not date:
         raise ValueError("review_expected_day_invalid")
+    # Local human attestation is only meaningful for an already completed
+    # Cairo day; never bless the current partial day or a future report.
+    if day >= datetime.now(CAIRO).date():
+        raise ValueError("private_review_incomplete_cairo_calendar_day")
     folder = Path(folder)
     if not folder.is_dir() or folder.is_symlink():
         raise ValueError("private_review_folder_invalid")
