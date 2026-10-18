@@ -170,7 +170,10 @@ def build_unified_word(
     def hold(reason):
         reasons[reason] = reasons.get(reason, 0) + 1
     # Only SOURCE ID/count and allowlisted reason labels appear in public logs.
-    inspected = inspect(config, fetch=fetch, now=checked, article_limit=200)
+    # A valid XML wrapper is not enough: every listed native RSS item must
+    # have a verifiable original publisher identity and date. No silent loss.
+    inspected = inspect(config, fetch=fetch, now=checked, article_limit=200,
+                        require_complete_items=True)
     health = [{
         "feed_id": row["feed_id"], "status": row["status"],
         "verified_links": row["verified_links"],
