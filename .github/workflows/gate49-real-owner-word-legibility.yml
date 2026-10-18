@@ -1,0 +1,97 @@
+name: Gate49 — real Ministry Word encrypted owner acceptance smoke (branch-only)
+
+on:
+  push:
+    branches:
+      - gate49-private-word-legibility-review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-gate49-owner-encrypted-smoke
+  cancel-in-progress: true
+
+jobs:
+  real-full-day-owner-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install read-only Chromium, Word render tools and owner encryption
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libreoffice-writer poppler-utils fonts-dejavu-core fonts-noto-core
+      - name: Full offline acceptance before accessing publishers
+        run: python -m unittest discover -s tests -v
+      - name: Probe most recent COMPLETE Cairo calendar day, privately encrypt genuine Word
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+          RASD_MAIL_ENABLED: "false"
+          RASD_SCHEDULER_ENABLED: "false"
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$(TZ=Africa/Cairo date -d yesterday +%Y-%m-%d)"
+          mkdir -p "$RUNNER_TEMP/gate49-private"
+          python unified_ministry_word.py --target-day "$target" \
+            --output-dir "$RUNNER_TEMP/gate49-private" \
+            | tee "$RUNNER_TEMP/gate49-audit.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from word_render_audit import rendered_word_preflight
+          from gate43_owner_encrypted_review import pack_owner_review
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          audit = json.loads((root / "gate49-audit.json").read_text().splitlines()[0])
+          words = sorted((root / "gate49-private").glob("RASD-Unified-*.docx"))
+          assert audit["mode"] == "stage2_ministry_unified_word_ephemeral_qa"
+          assert audit["source_added_to_production"] is False
+          assert audit["email_sent"] is False
+          assert audit["scheduler_enabled"] is False
+          assert audit["private_storage_used"] is False
+          assert audit["final_report_published"] is False
+          assert audit["production_sources_changed"] is False
+          assert audit["keywords_changed"] is False
+          assert audit["date_only_official_not_assigned_hour"] is True
+          assert audit["production_15_item_cap_intact"] is True
+          reviewed_by_machine = False
+          if audit["status"] == "READY_QA_ONLY":
+              assert audit["all_sources_healthy"] is True
+              assert audit["official_pagination_complete"] is True
+              assert audit["word_images_verified"] is True
+              assert audit["screenshots_missing"] == 0
+              assert audit["screenshots_verified"] == audit["selected_unique_articles"]
+              assert len(words) == 1
+              check = rendered_word_preflight(
+                  words[0], expected_articles=audit["selected_unique_articles"])
+              assert check["status"] == "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW"
+              reviewed_by_machine = True
+              print("GATE49_GENUINE_WORD_AND_IMAGES_PRIVATE_RENDER_PASS; HUMAN_REVIEW_PENDING")
+          else:
+              assert audit["status"] == "HOLD" and not words
+              print("::warning::GATE49_SOURCE_HOLD; NO_INCOMPLETE_WORD")
+          receipt = pack_owner_review(
+              root / "gate49-private", audit,
+              root / "gate49-owner-ciphertext.json",
+              render_passed=reviewed_by_machine)
+          assert receipt["encrypted"] and not receipt["plaintext_artifact"]
+          assert receipt["owner_review_word_included"] == reviewed_by_machine
+          print("GATE49_OWNER_CIPHERTEXT_READY; WORD_INCLUDED=" +
+                str(receipt["owner_review_word_included"]))
+          PY
+      - name: Upload ONLY ciphertext — 1-day retention, no plaintext publisher data
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-gate49-owner-ciphertext-${{ github.run_id }}
+          path: ${{ runner.temp }}/gate49-owner-ciphertext.json
+          retention-days: 1
+          if-no-files-found: error
