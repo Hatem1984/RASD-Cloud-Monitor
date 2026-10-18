@@ -3,7 +3,9 @@
 The tests never authenticate Gmail or write to a real private repository.
 """
 import os
+import tempfile
 import unittest
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -13,6 +15,7 @@ from PIL import Image, ImageDraw
 from digest_mailer import (
     WORKFLOW_REF, build_digest_message, deliver_digest, report_identity, run,
 )
+from cloud_proof_report import build_proof_report
 from test_gate11_pipeline_acceptance import FakeGithubContents
 
 CLOCK = datetime(2026, 10, 13, 12, 0, tzinfo=timezone.utc)
@@ -124,6 +127,61 @@ class DailyProtectedEmailTests(unittest.TestCase):
         self.assertEqual(len(self.feed_calls), 2)
         self.assertEqual(len(FakeSMTPSender.sent), 1)
         self.assertEqual(self.api.writes, 2)
+
+    def test_changed_word_jpeg_rejected_before_private_reservation_or_smtp(self):
+        """A Word with the expected picture count but tampered JPEG cannot send."""
+        class NeverReserve:
+            def reserve(self, *args):
+                raise AssertionError("invalid evidence must NOT reserve private state")
+            def mark_smtp_accepted(self, *args):
+                raise AssertionError("invalid evidence must NOT update private state")
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            report = build_proof_report(
+                Path("sources.json"), folder,
+                fetch=publisher_fetch, capture=publisher_capture, now=CLOCK)
+            self.assertEqual(report["status"], "READY")
+            self.assertEqual(report["articles"], 1)
+            date, key = report_identity(CLOCK)
+            word = folder / f"RASD-Daily-{date}.docx"
+            with zipfile.ZipFile(word) as archive:
+                parts = [(part, archive.read(part.filename))
+                         for part in archive.infolist()]
+            with zipfile.ZipFile(word, "w") as archive:
+                for part, raw in parts:
+                    if part.filename.startswith("word/media/"):
+                        raw += b"modified_after_capture"
+                    archive.writestr(part, raw)
+            with self.assertRaisesRegex(
+                    ValueError, "digest_word_evidence_integrity_failed"):
+                deliver_digest(
+                    report, date=date, key=key, word=word,
+                    sender=SENDER, approved_recipient=SENDER,
+                    app_password=ENV["RASD_GMAIL_APP_PASSWORD"],
+                    ledger=NeverReserve(), smtp_factory=FakeSMTPSender)
+            self.assertEqual(FakeSMTPSender.sent, [])
+
+    def test_missing_independent_capture_receipts_rejected_before_reservation(self):
+        class NeverReserve:
+            def reserve(self, *args):
+                raise AssertionError("unproven Word must NOT reserve private state")
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            report = build_proof_report(
+                Path("sources.json"), folder,
+                fetch=publisher_fetch, capture=publisher_capture, now=CLOCK)
+            self.assertEqual(report["status"], "READY")
+            report.pop("entries")
+            date, key = report_identity(CLOCK)
+            with self.assertRaisesRegex(
+                    ValueError, "digest_word_evidence_integrity_failed"):
+                deliver_digest(
+                    report, date=date, key=key,
+                    word=folder / f"RASD-Daily-{date}.docx",
+                    sender=SENDER, approved_recipient=SENDER,
+                    app_password=ENV["RASD_GMAIL_APP_PASSWORD"],
+                    ledger=NeverReserve(), smtp_factory=FakeSMTPSender)
+            self.assertEqual(FakeSMTPSender.sent, [])
 
     def test_no_news_holds_instead_of_sending_unverified_word(self):
         with self.assertRaisesRegex(RuntimeError, "digest_publisher_evidence_incomplete"):
