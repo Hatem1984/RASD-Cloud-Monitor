@@ -91,6 +91,53 @@ jobs:
           else:
               print("Gate24 SAMPLE evidence passed; full daily Word still NOT accepted.")
           PY
+      - name: Gate31 — genuine full-source Word proof acceptance (QA branch only; no evidence uploaded)
+        if: startsWith(github.ref, 'refs/heads/gate31-')
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import tempfile
+          from pathlib import Path
+          from docx import Document
+          from cloud_proof_report import build_proof_report, word_images_match_capture_digests
+
+          # Entire full-source report and real screenshots exist only in
+          # ephemeral runner storage. No public Word/photo artifact or email.
+          with tempfile.TemporaryDirectory(prefix="rasd-g31-") as tmp:
+              folder = Path(tmp)
+              result = build_proof_report(Path("sources.json"), folder)
+              audit = {
+                  "gate": 31,
+                  "status": result["status"],
+                  "coverage": result["coverage"],
+                  "articles": result["articles"],
+                  "screenshots_verified": result["screenshots_verified"],
+                  "screenshots_missing": result["screenshots_missing"],
+                  "word_created": result["word_created"],
+                  "email_sent": result["email_sent"],
+                  "scheduler_enabled": result["scheduler_enabled"],
+              }
+              print(json.dumps(audit, sort_keys=True), flush=True)
+              words = list(folder.glob("RASD-Daily-*.docx"))
+              if result["status"] != "READY":
+                  assert not words, "HOLD must never leave final Word"
+                  print("::error::Gate31 full-source screenshot proof HOLD; "
+                        "no final Word exported, no email or schedule", flush=True)
+                  raise SystemExit(2)
+              assert result["coverage"] == "HEALTHY"
+              assert result["articles"] >= 1
+              assert result["screenshots_verified"] == result["articles"]
+              assert result["screenshots_missing"] == 0
+              assert len(words) == 1
+              assert len(Document(words[0]).inline_shapes) == result["articles"]
+              assert word_images_match_capture_digests(words[0], result["entries"])
+              print("GATE31_FULL_SOURCE_EPHEMERAL_WORD_PROOF_VERIFIED; "
+                    "NO_PUBLIC_DOCX; NO_EMAIL; NO_SCHEDULE", flush=True)
+          PY
       - name: Create read-only Arabic Word preview (no images, not final proof)
         env:
           RASD_GATE11_SEND_APPROVED: ""
