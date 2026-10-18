@@ -8,7 +8,9 @@ import copy
 import hashlib
 import tempfile
 import unittest
+import warnings
 import zipfile
+from xml.etree import ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -136,6 +138,55 @@ class Gate27WordImageIntegrityTests(unittest.TestCase):
             self.assertEqual(outcome["screenshots_verified"], 2)
             self.assertEqual(outcome["status"], "HOLD")
             self.assertEqual(outcome["failure"], "word_evidence_integrity_failed")
+            self.assertFalse(outcome["word_created"])
+            self.assertFalse(list(folder.glob("*.docx")))
+
+    def test_duplicate_zip_member_is_hold_even_with_identical_authentic_bytes(self):
+        """Duplicate OPC part names are ambiguous to Word ZIP consumers."""
+        def duplicate_image_part(report, word):
+            render_docx(report, word)
+            with zipfile.ZipFile(word) as archive:
+                part = next(name for name in archive.namelist()
+                            if name.startswith("word/media/"))
+                image = archive.read(part)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                with zipfile.ZipFile(word, "a") as archive:
+                    archive.writestr(part, image)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            with patch("cloud_proof_report.render_docx",
+                       side_effect=duplicate_image_part):
+                outcome = build(folder)
+            self.assertEqual(outcome["status"], "HOLD")
+            self.assertFalse(outcome["word_created"])
+            self.assertFalse(list(folder.glob("*.docx")))
+
+    def test_external_image_relation_with_media_looking_target_is_hold(self):
+        """A media-looking Target is not enough when TargetMode is External."""
+        def external_image_relationship(report, word):
+            render_docx(report, word)
+            with zipfile.ZipFile(word) as archive:
+                parts = [(info, archive.read(info.filename))
+                         for info in archive.infolist()]
+            with zipfile.ZipFile(word, "w") as archive:
+                for info, raw in parts:
+                    if info.filename == "word/_rels/document.xml.rels":
+                        root = ET.fromstring(raw)
+                        image = next(node for node in root
+                                     if node.attrib.get("Type", "").endswith("/image"))
+                        image.set("TargetMode", "External")
+                        raw = ET.tostring(root, encoding="utf-8",
+                                          xml_declaration=True)
+                    archive.writestr(info, raw)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            with patch("cloud_proof_report.render_docx",
+                       side_effect=external_image_relationship):
+                outcome = build(folder)
+            self.assertEqual(outcome["status"], "HOLD")
             self.assertFalse(outcome["word_created"])
             self.assertFalse(list(folder.glob("*.docx")))
 
