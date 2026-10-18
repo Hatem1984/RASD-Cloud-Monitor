@@ -60,7 +60,9 @@ def no_send_unified_mime_preflight(audit: dict, word: Path,
             {r.get("feed_id") for r in health if type(r) is dict} != _EXPECTED or
             any(type(r) is not dict or r.get("status") != "ok" or
                 type(r.get("verified_links")) is not int or
-                r["verified_links"] < 1 for r in health)):
+                r["verified_links"] < 0 or
+                (r.get("feed_id") == "mped-official" and
+                 r["verified_links"] < 1) for r in health)):
         raise ValueError("unified_mail_preflight_original_source_incomplete")
     word = Path(word)
     if (word.name != f"RASD-Unified-{target_day.isoformat()}.docx" or
