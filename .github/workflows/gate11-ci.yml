@@ -172,6 +172,35 @@ jobs:
               print("GATE38 official source QUALIFIED FOR REVIEW ONLY; "
                     "production promotion separately gated")
           PY
+      - name: Gate39 — independently repeat original Ministry NewsList discovery and screenshot Word (no delivery)
+        if: github.ref == 'refs/heads/gate39-official-homepage-discovery'
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python official_ministry_source.py | tee "$RUNNER_TEMP/gate39-ministry-audit.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          audit = json.loads((Path(os.environ["RUNNER_TEMP"]) /
+                              "gate39-ministry-audit.json").read_text().splitlines()[0])
+          assert audit["source_added_to_production"] is False
+          assert audit["keywords_changed"] is False
+          assert audit["email_sent"] is False
+          assert audit["scheduler_enabled"] is False
+          assert audit["final_report_published"] is False
+          if audit["status"] != "READY_SOURCE_QA_ONLY":
+              print("::error::Stage1 official Ministry auto-discovery HOLD")
+              raise SystemExit(2)
+          assert audit["official_index"] == "FOUND"
+          assert audit["index_repeat_confirmed"] is True
+          assert audit["index_article_links"] >= 1
+          assert audit["sample_origin"] == "official_NewsList_card_discovery_only"
+          assert audit["sample_verified_screenshots"] == 1
+          assert audit["sample_word_images_verified"] is True
+          print("GATE39_OFFICIAL_ORIGINAL_NEWSLIST_AUTO_DISCOVERY_AND_WORD_VERIFIED")
+          PY
       - name: Create read-only Arabic Word preview (no images, not final proof)
         env:
           RASD_GATE11_SEND_APPROVED: ""
