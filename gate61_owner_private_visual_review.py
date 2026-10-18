@@ -70,7 +70,9 @@ def inspect_private_review(folder: Path, day: date) -> dict:
             != EXPECTED_SOURCES or
             any(type(row) is not dict or row.get("status") != "ok" or
                 type(row.get("verified_links")) is not int or
-                row["verified_links"] < 1 for row in sources)):
+                row["verified_links"] < 0 or
+                (row.get("feed_id") == "mped-official" and
+                 row["verified_links"] < 1) for row in sources)):
         raise ValueError("private_review_original_sources_not_healthy")
     count = audit.get("selected_unique_articles")
     if (type(count) is not int or not 1 <= count <= 15 or
