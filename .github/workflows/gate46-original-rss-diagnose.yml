@@ -1,0 +1,64 @@
+name: Gate46 — original publisher RSS HTTP diagnosis, branch-only, read-only
+
+on:
+  push:
+    branches:
+      - gate46-real-rss-status-probe
+
+permissions:
+  contents: read
+
+jobs:
+  source-original-http-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Capture only approved publisher RSS transport status, never article text
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from monitor import inspect
+          config = json.loads(Path("sources.json").read_text())
+          assert config["keywords"] == [
+              "وزارة التخطيط", "وزير التخطيط", "وزيرة التخطيط",
+              "التخطيط والتنمية الاقتصادية"
+          ]
+          assert [f["id"] for f in config["feeds"]] == [
+              "hapi", "almasryalyoum"
+          ]
+          try:
+              observed = inspect(config, now=datetime.now(timezone.utc),
+                                 article_limit=15)
+          except RuntimeError:
+              print("RSS_DIAGNOSTIC_ALL_SOURCES_DOWN")
+              raise SystemExit(0)
+          for row in observed["sources"]:
+              issue = row.get("error", None)
+              code = row.get("http_status", None)
+              assert issue is None or issue in (
+                  "HTTPError", "URLError", "TimeoutError", "ValueError",
+                  "ParseError", "SSLError", "OSError"
+              )
+              assert code is None or code in (
+                  301, 302, 303, 307, 308, 400, 401, 403, 404, 408,
+                  429, 500, 502, 503, 504
+              )
+              print("RSS_DIAGNOSTIC_SOURCE=" + row["feed_id"] +
+                    ";status=" + row["status"] +
+                    ";error_type=" + str(issue) +
+                    ";http_status=" + str(code) +
+                    ";links=" + str(row["verified_links"]))
+          print("RSS_DIAGNOSTIC_NO_MAIL_NO_WORD_NO_SCHEDULE")
+          PY
