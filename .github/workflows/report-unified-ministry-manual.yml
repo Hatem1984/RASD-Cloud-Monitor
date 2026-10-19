@@ -145,7 +145,7 @@ jobs:
               summary.write(f"- Machine verdict: **{verdict}**\n")
               summary.write(f"- All original sources healthy: {audit['all_sources_healthy']}\n")
               summary.write(f"- Owner-encrypted Word: {receipt['owner_review_word_included']}\n")
-              summary.write(f"- Unified Word MIME NO-SEND QA: **{mime_result['status']}**\\n")
+              summary.write(f"- Unified Word MIME NO-SEND QA: **{mime_result['status']}**\n")
               summary.write("- Human page-by-page review: **PENDING**\n")
               summary.write("- Delivery, scheduling and remote storage: **DISABLED**\n")
           print("RASD_OWNER_ENCRYPTED_ARTIFACT_READY; HAS_GENUINE_WORD=" +
