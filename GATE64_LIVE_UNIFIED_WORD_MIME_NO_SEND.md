@@ -1,0 +1,21 @@
+# Gate 64 — unified Word LIVE owner-only runner MIME rehearsal, NO SEND
+
+Date: **19 October 2026, Africa/Cairo**. Base `main` `f10c19c3131f20a49df20f3bcf3729ceb330b82f`. The original approved Ministry of Planning first-party NewsList, Hapi native RSS, **Al Masry Al Youm plural native RSS** and exact four saved Arabic phrases remain unchanged. This is an extension of the existing owner-initiated Stage2 **manual** encrypted QA workflow, NOT an email authorization.
+
+## Gap closed
+
+Gate63 had safely rehearsed the MIME shape of a **synthetic** `RASD-Unified-YYYY-MM-DD.docx` without sending. Before Gate64, the actual source-verified Word generated in the owner-manual CI never passed the existing Gate63 no-send attachment check on the **same bytes**. Meanwhile the older Gmail `digest_mailer.py` only accepts the **legacy RSS-only** `RASD-Daily-YYYY-MM-DD.docx`, not the new unified Ministry Word. No prior offline Gmail simulation proves delivery of the new report.
+
+Gate64 wires the existing no-send `gate63_unified_mail_no_send.no_send_unified_mime_preflight` behind a separate strict guard to the **already locally generated original Word** inside `.github/workflows/report-unified-ministry-manual.yml`. It uses only the publisher-source audit JSON and the already original-image-bound Word. There are no secrets, real recipient, private delivery ledger, SMTP connection, R2 or network transfer in the MIME rehearsal.
+
+**Order matters:** Stage2 source/date/screenshots/Word SHA+render preflight is performed first. Then **RSA/AES-GCM owner-only ciphertext is created**. Then Stage2 full-day machine verdict is recorded. **Only after that** does Gate64 try MIME serialization in RAM and verify the single Word attachment identity, count and bytes via Gate63. Its result is a *separate* line in the safe public GitHub Step Summary, **without** publishing source headlines, Word/JPEG/PDF, MIME bytes or Word SHA. If the NO-SEND MIME check itself fails on an otherwise READY full-day report, the workflow fails closed, but `if: always()` still uploads the **already packed owner ciphertext** for local review. This is NOT the same as source-coverage rejection.
+
+If the original collector returns `HOLD` (including the real October18 mandatory Al Masry malformed XML or zero on-day match), MIME is correctly **SKIPPED_SOURCE_OR_PROOF_HOLD** — it does NOT turn the source into a healthy synthetic report. If user requested `today`, MIME is **SKIPPED_PARTIAL_CAIRO_DAY** (today is never full-day accepted). Successful full previous Cairo day is **`UNIFIED_WORD_MIME_NO_SEND_QA_ONLY`**, never `email_sent`, Gmail auth, storage, reviewer signoff or Stage2 production release.
+
+## Tests and release boundaries
+
+The new isolated 9-test regression fixture builds an actual synthetic Ministry unified Word via existing Gate40 fixture and exercises the same Gate63 MIME builder through Gate64. It asserts no SMTP, file SHA leak, manual workflow-only invocation, ciphertext packing **before** MIME, no plaintext artifact, explicit HOLD/partial-day SKIP, wrong date, duplicate Word, dangerous flags, and rejection of forged transport side effects. All synthetic only; this is NOT a second genuine publisher reporting day.
+
+**The genuine complete day 18 October 2026** was attempted on 19 October through [manual run 39207506038](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/39207506038): original Al Masry **plural** RSS parse failure code 11 line 242 (same malformed bytes on bounded retry), Hapi 10 valid entries, official Ministry 10 older articles and no matching report articles. It correctly returned `HOLD`, no Word. This gate does not fix nor silently substitute the original RSS, and should not be counted as a second successful day. First real healthy completed date remains **17 October 2026 only**, with owner-human visual page review still pending.
+
+**Keep Stage2 #42 and source #53 OPEN.** No Gmail SMTP or private state writes, no scheduled RASD cron, paid R2, new feed, publisher HTML repair, plaintext artifacts or production launch. A future SMTP transport will require a separate protected real-Gmail credential preflight, owner approval, private ledger replay and Gmail Sent/Inbox verification against the SAME actual approved unified Word.

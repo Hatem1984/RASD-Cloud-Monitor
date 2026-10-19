@@ -72,6 +72,7 @@ jobs:
           from word_render_audit import rendered_word_preflight
           from gate43_owner_encrypted_review import pack_owner_review
           from gate58_manual_acceptance import stage2_manual_machine_verdict
+          from gate64_stage2_live_mime_no_send import stage2_live_no_send_mime_check
           from datetime import datetime
           from zoneinfo import ZoneInfo
           root = Path(os.environ["RUNNER_TEMP"])
@@ -124,6 +125,19 @@ jobs:
           (root / "rasd-stage2-manual-machine-verdict").write_text(
               verdict, encoding="ascii",
           )
+          # Ciphertext is already packed. If the memory-only MIME check
+          # fails, the always() upload still preserves the private Word/pages.
+          # No MIME bytes, original headlines, or attachment hashes enter logs.
+          mime_failed = False
+          try:
+              mime_result = stage2_live_no_send_mime_check(
+                  audit, report_dir,
+                  requested_window=os.environ["RASD_STAGE2_WINDOW_MODE"],
+                  today_cairo=datetime.now(ZoneInfo("Africa/Cairo")).date(),
+              )
+          except Exception:
+              mime_failed = True
+              mime_result = {"status": "UNIFIED_WORD_MIME_NO_SEND_HOLD"}
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
               summary.write("### Stage 2 genuine Word machine acceptance\n\n")
               summary.write(f"- Cairo date: {audit['target_date_cairo']}\n")
@@ -131,11 +145,16 @@ jobs:
               summary.write(f"- Machine verdict: **{verdict}**\n")
               summary.write(f"- All original sources healthy: {audit['all_sources_healthy']}\n")
               summary.write(f"- Owner-encrypted Word: {receipt['owner_review_word_included']}\n")
+              summary.write(f"- Unified Word MIME NO-SEND QA: **{mime_result['status']}**\n")
               summary.write("- Human page-by-page review: **PENDING**\n")
               summary.write("- Delivery, scheduling and remote storage: **DISABLED**\n")
           print("RASD_OWNER_ENCRYPTED_ARTIFACT_READY; HAS_GENUINE_WORD=" +
                 str(receipt["owner_review_word_included"]))
           print("RASD_STAGE2_MANUAL_MACHINE_VERDICT=" + verdict)
+          print("RASD_UNIFIED_WORD_MIME_NO_SEND_STATUS=" + mime_result["status"])
+          if mime_failed:
+              print("::error::RASD_UNIFIED_WORD_MIME_NO_SEND_HOLD; OWNER_CIPHERTEXT_PRESERVED")
+              raise SystemExit(2)
           PY
       - name: Upload ONLY RSA/AES-GCM ciphertext for local owner review
         if: ${{ always() }}
