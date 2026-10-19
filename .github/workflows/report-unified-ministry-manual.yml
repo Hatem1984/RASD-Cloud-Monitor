@@ -72,7 +72,7 @@ jobs:
           from word_render_audit import rendered_word_preflight
           from gate43_owner_encrypted_review import pack_owner_review
           from gate58_manual_acceptance import stage2_manual_machine_verdict
-          from gate64_stage2_live_mime_no_send import stage2_live_no_send_mime_check
+          from gate65_owner_bound_mime_no_send import owner_bound_stage2_mime_check
           from datetime import datetime
           from zoneinfo import ZoneInfo
           root = Path(os.environ["RUNNER_TEMP"])
@@ -125,13 +125,14 @@ jobs:
           (root / "rasd-stage2-manual-machine-verdict").write_text(
               verdict, encoding="ascii",
           )
-          # Ciphertext is already packed. If the memory-only MIME check
-          # fails, the always() upload still preserves the private Word/pages.
-          # No MIME bytes, original headlines, or attachment hashes enter logs.
+          # Owner ciphertext is already packed. The SAME exact Word byte
+          # SHA must match before and after MIME-only rehearsal. Never print
+          # hashes, MIME bytes, original publisher text or private files.
+          # On mismatch, fail closed but always() still preserves ciphertext.
           mime_failed = False
           try:
-              mime_result = stage2_live_no_send_mime_check(
-                  audit, report_dir,
+              mime_result = owner_bound_stage2_mime_check(
+                  audit, report_dir, owner_receipt=receipt,
                   requested_window=os.environ["RASD_STAGE2_WINDOW_MODE"],
                   today_cairo=datetime.now(ZoneInfo("Africa/Cairo")).date(),
               )
