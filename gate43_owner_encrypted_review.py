@@ -93,6 +93,14 @@ def pack_owner_review(
             "email_sent", "scheduler_enabled", "source_added_to_production",
         }
     }
+    # The Word SHA must reference the EXACT bytes placed inside the AES-GCM
+    # owner package. A later MIME rehearsal must never silently use a
+    # different mutable Word file. None means HOLD contains no original Word.
+    word_bytes = documents[0].read_bytes() if ready else None
+    owner_word_sha256 = (
+        hashlib.sha256(word_bytes).hexdigest() if word_bytes is not None else None
+    )
+    sanitized["owner_packed_word_sha256"] = owner_word_sha256
     sanitized["private_renderer_passed"] = bool(render_passed)
     sanitized["human_visual_review"] = False
     sanitized["production_delivery_approved"] = False
@@ -106,7 +114,9 @@ def pack_owner_review(
                 json.dumps(sanitized, ensure_ascii=False, sort_keys=True),
             )
             if ready:
-                package.write(documents[0], arcname=documents[0].name)
+                # Same byte buffer as owner_packed_word_sha256, no second
+                # mutable filesystem read while building the encrypted ZIP.
+                package.writestr(documents[0].name, word_bytes)
                 if page_receipts:
                     package.writestr(
                         "rasd-owner-review-pages-manifest.json",
@@ -144,6 +154,9 @@ def pack_owner_review(
         "email_sent": False, "file_size_bytes": destination.stat().st_size,
         "owner_review_pages_encrypted": bool(page_receipts),
         "owner_review_page_count": len(page_receipts),
+        # In-memory-only receipt. Never print this original Word SHA into
+        # public Actions logs or publish it alongside a plaintext artifact.
+        "owner_packed_word_sha256": owner_word_sha256,
     }
 
 

@@ -85,6 +85,18 @@ def inspect_private_review(folder: Path, day: date) -> dict:
     if (len(list(folder.glob("RASD-Unified-*.docx"))) != 1 or
             len(Document(word).inline_shapes) != count):
         raise ValueError("private_review_word_image_count_mismatch")
+    word_digest = _digest(word)
+    # Gate65+ owner ciphertext contains an exact binding to the Word bytes
+    # packed before Gmail MIME NO-SEND. Older genuine Gate50 archives did not
+    # include this field: retain local review compatibility, without falsely
+    # asserting the historical pack-to-MIME proof.
+    pack_digest_exists = "owner_packed_word_sha256" in audit
+    if pack_digest_exists:
+        packed_digest = audit["owner_packed_word_sha256"]
+        if (type(packed_digest) is not str or
+                not re.fullmatch(r"[0-9a-f]{64}", packed_digest) or
+                packed_digest != word_digest):
+            raise ValueError("private_review_owner_packed_word_sha256_mismatch")
     manifest = _json_file(folder / "rasd-owner-review-pages-manifest.json")
     pages = manifest.get("pages")
     if (manifest.get("version") != 1 or
@@ -122,7 +134,8 @@ def inspect_private_review(folder: Path, day: date) -> dict:
         "original_source_count": 3,
         "article_count": count,
         "review_page_count": len(pages),
-        "word_sha256": _digest(word),
+        "word_sha256": word_digest,
+        "owner_ciphertext_word_identity_verified": pack_digest_exists,
         "page_sha256": hashes,
         "local_integrity_checked": True,
         "human_visual_review": False,
