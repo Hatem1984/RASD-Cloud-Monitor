@@ -51,7 +51,7 @@ class ExactArabicPDFGlyphTranspositionTests(unittest.TestCase):
 
     def test_complete_original_title_still_passes_default_mode(self):
         result = _verify_headlines_in_independent_pdf_extractions(
-            self.doc, layout_text="\\n".join((FIRST, SECOND, OFFICIAL)), raw_text="",
+            self.doc, layout_text="\n".join((FIRST, SECOND, OFFICIAL)), raw_text="",
             expected_articles=3,
         )
         self.assertEqual(result, "layout")
