@@ -57,7 +57,7 @@ class ExactArabicPDFGlyphTranspositionTests(unittest.TestCase):
         self.assertEqual(result, "layout")
 
     def test_other_absent_title_word_is_still_hold(self):
-        for missing in ("الجامعات", "العمل", "الاستثمار"):
+        for missing in ("الجامعات", "العمل", "التعافي"):
             with self.subTest(word=missing):
                 bad = self.layout.replace(missing, "غياب", 1)
                 with self.assertRaisesRegex(
