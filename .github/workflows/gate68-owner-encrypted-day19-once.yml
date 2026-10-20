@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   one-time-original-owner-encrypted-review:
-    if: github.actor == 'Hatem1984' && github.ref == 'refs/heads/gate68-one-shot-owner-encrypted-day19' && (startsWith(github.event.head_commit.message, 'RASD-GATE68-CIPHER-ONCE') || startsWith(github.event.head_commit.message, 'RASD-GATE68-TRACE-ONCE') || startsWith(github.event.head_commit.message, 'RASD-GATE68-RENDER-TRACE-ONCE'))
+    if: github.actor == 'Hatem1984' && github.ref == 'refs/heads/gate68-one-shot-owner-encrypted-day19' && (startsWith(github.event.head_commit.message, 'RASD-GATE68-CIPHER-ONCE') || startsWith(github.event.head_commit.message, 'RASD-GATE68-TRACE-ONCE') || startsWith(github.event.head_commit.message, 'RASD-GATE68-RENDER-TRACE-ONCE') || startsWith(github.event.head_commit.message, 'RASD-GATE68-HEADLINE-DIAG-ONCE'))
     runs-on: ubuntu-latest
     timeout-minutes: 29
     steps:
