@@ -164,6 +164,32 @@ def discover_official_newslist(request_context, *, max_articles=35,
         raise ValueError("official_newslist_encoding_invalid") from None
     return index_articles(html_body)[:max_articles]
 
+def original_headline_or_intro_matches(
+    body: str, headline: str, saved_keywords: list[str],
+) -> bool:
+    """Match the SAME saved Ministry phrases in headline OR bounded lead.
+
+    The first 1600 characters AFTER the actual original-page headline are
+    treated as the publisher's lead. Do not match unrelated site navigation,
+    other news cards, footer widgets or arbitrary full-page boilerplate.
+    Both the genuine original-page date and screenshot are still mandatory.
+    Never broaden keyword vocabulary or accept a guessed article URL.
+    """
+    if not isinstance(body, str) or not isinstance(headline, str):
+        return False
+    if _ministry_term_present(headline, saved_keywords):
+        return True
+    title = " ".join(headline.split())
+    original_text = " ".join(body.split())
+    if not title:
+        return False
+    start = original_text.find(title)
+    if start < 0:
+        return False
+    lead = original_text[start + len(title):start + len(title) + 1600]
+    return _ministry_term_present(lead, saved_keywords)
+
+
 def original_publication_date(body: str, headline: str) -> date | None:
     """Read date adjacent to article headline, not crawl time or footer date."""
     if not isinstance(body, str) or not isinstance(headline, str):
@@ -208,7 +234,7 @@ def _read_original(page, url: str, keywords: list[str], target_day: date, image:
     if (len(body) < 350 or len(body) > 500_000 or
             any(mark in body[:2000].lower() for mark in CHALLENGE_WORDS)):
         return {"status": "HOLD", "reason": "official_page_content_unavailable"}
-    if not _ministry_term_present(headline, keywords):
+    if not original_headline_or_intro_matches(body, headline, keywords):
         return {"status": "HOLD", "reason": "saved_ministry_keywords_missing"}
     published = original_publication_date(body, headline)
     if published is None or published != target_day:
