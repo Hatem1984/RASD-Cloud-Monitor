@@ -85,7 +85,7 @@ def diagnose_rendered_headline_coverage(word: Path) -> None:
                 for m in ("layout", "raw")
             }
             headings = [p.text for p in Document(word).paragraphs
-                        if re.match(r"^\\s*\\d{1,2}\\.\\s+", p.text)]
+                        if re.match(r"^\s*\d{1,2}\.\s+", p.text)]
             results = []
             for index, original in enumerate(headings, 1):
                 words = _arabic_headline_tokens(original)
