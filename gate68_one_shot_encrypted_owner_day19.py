@@ -54,6 +54,52 @@ def verify_cipher_only(envelope: Path) -> int:
     return envelope.stat().st_size
 
 
+def diagnose_rendered_headline_coverage(word: Path) -> None:
+    """Redacted counts by article index from SAME private rendered PDF only.
+
+    This independently checks LibreOffice/Poppler extraction and prints no
+    words, phrases, URLs, SHA fingerprints, PDF, Word or screenshots.
+    Diagnostic NEVER changes main acceptance rules or emits artifacts.
+    """
+    import re
+    from docx import Document
+    from word_render_audit import _run, _arabic_headline_tokens
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="rasd-g68-safe-pdf-diag-",
+                                         dir=os.environ["RUNNER_TEMP"]) as t:
+            root = Path(t)
+            _run(["libreoffice", "-env:UserInstallation=" +
+                  (root / "profile").as_uri(),
+                  "--headless", "--convert-to", "pdf", "--outdir",
+                  str(root), str(word.resolve())], timeout=100)
+            pdfs = list(root.glob("*.pdf"))
+            if len(pdfs) != 1:
+                print("RASD_G68_HEADLINE_DIAG=PDF_COUNT_UNEXPECTED")
+                return
+            texts = {
+                m: _arabic_headline_tokens(
+                    _run(["pdftotext", "-" + m, str(pdfs[0]), "-"],
+                         timeout=35).stdout,
+                    pdf_extraction=True)
+                for m in ("layout", "raw")
+            }
+            headings = [p.text for p in Document(word).paragraphs
+                        if re.match(r"^\\s*\\d{1,2}\\.\\s+", p.text)]
+            results = []
+            for index, original in enumerate(headings, 1):
+                words = _arabic_headline_tokens(original)
+                results.append({
+                    "index": index, "expected_token_count": len(words),
+                    "missing_layout_count": len(words - texts["layout"]),
+                    "missing_raw_count": len(words - texts["raw"]),
+                })
+            print("RASD_G68_HEADLINE_DIAG_COUNTS=" +
+                  json.dumps(results, sort_keys=True), flush=True)
+    except Exception:
+        print("RASD_G68_HEADLINE_DIAG=UNAVAILABLE", flush=True)
+
+
 def run_one_shot() -> None:
     now = datetime.now(CAIRO)
     target_day = validate_one_shot_scope(
@@ -128,6 +174,8 @@ def run_one_shot() -> None:
                 }
                 code = str(exc) if type(exc) is ValueError and str(exc) in approved else "RENDER_GENERIC_HOLD"
                 print("RASD_G68_REDACTED_RENDER_FAILURE=" + code, flush=True)
+                if code == "qa_rendered_original_headline_missing":
+                    diagnose_rendered_headline_coverage(words[0])
                 raise
             if (result.get("status") != "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW"
                     or result.get("private_owner_review_pages_staged") is not True
