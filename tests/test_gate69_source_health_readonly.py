@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import types
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
@@ -133,10 +134,17 @@ class SourceReliabilityTests(unittest.TestCase):
         player=Mock()
         player.__enter__=Mock(return_value=Mock(request=official.request))
         player.__exit__=Mock(return_value=False)
-        with patch("pathlib.Path.read_text",return_value=json.dumps(settings)), \
+        # The offline-security job intentionally does NOT install Playwright.
+        # Mock the optional module boundary instead of requiring network extras.
+        pkg = types.ModuleType("playwright")
+        pkg.__path__ = []
+        api = types.ModuleType("playwright.sync_api")
+        api.sync_playwright = Mock(return_value=player)
+        with patch.dict("sys.modules", {
+            "playwright": pkg, "playwright.sync_api": api,
+        }), patch("pathlib.Path.read_text", return_value=json.dumps(settings)), \
              patch("gate69_source_health_readonly.inspect",
                    return_value=inspector_result) as inspect, \
-             patch("playwright.sync_api.sync_playwright",return_value=player), \
              patch("gate69_source_health_readonly.discover_official_newslist",
                    return_value=["https://mped.gov.eg/singlenews?id=7270&lang=ar"]):
             result=public_live_probe()
