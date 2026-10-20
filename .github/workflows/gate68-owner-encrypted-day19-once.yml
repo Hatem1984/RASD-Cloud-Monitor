@@ -1,0 +1,67 @@
+name: RASD Gate68 — one-time owner encrypted Word evidence (NO MAIL)
+
+# This is a ONE-OFF review-only branch, NOT production. The final marker
+# authorizes a single owner-originating push. No cron or generic dispatch.
+on:
+  push:
+    branches:
+      - gate68-one-shot-owner-encrypted-day19
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-g68-owner-ciphertext-original-day19
+  cancel-in-progress: false
+
+jobs:
+  one-time-original-owner-encrypted-review:
+    if: github.actor == 'Hatem1984' && github.ref == 'refs/heads/gate68-one-shot-owner-encrypted-day19' && startsWith(github.event.head_commit.message, 'RASD-GATE68-CIPHER-ONCE')
+    runs-on: ubuntu-latest
+    timeout-minutes: 29
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pin genuine completed Cairo yesterday and approved Gate66 main ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(TZ=Africa/Cairo date +%Y-%m-%d)" = "2026-10-20"
+          expected="4f914c779a4528a2b1df7681dc6baca91e3257ca"
+          ancestor="$(git merge-base HEAD "$expected")"
+          test "$ancestor" = "$expected"
+          echo "RASD_GATE68_BASE=$ancestor" >> "$GITHUB_ENV"
+          test -f gate26_owner_review_pubkey.pem
+          echo "RASD_G68_OWNER_PUBLIC_KEY_TRACKED; NOT THE PRIVATE KEY"
+      - name: Install approved original-source Chromium and Arabic Word-page render dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2" "cryptography>=42,<50"
+          python -m playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libreoffice-writer poppler-utils fonts-dejavu-core fonts-noto-core
+      - name: Run complete offline security test suite — NO secrets, NO SMTP
+        run: python -m unittest discover -s tests -v
+      - name: Capture original completed-day report and AES-GCM owner-only Word plus pages
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+          RASD_MAIL_ENABLED: "false"
+          RASD_SCHEDULER_ENABLED: "false"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python gate68_one_shot_encrypted_owner_day19.py
+      - name: Upload ONLY RSA/AES-GCM owner ciphertext for local inspection (expires after 1 day)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-g68-owner-encrypted-day19-${{ github.run_id }}
+          path: ${{ runner.temp }}/rasd-g43-owner-encrypted.json
+          retention-days: 1
+          if-no-files-found: ignore
