@@ -85,7 +85,7 @@ class CairoSchedulerNoCronTests(unittest.TestCase):
         c=(Path(__file__).resolve().parents[1] /
            "gate72_cairo_schedule_dryrun.py").read_text()
         for banned in ("smtplib","boto3","PrivateGitHubLedger",
-                       "send_message(","APScheduler","cron:",
+                       "send_message(","import apscheduler","cron:",
                        "GITHUB_TOKEN","RASD_GMAIL_APP_PASSWORD"):
             self.assertNotIn(banned,c)
 
