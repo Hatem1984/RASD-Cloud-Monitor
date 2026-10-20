@@ -1,0 +1,154 @@
+"""Gate68: one-shot OWNER-ACTOR read-only Stage2 ciphertext evidence capture.
+
+A one-time QA branch, not production, mail, private key use or permission
+to forge the owner's private interactive review. No report/article plaintext
+or screenshot is uploaded or logged. Actual live publisher coverage required.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import tempfile
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from gate43_owner_encrypted_review import pack_owner_review
+from gate58_manual_acceptance import stage2_manual_machine_verdict
+from gate65_owner_bound_mime_no_send import owner_bound_stage2_mime_check
+from unified_ministry_word import build_unified_word
+from word_render_audit import rendered_word_preflight
+
+CAIRO = ZoneInfo("Africa/Cairo")
+EXPECTED_CAIRO_DAY = date(2026, 10, 20)
+EXPECTED_PREVIOUS_DAY = date(2026, 10, 19)
+EXPECTED_MAIN_BASE = "4f914c779a4528a2b1df7681dc6baca91e3257ca"
+EXPECTED_BRANCH = "refs/heads/gate68-one-shot-owner-encrypted-day19"
+
+
+def validate_one_shot_scope(now: datetime, *, actor: str, ref: str,
+                            original_main_base: str) -> date:
+    """Never fabricate a past full reporting window or owner identity."""
+    if (now.tzinfo is None or now.utcoffset() is None or
+            now.astimezone(CAIRO).date() != EXPECTED_CAIRO_DAY or
+            now.astimezone(CAIRO).date() - timedelta(days=1)
+            != EXPECTED_PREVIOUS_DAY):
+        raise ValueError("gate68_original_cairo_day_no_longer_in_safe_window")
+    if (actor != "Hatem1984" or ref != EXPECTED_BRANCH
+            or original_main_base != EXPECTED_MAIN_BASE):
+        raise ValueError("gate68_authenticated_owner_and_base_required")
+    return EXPECTED_PREVIOUS_DAY
+
+
+def verify_cipher_only(envelope: Path) -> int:
+    """Verify uploaded file contains ONLY the approved AES-GCM envelope."""
+    data = json.loads(envelope.read_text(encoding="ascii"))
+    if (type(data) is not dict or
+            set(data) != {"format", "ciphertext", "nonce", "wrapped"} or
+            data["format"] != "RASD_G43_OWNER_ENCRYPTED" or
+            any(type(data[k]) is not str or not data[k]
+                for k in ("ciphertext", "nonce", "wrapped"))):
+        raise ValueError("gate68_ciphertext_envelope_not_exclusive")
+    # No original publisher data, Word, JPEG or hashes are emitted.
+    return envelope.stat().st_size
+
+
+def run_one_shot() -> None:
+    now = datetime.now(CAIRO)
+    target_day = validate_one_shot_scope(
+        now,
+        actor=os.environ.get("GITHUB_ACTOR", ""),
+        ref=os.environ.get("GITHUB_REF", ""),
+        original_main_base=os.environ.get("RASD_GATE68_BASE", ""),
+    )
+    artifact = Path(os.environ["RUNNER_TEMP"]) / "rasd-g43-owner-encrypted.json"
+    if artifact.exists():
+        raise ValueError("gate68_existing_owner_artifact_forbidden")
+
+    with tempfile.TemporaryDirectory(prefix="rasd-g68-private-",
+                                     dir=os.environ["RUNNER_TEMP"]) as td:
+        folder = Path(td)
+        report_dir = folder / "report"
+        report_dir.mkdir()
+        audit = build_unified_word(
+            Path("sources.json"), report_dir, target_day=target_day, now=now,
+        )
+        if (audit.get("status") not in ("READY_QA_ONLY", "HOLD")
+                or audit.get("email_sent") is not False
+                or audit.get("scheduler_enabled") is not False
+                or audit.get("private_storage_used") is not False
+                or audit.get("source_added_to_production") is not False
+                or audit.get("production_sources_changed") is not False
+                or audit.get("keywords_changed") is not False
+                or audit.get("final_report_published") is not False):
+            raise ValueError("gate68_original_source_or_privacy_failure")
+
+        rendered = False
+        pages = folder / "rendered-pages"
+        if audit["status"] == "READY_QA_ONLY":
+            words = list(report_dir.glob("RASD-Unified-*.docx"))
+            if len(words) != 1:
+                raise ValueError("gate68_original_word_missing_or_ambiguous")
+            result = rendered_word_preflight(
+                words[0],
+                expected_articles=audit["selected_unique_articles"],
+                review_pages_dir=pages,
+            )
+            if (result.get("status") != "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW"
+                    or result.get("private_owner_review_pages_staged") is not True
+                    or result.get("rendered_page_count", 0) < 1):
+                raise ValueError("gate68_original_word_render_hold")
+            rendered = True
+
+        # Encrypt original rendered pages and Word BEFORE MIME inspection:
+        # exact same original Word SHA recorded inside owner's ciphertext.
+        receipt = pack_owner_review(
+            report_dir, audit, artifact,
+            render_passed=rendered,
+            review_pages_dir=pages if rendered else None,
+        )
+        verify_cipher_only(artifact)
+        verdict = stage2_manual_machine_verdict(
+            audit, receipt, requested_window="yesterday",
+            today_cairo=now.date(),
+        )
+        mime = owner_bound_stage2_mime_check(
+            audit, report_dir, owner_receipt=receipt,
+            requested_window="yesterday", today_cairo=now.date(),
+        )
+        summary = {
+            "status": verdict,
+            "target_date_cairo": target_day.isoformat(),
+            "source_health": [
+                {"source": r.get("feed_id"), "status": r.get("status")}
+                for r in audit.get("source_health", [])
+            ],
+            "sources_healthy": audit.get("all_sources_healthy"),
+            "article_count": audit.get("selected_unique_articles"),
+            "original_screenshots": audit.get("screenshots_verified"),
+            "word_in_owner_ciphertext": receipt["owner_review_word_included"],
+            "pages_in_owner_ciphertext": receipt["owner_review_page_count"],
+            "mime_no_send_qa": mime["status"],
+            "human_review": False,
+            "gmail_sent": False, "r2_used": False,
+            "scheduler_enabled": False,
+            "production_approved": False,
+        }
+        print("RASD_GATE68_ENCRYPTED_OWNER_AUDIT=" +
+              json.dumps(summary, sort_keys=True), flush=True)
+        if (verdict != "READY_QA_ONLY"
+                or mime["status"] != "UNIFIED_WORD_MIME_NO_SEND_QA_ONLY"
+                or not rendered):
+            raise ValueError("gate68_original_report_hold_not_owner_accepted")
+    # The temp Word/photos/rendered private pages are irreversibly cleaned up.
+    # The ONLY retained runner output is AES-GCM ciphertext for owner download.
+
+
+if __name__ == "__main__":
+    try:
+        run_one_shot()
+    except Exception as exc:
+        # No exception traceback may include publisher text, file path or SHA.
+        print("::error::RASD_GATE68_FAIL_CLOSED_NO_PRODUCTION_APPROVAL")
+        raise SystemExit(2) from None
