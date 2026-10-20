@@ -1,0 +1,40 @@
+name: RASD Gate69 — original publisher source health (NO MAIL)
+
+on:
+  push:
+    branches:
+      - gate69-native-source-health-readonly
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-gate69-readonly-source-health
+  cancel-in-progress: true
+
+jobs:
+  original-source-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install only public original browser probe
+        run: python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+      - name: Strict original RSS + first-party official source (fail closed)
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+          RASD_MAIL_ENABLED: "false"
+          RASD_SCHEDULER_ENABLED: "false"
+        run: python gate69_source_health_readonly.py
+      - name: Verify no public documents, mail or owner files exist
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -d rasd-unified-private
+          test ! -d rasd-private-review-pages
+          test -z "$(find . -name 'rasd-g43-owner-encrypted.json' -print -quit)"
+          echo "GATE69_ONLY_SANITIZED_ORIGINAL_SOURCE_HEALTH; NO_WORD; NO_EMAIL; NO_CRON; NO_R2"
