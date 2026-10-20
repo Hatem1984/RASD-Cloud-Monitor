@@ -21,6 +21,7 @@ from monitor import _ministry_term_present, article_id, inspect, read_feed
 from official_ministry_source import (
     _read_original, allowed_official_resource, canonical_official_article,
     discover_official_newslist, original_publication_date,
+    original_headline_or_intro_matches,
 )
 
 OFFICIAL_NAME = "وزارة التخطيط — الموقع الرسمي"
@@ -82,7 +83,7 @@ class OfficialPageDriver:
             if published != target_day:
                 return {"status": "OUT_OF_WINDOW",
                         "published_date_cairo": published.isoformat()}
-            if not _ministry_term_present(headline, keywords):
+            if not original_headline_or_intro_matches(body, headline, keywords):
                 return {"status": "EXCLUDED_NON_MATCHING_TERM",
                         "published_date_cairo": published.isoformat()}
             proof = _read_original(self.page, url, keywords, target_day, image)
