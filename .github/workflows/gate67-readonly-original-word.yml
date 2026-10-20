@@ -1,0 +1,43 @@
+name: RASD Gate67 — original 3-source ephemeral Word QA (NO MAIL)
+
+on:
+  push:
+    branches:
+      - gate67-real-ministry-live-proof
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-g67-readonly-owner-word-qa
+  cancel-in-progress: true
+
+jobs:
+  original-ministry-word-no-send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install public test and browser packages only
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --with-deps chromium
+      - name: Run true publisher Word, photos, SHA and MIME no-send — ephemeral only
+        shell: bash
+        env:
+          RASD_GATE11_SEND_APPROVED: ""
+        run: |
+          set -euo pipefail
+          python gate67_readonly_real_ministry_probe.py
+      - name: Guard no public Word, photo or encrypted owner artifact
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e "RASD-Unified-2026-10-19.docx"
+          test ! -d "review-pages"
+          echo "GATE67_EPHEMERAL_REPORT_DISCARDED; NO OWNER_ATTESTATION; NO_EMAIL; NO_R2; NO_CRON"
