@@ -71,9 +71,22 @@ def run_one_shot() -> None:
         folder = Path(td)
         report_dir = folder / "report"
         report_dir.mkdir()
+        print("RASD_G68_STAGE=ORIGINAL_COLLECTOR_START", flush=True)
         audit = build_unified_word(
             Path("sources.json"), report_dir, target_day=target_day, now=now,
         )
+        # Safe public audit: known status, source ID/health, counts,
+        # allowlisted code names; no original article content or file hashes.
+        print("RASD_G68_COLLECTOR_REDacted=" + json.dumps({
+            "status": audit.get("status"),
+            "health": [{"source": r.get("feed_id"), "ok": r.get("status") == "ok"}
+                       for r in audit.get("source_health", [])],
+            "official_on_day": audit.get("official_same_day"),
+            "article_count": audit.get("selected_unique_articles"),
+            "verified_screenshots": audit.get("screenshots_verified"),
+            "failure_labels": sorted(audit.get("failures", {}).keys()),
+            "word_created": audit.get("word_created"),
+        }, sort_keys=True), flush=True)
         if (audit.get("status") not in ("READY_QA_ONLY", "HOLD")
                 or audit.get("email_sent") is not False
                 or audit.get("scheduler_enabled") is not False
@@ -90,6 +103,7 @@ def run_one_shot() -> None:
             words = list(report_dir.glob("RASD-Unified-*.docx"))
             if len(words) != 1:
                 raise ValueError("gate68_original_word_missing_or_ambiguous")
+            print("RASD_G68_STAGE=RENDER_ORIGINAL_WORD_PAGES", flush=True)
             result = rendered_word_preflight(
                 words[0],
                 expected_articles=audit["selected_unique_articles"],
@@ -103,16 +117,19 @@ def run_one_shot() -> None:
 
         # Encrypt original rendered pages and Word BEFORE MIME inspection:
         # exact same original Word SHA recorded inside owner's ciphertext.
+        print("RASD_G68_STAGE=ENCRYPT_OWNER_WORD_AND_PAGES", flush=True)
         receipt = pack_owner_review(
             report_dir, audit, artifact,
             render_passed=rendered,
             review_pages_dir=pages if rendered else None,
         )
         verify_cipher_only(artifact)
+        print("RASD_G68_STAGE=CIPHERTEXT_PACKED_EXCLUSIVE", flush=True)
         verdict = stage2_manual_machine_verdict(
             audit, receipt, requested_window="yesterday",
             today_cairo=now.date(),
         )
+        print("RASD_G68_STAGE=BOUND_MIME_NO_SEND_VALIDATION", flush=True)
         mime = owner_bound_stage2_mime_check(
             audit, report_dir, owner_receipt=receipt,
             requested_window="yesterday", today_cairo=now.date(),
