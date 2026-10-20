@@ -104,11 +104,31 @@ def run_one_shot() -> None:
             if len(words) != 1:
                 raise ValueError("gate68_original_word_missing_or_ambiguous")
             print("RASD_G68_STAGE=RENDER_ORIGINAL_WORD_PAGES", flush=True)
-            result = rendered_word_preflight(
-                words[0],
-                expected_articles=audit["selected_unique_articles"],
-                review_pages_dir=pages,
-            )
+            try:
+                result = rendered_word_preflight(
+                    words[0],
+                    expected_articles=audit["selected_unique_articles"],
+                    review_pages_dir=pages,
+                )
+            except Exception as exc:
+                # Public logs may contain only predefined render failure
+                # CODES, never PDF extracted Arabic original article text,
+                # paths, document text, screenshots, or subprocess stderr.
+                approved = {
+                    "qa_original_publisher_image_count_mismatch",
+                    "qa_publisher_picture_too_narrow_or_outside_page",
+                    "qa_rendered_arabic_text_layer_missing",
+                    "qa_rendered_original_headline_missing",
+                    "qa_original_report_headline_count_mismatch",
+                    "qa_offline_pdf_render_failed",
+                    "qa_rendered_page_count_invalid",
+                    "qa_page_raster_too_small",
+                    "qa_blank_or_unreadable_rendered_page",
+                    "qa_review_pages_destination_already_exists",
+                }
+                code = str(exc) if type(exc) is ValueError and str(exc) in approved else "RENDER_GENERIC_HOLD"
+                print("RASD_G68_REDACTED_RENDER_FAILURE=" + code, flush=True)
+                raise
             if (result.get("status") != "RENDER_CHECK_PASSED_NOT_HUMAN_REVIEW"
                     or result.get("private_owner_review_pages_staged") is not True
                     or result.get("rendered_page_count", 0) < 1):
