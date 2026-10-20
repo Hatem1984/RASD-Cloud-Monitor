@@ -115,7 +115,7 @@ def _verify_pdf_known_lamalef_glyph_reorder(
     seen = 0
     glyph_reorder = 0
     for paragraph in doc.paragraphs:
-        if not re.match(r"^\\s*\\d{1,2}\\.\\s+", paragraph.text):
+        if not re.match(r"^\s*\d{1,2}\.\s+", paragraph.text):
             continue
         seen += 1
         words = _arabic_headline_tokens(paragraph.text)
