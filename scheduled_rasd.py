@@ -14,7 +14,7 @@ import re
 import smtplib
 import ssl
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from email.message import EmailMessage
 from pathlib import Path
@@ -31,7 +31,7 @@ EXPECTED_WORKFLOW = (
     "rasd-scheduled.yml@refs/heads/main"
 )
 HALF_HOUR_CRON = "0,30 * * * *"
-DAILY_CRON = "50 20,21 * * *"
+DAILY_CRON = "0 19,20 * * *"
 MAX_WORD_BYTES = 8_000_000
 MAX_BATCH = 15  # Existing production limit, unchanged.
 MAX_ROLLUP = 60
@@ -52,13 +52,18 @@ def digest_key(value: str) -> str:
 
 
 def scheduled_phase(cron: str, now: datetime) -> str:
-    """Ignore second daily UTC trigger and accept 23:50 Cairo in both seasons."""
+    """Accept 22:00 Cairo in both seasons; avoid competing 22:00 interval send.
+
+    The noon-ish second UTC candidate is rejected by its Cairo wall clock.
+    The 22:00 half-hour tick is deliberately skipped: 22:30 is the next
+    interval, whose accepted items belong to the following 22:00 rollup.
+    """
     _, _, _ = cairo_window(now)
+    local = now.astimezone(CAIRO)
     if cron == HALF_HOUR_CRON:
-        return "interval"
+        return "skip" if local.hour == 22 and local.minute < 30 else "interval"
     if cron == DAILY_CRON:
-        local = now.astimezone(CAIRO)
-        return "rollup" if local.hour == 23 and local.minute >= 50 else "skip"
+        return "rollup" if local.hour == 22 and local.minute < 30 else "skip"
     raise ValueError("unknown_schedule_event")
 
 
@@ -238,12 +243,30 @@ def send_one_word(word: Path, *, sender: str, recipient: str, password: str,
 
 
 def news_for_rollup(state: dict, day: str, config: dict) -> list[dict]:
-    """Daily digest reads ONLY articles confirmed SMTP-accepted that Cairo day."""
+    """Roll up accepted mail in (prior 22:00 Cairo, today's 22:00 Cairo].
+
+    Calendar midnight is NOT the operational report cutoff. A news alert
+    accepted at 22:30 cannot silently disappear from both daily reports.
+    Filtering by durable SMTP accepted_at also survives Cairo DST switches.
+    """
+    cutoff = datetime.combine(date.fromisoformat(day), time(22, 0), tzinfo=CAIRO)
+    previous = datetime.combine(cutoff.date() - timedelta(days=1),
+                                time(22, 0), tzinfo=CAIRO)
     news = []
     for key, entry in state["entries"].items():
-        if (entry.get("kind") != "interval_item"
-                or entry.get("day_cairo") != day
-                or entry["status"] != "smtp_accepted"):
+        if entry.get("kind") != "interval_item" or entry.get("status") != "smtp_accepted":
+            continue
+        accepted_raw = entry.get("accepted_at")
+        if not isinstance(accepted_raw, str):
+            raise RuntimeError("private_accepted_timestamp_missing")
+        try:
+            accepted = datetime.fromisoformat(accepted_raw)
+        except ValueError:
+            raise RuntimeError("private_accepted_timestamp_invalid") from None
+        if accepted.tzinfo is None or accepted.utcoffset() is None:
+            raise RuntimeError("private_accepted_timezone_missing")
+        accepted = accepted.astimezone(CAIRO)
+        if not previous <= accepted < cutoff:
             continue
         item = entry.get("news")
         if not isinstance(item, dict) or item.get("id") != key:
@@ -260,7 +283,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     now = datetime.now(timezone.utc) if clock is None else clock
     phase = scheduled_phase(os.environ.get("RASD_JOB_CRON", ""), now)
     if phase == "skip":
-        return {"status": "skip_wrong_cairo_daily_hour", "smtp_accepted": False}
+        return {"status": "skip_non_target_cairo_slot", "smtp_accepted": False}
     if mode != phase:
         raise RuntimeError("scheduled_mode_cron_mismatch")
     sender, recipient, password, ledger = protected_credentials()
@@ -296,7 +319,8 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 return {"status": "no_confirmed_items_for_daily_rollup", "smtp_accepted": False}
             title = "رصد | التقرير المجمع للأخبار المرسلة | " + day
             doc, _ = prepare_word(stories, config, output, title=title,
-                                  start=day+" 00:00 القاهرة", end=day+" 23:50 القاهرة")
+                                  start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
+                                  end=day+" 22:00 القاهرة")
             reservation = ledger.reserve(rollup_key, recipient)
             if reservation != "reserved":
                 return {"status": "rollup_not_reserved", "smtp_accepted": False}
