@@ -12,12 +12,12 @@ from monitor import article_id
 
 class ScheduledRASDSecurity(unittest.TestCase):
     def test_dst_summer_and_winter_daily_scheduler(self):
-        summer = datetime(2026, 7, 5, 20, 51, tzinfo=timezone.utc)
-        winter = datetime(2026, 12, 5, 21, 51, tzinfo=timezone.utc)
+        summer = datetime(2026, 7, 5, 19, 1, tzinfo=timezone.utc)
+        winter = datetime(2026, 12, 5, 20, 1, tzinfo=timezone.utc)
         self.assertEqual(subject.scheduled_phase(subject.DAILY_CRON, summer), 'rollup')
         self.assertEqual(subject.scheduled_phase(subject.DAILY_CRON, winter), 'rollup')
         self.assertEqual(subject.scheduled_phase(subject.DAILY_CRON,
-                         datetime(2026, 7, 5, 21, 51, tzinfo=timezone.utc)), 'skip')
+                         datetime(2026, 7, 5, 20, 1, tzinfo=timezone.utc)), 'skip')
 
     def test_slot_is_utc_30_minute_floor_with_cairo_day(self):
         slot, day, _ = subject.cairo_window(
@@ -79,25 +79,72 @@ class ScheduledRASDSecurity(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'sender_and_recipient_must_differ'):
                 subject.protected_credentials()
 
-    def test_rollup_contains_only_prior_accepted_interval_items(self):
+    def test_rollup_is_22_to_22_window_without_loss_of_late_alerts(self):
         story = {'id': article_id('https://hapijournal.com/planning-news'),
                  'headline': 'وزارة التخطيط تناقش مؤشرات الاستثمار',
                  'publisher_excerpt': '', 'source': 'Hapi native news RSS',
                  'url': 'https://hapijournal.com/planning-news',
                  'published_at_cairo': '2026-10-21 12:05 EEST',
                  'published_display_cairo': '21 أكتوبر 2026'}
+        second = dict(story)
+        second['url'] = 'https://hapijournal.com/second-news'
+        second['id'] = article_id(second['url'])
+        third = dict(story)
+        third['url'] = 'https://hapijournal.com/third-news'
+        third['id'] = article_id(third['url'])
         state = {'entries': {
-            story['id']: {'status': 'smtp_accepted', 'day_cairo': '2026-10-21',
+            story['id']: {'status': 'smtp_accepted',
+                          'accepted_at': '2026-10-20T20:30:00+00:00',
                           'kind': 'interval_item', 'news': story},
-            'ab'*12: {'status': 'reserved', 'day_cairo': '2026-10-21',
-                      'kind': 'interval_item', 'news': story},
-            'bb'*12: {'status': 'smtp_accepted', 'day_cairo': '2026-10-20',
-                      'kind': 'interval_item', 'news': story},
+            second['id']: {'status': 'smtp_accepted',
+                           'accepted_at': '2026-10-21T16:00:00+00:00',
+                           'kind': 'interval_item', 'news': second},
+            third['id']: {'status': 'smtp_accepted',
+                          'accepted_at': '2026-10-21T19:30:00+00:00',
+                          'kind': 'interval_item', 'news': third},
+            'ab'*12: {'status': 'reserved', 'kind': 'interval_item',
+                      'news': story},
         }}
         config = {'feeds': [{'name': 'Hapi native news RSS',
                             'allowed_article_hosts': ['hapijournal.com']}]}
-        selected = subject.news_for_rollup(state, '2026-10-21', config)
-        self.assertEqual([s['id'] for s in selected], [story['id']])
+        today = subject.news_for_rollup(state, '2026-10-21', config)
+        self.assertEqual({s['id'] for s in today}, {story['id'], second['id']})
+        tomorrow = subject.news_for_rollup(state, '2026-10-22', config)
+        self.assertEqual({s['id'] for s in tomorrow}, {third['id']})
+
+    def test_rollup_2200_dst_and_interval_collision_guard(self):
+        for today_utc, prior_utc, following_utc in (
+            (datetime(2026, 7, 5, 19, 0, tzinfo=timezone.utc),
+             datetime(2026, 7, 5, 18, 0, tzinfo=timezone.utc),
+             datetime(2026, 7, 5, 20, 0, tzinfo=timezone.utc)),
+            (datetime(2026, 12, 5, 20, 0, tzinfo=timezone.utc),
+             datetime(2026, 12, 5, 19, 0, tzinfo=timezone.utc),
+             datetime(2026, 12, 5, 21, 0, tzinfo=timezone.utc)),
+        ):
+            self.assertEqual(subject.scheduled_phase(subject.DAILY_CRON,
+                             today_utc), 'rollup')
+            self.assertEqual(subject.scheduled_phase(subject.DAILY_CRON,
+                             prior_utc), 'skip')
+            self.assertEqual(subject.scheduled_phase(subject.DAILY_CRON,
+                             following_utc), 'skip')
+            self.assertEqual(subject.scheduled_phase(subject.HALF_HOUR_CRON,
+                             today_utc), 'skip')
+            self.assertEqual(subject.scheduled_phase(subject.HALF_HOUR_CRON,
+                             today_utc.replace(minute=30)), 'interval')
+
+    def test_rollup_missing_or_naive_acceptance_timestamp_holds(self):
+        url = 'https://hapijournal.com/missing-date'
+        article = {'id': article_id(url), 'headline': 'وزارة التخطيط',
+                   'url': url, 'source': 'Hapi native news RSS',
+                   'published_at_cairo': '2026-10-21 10:00 EEST'}
+        config = {'feeds': [{'name': 'Hapi native news RSS',
+                            'allowed_article_hosts': ['hapijournal.com']}]}
+        for invalid in [None, '2026-10-21T16:00:00']:
+            entry = {'kind': 'interval_item', 'status': 'smtp_accepted',
+                     'news': article, 'accepted_at': invalid}
+            with self.assertRaises(RuntimeError):
+                subject.news_for_rollup(
+                    {'entries': {article['id']: entry}}, '2026-10-21', config)
 
     def test_negative_unapproved_external_story_and_duplicate(self):
         config = {'feeds': [{'name': 'Hapi native news RSS',
