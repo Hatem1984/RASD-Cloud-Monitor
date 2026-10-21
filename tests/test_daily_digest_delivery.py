@@ -98,8 +98,12 @@ class DailyProtectedEmailTests(unittest.TestCase):
         return publisher_fetch(url, limit)
 
     def execute(self, *, capture=publisher_capture, fetch=None):
+        # Keep this test fully offline even on Windows: after clear=True,
+        # the OS certificate-store initialization may not have SystemRoot.
+        # Both GitHub and SMTP transports are fakes; never create real TLS here.
         with patch.dict(os.environ, self.env, clear=True), \
-             patch("delivery_bridge.build_opener", return_value=self.api):
+             patch("delivery_bridge.build_opener", return_value=self.api), \
+             patch("delivery_bridge.ssl.create_default_context", return_value=object()):
             return run(clock=CLOCK, fetch=fetch or self.fetch, capture=capture,
                        smtp_factory=FakeSMTPSender)
 
