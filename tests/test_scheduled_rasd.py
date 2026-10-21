@@ -48,6 +48,28 @@ class ScheduledRASDSecurity(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 subject.require_github_scheduler()
 
+    def test_source_inventory_not_cut_to_15_before_deduplication(self):
+        checked = datetime(2026, 10, 21, 12, 0, tzinfo=timezone.utc)
+        config = {"feeds": [{"name": "Hapi native news RSS",
+                             "allowed_article_hosts": ["hapijournal.com"]}]}
+        raw = [{"sequence": n} for n in range(18)]
+        fake = {"matched_public_articles": raw,
+                "matched_article_pool_truncated": False,
+                "sources": [{"status": "ok"}]}
+        def candidate(item, *_args):
+            n = item["sequence"]
+            url = "https://hapijournal.com/story-" + str(n)
+            return {"id": article_id(url), "url": url,
+                    "headline": "وزارة التخطيط خبر " + str(n),
+                    "source": "Hapi native news RSS", "published": "Wed, 21 Oct 2026 11:30:00 GMT"}
+        with patch.object(subject, "candidate_from_feed", side_effect=candidate):
+            result = subject.discover_interval_news(
+                config, checked, inspector=lambda *_args, **_kw: fake)
+        self.assertEqual(len(result), 18)
+        already_sent = {a["id"]: {"status": "smtp_accepted"} for a in result[:17]}
+        unsent = [a for a in result if a["id"] not in already_sent]
+        self.assertEqual(len(unsent), 1)
+
     def test_sender_must_not_be_recipient(self):
         variables = {'RASD_GMAIL_SENDER': 'owner@gmail.com',
                      'RASD_REPORT_TO': 'owner@gmail.com',
