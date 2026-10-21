@@ -15,14 +15,16 @@ import smtplib
 import ssl
 import tempfile
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from email.message import EmailMessage
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from cloud_proof_report import proof_capture, word_images_match_capture_digests
-from daily_report import CAIRO, gather, render_docx
+from daily_report import CAIRO, cairo_display_time, render_docx
 from delivery_bridge import PrivateGitHubLedger, now_iso, reserve_entry
-from monitor import article_id
+from monitor import article_id, inspect
+from gate11_runner import candidate_from_feed
 
 EXPECTED_WORKFLOW = (
     "Hatem1984/RASD-Cloud-Monitor/.github/workflows/"
@@ -106,6 +108,41 @@ def validate_story(item: dict, config: dict) -> None:
         raise ValueError("unapproved_news_publisher")
     if not item.get("headline") or not item.get("published_at_cairo"):
         raise ValueError("incomplete_story")
+
+
+def discover_interval_news(config: dict, now: datetime, *, inspector=inspect) -> list[dict]:
+    """Read ALL current saved-keyword matches before deciding the per-email cap.
+
+    The 15-story cap belongs to each *new* message, not an entire 24-hour
+    publisher inventory, which would otherwise block jobs after prior sends.
+    """
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("naive_news_clock_forbidden")
+    checked = now.astimezone(timezone.utc)
+    observed = inspector(config, now=checked, article_limit=200,
+                         require_complete_items=True)
+    if observed.get("matched_article_pool_truncated") or len(observed["matched_public_articles"]) > 200:
+        raise RuntimeError("news_inventory_silent_truncation_hold")
+    if any(s["status"] != "ok" for s in observed["sources"]):
+        raise RuntimeError("source_not_healthy")
+    newest = {}
+    for original in observed["matched_public_articles"]:
+        candidate = candidate_from_feed(original, config, checked)
+        if candidate is None:
+            continue
+        stamp = parsedate_to_datetime(candidate["published"])
+        if stamp.tzinfo is None or stamp.utcoffset() is None:
+            raise RuntimeError("publisher_date_unverifiable")
+        stamp = stamp.astimezone(timezone.utc)
+        if not checked - timedelta(hours=24) <= stamp <= checked:
+            continue
+        row = {"id": candidate["id"], "headline": candidate["headline"],
+               "publisher_excerpt": candidate.get("publisher_excerpt", ""),
+               "source": candidate["source"], "url": candidate["url"],
+               "published_at_cairo": stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
+               "published_display_cairo": cairo_display_time(stamp)}
+        newest.setdefault(row["id"], (stamp, row))
+    return [x[1] for x in sorted(newest.values(), key=lambda x: x[0], reverse=True)]
 
 
 def prepare_word(items: list[dict], config: dict, output: Path,
@@ -233,12 +270,12 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     with tempfile.TemporaryDirectory(prefix="rasd-scheduled-") as folder:
         output = Path(folder)
         if mode == "interval":
-            snapshot = gather(config, now=now, max_articles=MAX_BATCH)
-            if snapshot["coverage"] != "HEALTHY" or snapshot["truncated"]:
-                raise RuntimeError("feed_degraded_or_item_overflow")
-            stories = [a for a in snapshot["articles"] if a["id"] not in state["entries"]]
+            available = discover_interval_news(config, now)
+            stories = [a for a in available if a["id"] not in state["entries"]]
             if not stories:
                 return {"status": "no_new_verified_news", "smtp_accepted": False}
+            if len(stories) > MAX_BATCH:
+                raise RuntimeError("more_than_15_unsent_articles_manual_review")
             title = "رصد | الأخبار الجديدة — نصف ساعة | " + window
             doc, _ = prepare_word(stories, config, output, title=title,
                                   start=start.astimezone(CAIRO).isoformat(),
