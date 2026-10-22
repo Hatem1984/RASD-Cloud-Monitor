@@ -80,8 +80,8 @@ class ScheduledRASDSecurity(unittest.TestCase):
         env = {
             "RASD_GMAIL_SENDER": "sender@gmail.com",
             "RASD_REPORT_TO": recipient,
-            "RASD_GMAIL_APP_PASSWORD": " abcd efgh ijkl mnop \\n",
-            "RASD_PRIVATE_LEDGER_TOKEN": "  github_pat_mock_credential_123456  \\n",
+            "RASD_GMAIL_APP_PASSWORD": " abcd efgh ijkl mnop \n",
+            "RASD_PRIVATE_LEDGER_TOKEN": "  github_pat_mock_credential_123456  \n",
         }
         with patch.dict(os.environ, env, clear=True):
             with patch.object(subject, "PrivateGitHubLedger",
@@ -96,8 +96,8 @@ class ScheduledRASDSecurity(unittest.TestCase):
         env = {
             "RASD_GMAIL_SENDER": "sender@gmail.com",
             "RASD_REPORT_TO": "approved-recipient@example.com",
-            "RASD_GMAIL_APP_PASSWORD": "  \\n    ",
-            "RASD_PRIVATE_LEDGER_TOKEN": "  \\n    ",
+            "RASD_GMAIL_APP_PASSWORD": "  \n    ",
+            "RASD_PRIVATE_LEDGER_TOKEN": "  \n    ",
         }
         with patch.dict(os.environ, env, clear=True):
             with patch.object(subject, "PrivateGitHubLedger") as factory:
