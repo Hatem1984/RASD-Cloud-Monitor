@@ -76,6 +76,13 @@ jobs:
               hold("SECRET_CONTRACT")
               sys.exit(2)
           passed("SECRET_CONTRACT")
+          # Public metadata about credential *type* only; never print values.
+          print("RASD_PREFLIGHT_TOKEN_TYPE=" +
+                ("FINE_GRAINED_PAT" if token.startswith("github_pat_") else "OTHER"),
+                flush=True)
+          print("RASD_PREFLIGHT_TOKEN_CONTROL_CHARACTERS=" +
+                ("PRESENT" if any(ord(c) < 32 for c in token) else "ABSENT"),
+                flush=True)
 
           owner_repo = "Hatem1984/RASD-Pilot"
           branch = "rasd-private-delivery-state"
@@ -98,7 +105,9 @@ jobs:
 
           read_ok = False
           try:
+              print("RASD_PREFLIGHT_LEDGER_REQUEST=START", flush=True)
               item = github("GET", "delivery-state.json", ref=branch)
+              print("RASD_PREFLIGHT_LEDGER_HTTP_RESPONSE=RECEIVED", flush=True)
               assert item["encoding"] == "base64"
               ledger = json.loads(base64.b64decode(item["content"]))
               assert ledger["schema_version"] == 2
@@ -141,12 +150,28 @@ jobs:
           try:
               with smtplib.SMTP_SSL("smtp.gmail.com", 465,
                                     timeout=18, context=ssl.create_default_context()) as smtp:
+                  print("RASD_PREFLIGHT_GMAIL_TLS_465=PASS", flush=True)
                   smtp.login(sender, password)
                   # Deliberately NO sendmail()/send_message()/MAIL FROM.
               smtp_ok = passed("GMAIL_SMTP_AUTH_NO_SEND")
           except Exception as error:
-              print("RASD_PREFLIGHT_GMAIL_ERROR_CLASS=" + reason_class(error), flush=True)
+              print("RASD_PREFLIGHT_GMAIL_465_ERROR_CLASS=" + reason_class(error), flush=True)
               hold("GMAIL_SMTP_AUTH_NO_SEND")
+              # Safe alternative transport diagnostic, still NO MAIL.
+              try:
+                  with smtplib.SMTP("smtp.gmail.com", 587, timeout=18) as smtp:
+                      smtp.ehlo()
+                      if not smtp.has_extn("starttls"):
+                          raise RuntimeError("starttls_unavailable")
+                      smtp.starttls(context=ssl.create_default_context())
+                      smtp.ehlo()
+                      print("RASD_PREFLIGHT_GMAIL_STARTTLS_587=PASS", flush=True)
+                      smtp.login(sender, password)
+                  passed("GMAIL_AUTH_587_ALTERNATIVE_NO_SEND")
+              except Exception as alternate:
+                  print("RASD_PREFLIGHT_GMAIL_587_ERROR_CLASS=" +
+                        reason_class(alternate), flush=True)
+                  hold("GMAIL_AUTH_587_ALTERNATIVE_NO_SEND")
 
           passed("NO_EMAIL_TRANSMITTED")
           if not (read_ok and write_ok and smtp_ok):
