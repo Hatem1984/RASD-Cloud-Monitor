@@ -26,6 +26,8 @@ jobs:
           python-version: '3.11'
       - name: Install only existing test image dependency
         run: python -m pip install -r requirements-test.txt
+      - name: Housekeeping — syntax-check all tracked Python modules (NO NETWORK)
+        run: python -m compileall -q .
       - name: All offline tests; NO browser network, NO SMTP, NO secrets
         run: python -m unittest discover -s tests -v
 
