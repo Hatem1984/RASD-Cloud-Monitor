@@ -87,8 +87,10 @@ def protected_credentials() -> tuple[str, str, str, PrivateGitHubLedger]:
     env = os.environ
     sender = env.get("RASD_GMAIL_SENDER", "").strip().lower()
     recipient = env.get("RASD_REPORT_TO", "").strip().lower()
-    password = env.get("RASD_GMAIL_APP_PASSWORD", "")
-    token = env.get("RASD_PRIVATE_LEDGER_TOKEN", "")
+    # Google displays app passwords grouped with spaces. Normalize only
+    # whitespace in memory, matching the tested protected SMTP preflight.
+    password = "".join(env.get("RASD_GMAIL_APP_PASSWORD", "").split())
+    token = env.get("RASD_PRIVATE_LEDGER_TOKEN", "").strip()
     if not re.fullmatch(r"[^@\s]+@gmail\.com", sender):
         raise RuntimeError("sender_must_be_dedicated_gmail")
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", recipient):
