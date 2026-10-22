@@ -47,7 +47,7 @@ jobs:
                                       protected_credentials, reserve_stories,
                                       send_one_word)
           sender, recipient, password, ledger = protected_credentials()
-          config = json.loads(Path("sources.json").read_text(encoding="utf-8"))
+          config = json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
           now = datetime.now(timezone.utc)
           _, day, _ = cairo_window(now)
           state, _ = ledger.read()
