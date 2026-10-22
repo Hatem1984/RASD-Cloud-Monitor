@@ -43,7 +43,7 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
           from scheduled_rasd import (CAIRO, cairo_window, digest_key,
-                                      discover_interval_news, prepare_word,
+                                      discover_interval_news, prepare_first_verified_word,
                                       protected_credentials, reserve_stories,
                                       send_one_word)
           sender, recipient, password, ledger = protected_credentials()
@@ -59,11 +59,13 @@ jobs:
           if len(fresh) > 15:
               print("RASD_FIRST_LIVE_ACCEPTANCE=HOLD_EXCESSIVE_UNSENT_NEWS", flush=True)
               raise SystemExit(2)
-          article = fresh[0]
-          title = "رصد | اعتماد إرسال Word الحقيقي الأول | " + day
+          title = "رصد | اعتماد إرسال Word الحقيقي الأول (عينة واحدة) | " + day
           with tempfile.TemporaryDirectory(prefix="rasd-first-mail-") as folder:
-              word, verified = prepare_word(
-                  [article], config, Path(folder), title=title,
+              # This is a one-article manual delivery acceptance, NOT a
+              # complete multi-article interval or daily rollup. Each
+              # attempted original publisher image must be genuine.
+              article, word, verified = prepare_first_verified_word(
+                  fresh, config, Path(folder), title=title,
                   start=now.astimezone(CAIRO).isoformat(),
                   end=now.astimezone(CAIRO).isoformat(),
               )
