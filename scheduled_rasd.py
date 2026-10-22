@@ -439,7 +439,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             # Only successfully captured/embedded originals enter private CAS.
             # Blocked items remain unsent, so later scheduled scans can retry.
             reserve_stories(ledger, delivered, day)
-            message_key = digest_key("interval:" + window + ":".join(x["id"] for x in delivered))
+            message_key = digest_key("interval:" + window + ":" + ",".join(x["id"] for x in delivered))
             subject = title + (" [تغطية جزئية]" if limited else "")
             receipt = send_one_word(doc, sender=sender, recipient=recipient,
                                     password=password, subject=subject, key=message_key)
