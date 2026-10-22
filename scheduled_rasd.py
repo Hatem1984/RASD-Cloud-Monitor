@@ -347,7 +347,7 @@ def reserve_stories(ledger: PrivateGitHubLedger, stories: list[dict],
 
 
 def send_one_word(word: Path, *, sender: str, recipient: str, password: str,
-                  subject: str, key: str) -> str:
+                  subject: str, key: str, body_text: str | None = None) -> str:
     if sender == recipient or not re.fullmatch(r"[0-9a-f]{24}", key):
         raise ValueError("invalid_transport_identity")
     msg = EmailMessage()
@@ -355,8 +355,10 @@ def send_one_word(word: Path, *, sender: str, recipient: str, password: str,
     msg["Subject"] = subject
     msg["Message-ID"] = f"<rasd-{key}@gmail.com>"
     msg["X-RASD-Delivery-ID"] = key
-    msg.set_content("تقرير رصد صحفي آلي. المرفق Word يحوي لقطات شاشة"
-                    " لصفحات الأخبار الأصلية، وعناوينها وتواريخها وروابطها.\n")
+    msg.set_content(
+        body_text if body_text is not None else
+        "تقرير رصد صحفي آلي. المرفق Word يحوي لقطات شاشة"
+        " لصفحات الأخبار الأصلية، وعناوينها وتواريخها وروابطها.\n")
     msg.add_attachment(
         word.read_bytes(), maintype="application",
         subtype="vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -493,21 +495,79 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 no_news = True
             else:
                 title = "رصد | التقرير المجمع للأخبار المرسلة | " + day
-                doc, _ = prepare_word(stories, config, output, title=title,
-                                      start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
-                                      end=day+" 22:00 القاهرة")
+                try:
+                    doc, _ = prepare_word(
+                        stories, config, output, title=title,
+                        start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
+                        end=day + " 22:00 القاهرة")
+                    photo_hold = False
+                except RuntimeError as exc:
+                    # A publisher can revoke public browser access AFTER an
+                    # alert was genuinely delivered. Do not fabricate/omit
+                    # accepted stories or turn any integrity error into success.
+                    if str(exc) != "publisher_screenshot_hold":
+                        raise
+                    title = ("رصد | تقرير حالة: أخبار مُرسلة وصورها غير متاحة"
+                             " لإعادة الالتقاط | " + day)
+                    report = {
+                        "title": title,
+                        "display_window_start":
+                            "الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
+                        "display_window_end": day + " 22:00 القاهرة",
+                        "coverage": "PREVIOUSLY_ACCEPTED_NEWS_IMAGE_HOLD",
+                        "verified_links": len(stories),
+                        "articles": stories,  # Source URLs and titles, no images.
+                        "sources": [],
+                        "limitations": (
+                            "هذه نشرة حالة للمراسلات المُثبتة في السجل الخاص"
+                            " وليست التقرير اليومي المصوّر النهائي. الأخبار"
+                            " التالية كانت قد أُرسلت بصورها الأصلية في رسائل"
+                            " نصف ساعية سابقة، لكن صور الصفحات تعذّر إعادة"
+                            " التقاطها الآن من الناشر؛ لا نختلق صورًا بديلة."
+                            " راجع التنبيهات الأصلية المحفوظة في البريد."
+                        ),
+                    }
+                    doc = output / "RASD-Daily-Sent-News-Image-HOLD.docx"
+                    render_docx(report, doc)
+                    from docx import Document
+                    if (not doc.is_file() or
+                            not 3000 <= doc.stat().st_size <= MAX_WORD_BYTES or
+                            len(Document(doc).inline_shapes) != 0):
+                        doc.unlink(missing_ok=True)
+                        raise RuntimeError("daily_image_hold_word_integrity_hold")
+                    photo_hold = True
                 no_news = False
             reservation = ledger.reserve(rollup_key, recipient)
             if reservation != "reserved":
                 return {"status": "rollup_not_reserved", "smtp_accepted": False}
-            receipt = send_one_word(doc, sender=sender, recipient=recipient,
-                                    password=password, subject=title, key=rollup_key)
+            status_notice = no_news or (not no_news and photo_hold)
+            description = (
+                "تقرير حالة تشغيل RASD مرفق في ملف Word. هذا المستند"
+                " ليس تقريرًا صحفيًا مصورًا. لا توجد أخبار مصوّرة مُسلّمة"
+                " ضمن النافذة، وقد تكون صفحات الناشرين معلّقة.\n"
+                if no_news else (
+                    "تنبيه RASD: روابط وعناوين الأخبار التي سبق إرسالها"
+                    " موثقة في Word، لكن إعادة التقاط صور الناشرين"
+                    " تعذّرت. هذا تقرير حالة دون صور، وليس تقريرًا"
+                    " صحفيًا مصورًا نهائيًا.\n" if photo_hold else None))
+            mail_args = {
+                "sender": sender, "recipient": recipient, "password": password,
+                "subject": title, "key": rollup_key,
+            }
+            if status_notice:
+                mail_args["body_text"] = description
+            receipt = send_one_word(doc, **mail_args)
             ledger.mark_smtp_accepted(rollup_key, receipt)
             return {
-                "status": ("daily_no_verified_news_status_smtp_accepted_unconfirmed_inbox"
-                           if no_news else "daily_smtp_accepted_unconfirmed_inbox"),
+                "status": (
+                    "daily_no_verified_news_status_smtp_accepted_unconfirmed_inbox"
+                    if no_news else (
+                        "daily_image_hold_status_smtp_accepted_unconfirmed_inbox"
+                        if photo_hold else "daily_smtp_accepted_unconfirmed_inbox")),
                 "items": len(stories),
                 "is_explicit_zero_accepted_news_notice": no_news,
+                "is_explicit_image_capture_hold_notice": (
+                    not no_news and photo_hold),
             }
     raise RuntimeError("unsupported_scheduled_mode")
 
