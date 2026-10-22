@@ -45,7 +45,8 @@ def fixture_capture(article: dict, feeds: list, target: Path) -> dict:
     if article["url"].endswith("blocked"):
         return {"status": "hold", "reason": "publisher_access_refused"}
     # Offline test content only: no connection to a real publisher.
-    Image.new("RGB", (1100, 800), (220, 225, 232)).save(target, "JPEG")
+    seed = hashlib.sha256(article["id"].encode()).digest()
+    Image.new("RGB", (1100, 800), (seed[0], seed[1], seed[2])).save(target, "JPEG")
     return {"status": "verified",
             "sha256": hashlib.sha256(target.read_bytes()).hexdigest()}
 
