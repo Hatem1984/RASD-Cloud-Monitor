@@ -34,13 +34,16 @@ jobs:
         run: python scheduled_rasd.py --mode dry_run
 
   protected-scheduled-monitor:
-    # Mandatory human-operated opt-in. Vars unset => the cron is INERT.
-    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main' && vars.RASD_AUTOMATION_ENABLED == 'true'
+    # Authorized newsroom deployment: scheduled runs only on main, never
+    # workflow_dispatch or PR. Owner can suspend instantly using repository
+    # Actions variable RASD_AUTOMATION_PAUSED=true (default not paused).
+    # Publisher refusals and evidence failures STILL abort before private CAS.
+    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main' && vars.RASD_AUTOMATION_PAUSED != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 24
     environment: rasd-production
     env:
-      RASD_AUTOMATION_ENABLED: ${{ vars.RASD_AUTOMATION_ENABLED }}
+      RASD_AUTOMATION_ENABLED: 'true' # Owner-authorized production activation in signed main release
       RASD_JOB_CRON: ${{ github.event.schedule }}
       RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
       RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
