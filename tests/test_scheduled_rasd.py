@@ -193,6 +193,87 @@ class ScheduledRASDSecurity(unittest.TestCase):
         with self.assertRaises(ValueError):
             subject.validate_story(story, config)
 
+    def test_manual_one_shot_skips_only_capture_hold_to_next_verified_story(self):
+        config = {'feeds': [{'name': 'Hapi native news RSS',
+                            'allowed_article_hosts': ['hapijournal.com']}]}
+        one = {'id': article_id('https://hapijournal.com/one'),
+               'url': 'https://hapijournal.com/one', 'source': 'Hapi native news RSS',
+               'headline': 'وزارة التخطيط - أول خبر', 'published_at_cairo': '2026-10-22 17:00'}
+        two = dict(one, id=article_id('https://hapijournal.com/two'),
+                   url='https://hapijournal.com/two', headline='وزارة التخطيط - ثاني خبر')
+        expected_word = Path('/tmp/mock-second-original.docx')
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(subject, 'prepare_word', side_effect=[
+                    RuntimeError('publisher_screenshot_hold'),
+                    (expected_word, [{'id': two['id'], 'status': 'verified'}])]) as build:
+                with patch.object(subject, 'reserve_stories', side_effect=AssertionError('reserved')):
+                    with patch.object(subject, 'send_one_word', side_effect=AssertionError('emailed')):
+                        chosen, path, proof = subject.prepare_first_verified_word(
+                            [one, two], config, Path(tmp),
+                            title='Manual one genuine screenshot', start='s', end='e')
+        self.assertEqual(chosen['id'], two['id'])
+        self.assertEqual(path, expected_word)
+        self.assertEqual(proof[0]['id'], two['id'])
+        self.assertEqual(build.call_count, 2)
+        self.assertEqual(build.call_args_list[0].args[0], [one])
+        self.assertEqual(build.call_args_list[1].args[0], [two])
+        self.assertNotEqual(build.call_args_list[0].args[2],
+                            build.call_args_list[1].args[2])
+
+    def test_manual_one_shot_all_unavailable_stays_hold_without_mail(self):
+        rows = [{'id': str(n)} for n in range(2)]
+        with patch.object(subject, 'prepare_word',
+                          side_effect=RuntimeError('publisher_screenshot_hold')) as build:
+            with patch.object(subject, 'send_one_word', side_effect=AssertionError('emailed')):
+                with self.assertRaisesRegex(RuntimeError,
+                                            'first_live_no_verified_original_publisher_story'):
+                    subject.prepare_first_verified_word(
+                        rows, {}, Path('mock-only'), title='x', start='s', end='e')
+        self.assertEqual(build.call_count, 2)
+
+    def test_manual_one_shot_limit_and_empty_hold_without_network(self):
+        with patch.object(subject, 'prepare_word', side_effect=AssertionError('called')) as build:
+            for rows, code in (
+                    ([], 'first_live_no_new_approved_story'),
+                    ([{}] * 16, 'first_live_excessive_unsent_news')):
+                with self.assertRaisesRegex(RuntimeError, code):
+                    subject.prepare_first_verified_word(
+                        rows, {}, Path('mock-only'), title='x', start='s', end='e')
+        build.assert_not_called()
+
+    def test_manual_one_shot_must_not_skip_word_integrity_errors(self):
+        with patch.object(subject, 'prepare_word',
+                          side_effect=RuntimeError('word_screenshot_identity_hold')) as build:
+            with self.assertRaisesRegex(RuntimeError, 'word_screenshot_identity_hold'):
+                subject.prepare_first_verified_word(
+                    [{'id': 'one'}, {'id': 'two'}], {}, Path('mock-only'),
+                    title='x', start='s', end='e')
+        build.assert_called_once()
+
+    def test_manual_one_shot_rejects_misbound_article_evidence(self):
+        with patch.object(subject, 'prepare_word',
+                          return_value=(Path('fake.docx'), [
+                              {'id': 'other', 'status': 'verified'}])):
+            with self.assertRaisesRegex(RuntimeError, 'first_live_word_evidence_identity_hold'):
+                subject.prepare_first_verified_word(
+                    [{'id': 'article'}], {}, Path('mock-only'),
+                    title='x', start='s', end='e')
+
+    def test_manual_one_shot_unapproved_publisher_not_skipped(self):
+        invalid = {'id': article_id('https://untrusted.invalid/story'),
+                   'url': 'https://untrusted.invalid/story',
+                   'source': 'Hapi native news RSS',
+                   'headline': 'وزارة التخطيط', 'published_at_cairo': '2026-10-22 17:00'}
+        config = {'feeds': [{'name': 'Hapi native news RSS',
+                            'allowed_article_hosts': ['hapijournal.com']}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(subject, 'proof_capture',
+                              side_effect=AssertionError('capture untrusted')) as capture:
+                with self.assertRaisesRegex(ValueError, 'unapproved_news_publisher'):
+                    subject.prepare_first_verified_word(
+                        [invalid], config, Path(tmp), title='x', start='s', end='e')
+        capture.assert_not_called()
+
     def test_dry_run_never_connects_to_sender_or_ledger(self):
         with patch.object(subject, 'protected_credentials', side_effect=AssertionError('secrets called')):
             with patch.object(subject, 'run_scheduled', side_effect=AssertionError('send called')):
