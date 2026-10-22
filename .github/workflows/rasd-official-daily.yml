@@ -5,6 +5,7 @@ on:
     branches:
       - 'gate75-*'
       - 'gate77-*'
+      - 'gate78-*'
       - main
   workflow_dispatch:  # Preview only; never access private delivery secrets
   schedule:
