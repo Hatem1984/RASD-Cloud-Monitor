@@ -65,7 +65,9 @@ def fake_page(body: str):
         # Offline publisher-frame fixture, never sent or claimed real.
         picture = Image.new("RGB", (1200, 1100), "white")
         brush = ImageDraw.Draw(picture)
-        brush.rectangle((0, 0, 1199, 200), fill="#224466")
+        brush.rectangle((0, 0, 1199, 200), fill="#f3f5f8")
+        for y in (20, 50, 80, 110):
+            brush.rectangle((60, y, 1100, y + 12), fill="#224466")
         for y in range(210, 1050, 25):
             brush.rectangle((30, y, 1100, y + 11), fill="#324c60")
         picture.save(options["path"], "JPEG", quality=90)
