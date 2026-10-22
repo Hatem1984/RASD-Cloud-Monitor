@@ -195,6 +195,39 @@ def prepare_word(items: list[dict], config: dict, output: Path,
     return dest, verified
 
 
+
+def prepare_first_verified_word(candidates: list[dict], config: dict, output: Path,
+                                *, title: str, start: str, end: str,
+                                capture=proof_capture) -> tuple[dict, Path, list[dict]]:
+    """Select ONE genuine, independently verified article for manual mail QA.
+
+    This is not the complete interval or daily report: those still require
+    every selected original publisher screenshot, without fallback. A blocked
+    publisher page is never replaced by RSS text, a generated image or an
+    unapproved alternate website. No private reservation or SMTP occurs here.
+    """
+    if not candidates:
+        raise RuntimeError("first_live_no_new_approved_story")
+    if len(candidates) > MAX_BATCH:
+        raise RuntimeError("first_live_excessive_unsent_news")
+    for index, story in enumerate(candidates, start=1):
+        try:
+            doc, verified = prepare_word(
+                [story], config, output / f"candidate-{index:02d}",
+                title=title, start=start, end=end, capture=capture)
+        except RuntimeError as error:
+            if str(error) != "publisher_screenshot_hold":
+                raise
+            # Do not print publisher URL, page text or untrusted exceptions.
+            print("RASD_FIRST_LIVE_CANDIDATE_CAPTURE=HOLD", flush=True)
+            continue
+        if len(verified) != 1 or verified[0].get("id") != story["id"] or (
+                verified[0].get("status") != "verified"):
+            raise RuntimeError("first_live_word_evidence_identity_hold")
+        return story, doc, verified
+    raise RuntimeError("first_live_no_verified_original_publisher_story")
+
+
 def reserve_stories(ledger: PrivateGitHubLedger, stories: list[dict],
                     report_day: str) -> None:
     """One private compare-and-swap write BEFORE any SMTP attempt."""
