@@ -74,6 +74,37 @@ def require_official_scheduled_send(now: datetime) -> None:
         raise RuntimeError("official_run_identity_missing")
 
 
+def compact_official_word(word: Path) -> None:
+    """Keep the date-scoped one-story owner bulletin on one legible page.
+
+    This only adjusts DOCX paragraph spacing and the page box. All original
+    publisher JPEG bytes, hyperlinks, article text and trust evidence are
+    preserved. SHA-to-Word validation is performed again by the caller.
+    """
+    from docx import Document
+    from docx.shared import Inches, Pt
+
+    document = Document(word)
+    section = document.sections[0]
+    section.top_margin = Inches(0.50)
+    section.bottom_margin = Inches(0.50)
+    section.left_margin = Inches(0.70)
+    section.right_margin = Inches(0.70)
+    document.styles["Normal"].font.size = Pt(9.5)
+    document.styles["Title"].font.size = Pt(14)
+    for paragraph in document.paragraphs:
+        paragraph.paragraph_format.space_after = Pt(1.5)
+        paragraph.paragraph_format.space_before = Pt(0)
+        paragraph.paragraph_format.line_spacing = 1.03
+        if paragraph.style.name == "Title":
+            paragraph.paragraph_format.keep_with_next = True
+        if paragraph.text == "حالة المصادر":
+            paragraph.paragraph_format.keep_with_next = True
+        if paragraph.text.startswith("تنبيه منهجي"):
+            paragraph.paragraph_format.keep_together = True
+    document.save(word)
+
+
 def build_official_daily(output: Path, *, target_date: date,
                          config_path: Path = Path("sources.json"),
                          browser_factory=None) -> tuple[Path, list[dict]]:
@@ -170,6 +201,7 @@ def build_official_daily(output: Path, *, target_date: date,
     }
     word = output / f"RASD-Official-Original-{target_date.isoformat()}.docx"
     render_docx(report, word)
+    compact_official_word(word)
     proofs = [{"status": "verified", "sha256": r["sha256"]} for r in accepted]
     if not word_images_match_capture_digests(word, proofs):
         word.unlink(missing_ok=True)
