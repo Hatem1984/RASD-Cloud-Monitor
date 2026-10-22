@@ -220,6 +220,35 @@ class ScheduledRASDSecurity(unittest.TestCase):
         self.assertNotEqual(build.call_args_list[0].args[2],
                             build.call_args_list[1].args[2])
 
+    def test_manual_one_shot_mock_capture_builds_real_verified_word_package(self):
+        # This is purely offline and uses artificial JPEG bytes as a fixture,
+        # NOT an authorization or claim of actual publisher access.
+        from PIL import Image
+        first_url = 'https://hapijournal.com/blocked-fixture'
+        second_url = 'https://hapijournal.com/working-fixture'
+        first = {'id': article_id(first_url), 'url': first_url,
+                 'source': 'Hapi native news RSS', 'headline': 'وزارة التخطيط مثال أول',
+                 'published_at_cairo': '2026-10-22 17:00 EEST',
+                 'published_display_cairo': '22 أكتوبر 2026'}
+        second = dict(first, id=article_id(second_url), url=second_url,
+                      headline='وزارة التخطيط مثال ثان')
+        config = {'feeds': [{'id': 'hapi', 'name': 'Hapi native news RSS',
+                            'allowed_article_hosts': ['hapijournal.com']}]}
+        def capture_fixture(article, _feeds, destination):
+            if article['id'] == first['id']:
+                return {'status': 'hold', 'reason': 'publisher_access_refused'}
+            Image.new('RGB', (1100, 800), (245, 245, 245)).save(destination, 'JPEG')
+            return {'status': 'verified',
+                    'sha256': hashlib.sha256(destination.read_bytes()).hexdigest()}
+        with tempfile.TemporaryDirectory() as tmp:
+            chosen, word, evidence = subject.prepare_first_verified_word(
+                [first, second], config, Path(tmp), title='Offline acceptance only',
+                start='2026-10-22 17:00', end='2026-10-22 17:30',
+                capture=capture_fixture)
+            self.assertEqual(chosen['id'], second['id'])
+            self.assertTrue(word.is_file())
+            self.assertTrue(subject.word_images_match_capture_digests(word, evidence))
+
     def test_manual_one_shot_all_unavailable_stays_hold_without_mail(self):
         rows = [{'id': str(n)} for n in range(2)]
         with patch.object(subject, 'prepare_word',
