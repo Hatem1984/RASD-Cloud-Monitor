@@ -11,10 +11,8 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: rasd-scheduled-monitor-private-ledger
-  cancel-in-progress: false
-
+# Proof runs have no private ledger access and may execute independently.
+# The actual send alone shares the existing serial private-CAS group.
 jobs:
   publisher-proof-no-send:
     if: github.event_name != 'schedule'
@@ -43,6 +41,9 @@ jobs:
 
   protected-oneoff-send:
     if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: rasd-scheduled-monitor-private-ledger
+      cancel-in-progress: false
     environment: rasd-production
     runs-on: ubuntu-latest
     timeout-minutes: 20
