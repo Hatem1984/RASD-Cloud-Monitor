@@ -5,8 +5,6 @@ on:
     branches:
       - 'gate9pm-*'
   workflow_dispatch:  # NO-SEND proof mode only; cannot deliver mail
-  schedule:
-    - cron: '0 18 22 10 *' # On 22 Oct 2026 = 21:00 Cairo (UTC+3)
 
 permissions:
   contents: read
