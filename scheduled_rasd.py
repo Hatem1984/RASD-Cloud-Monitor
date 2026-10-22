@@ -417,7 +417,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     if mode != phase:
         raise RuntimeError("scheduled_mode_cron_mismatch")
     sender, recipient, password, ledger = protected_credentials()
-    config = json.loads(Path("sources.json").read_text(encoding="utf-8"))
+    config = json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
     window, day, start = cairo_window(now)
     state, _ = ledger.read()
     with tempfile.TemporaryDirectory(prefix="rasd-scheduled-") as folder:
