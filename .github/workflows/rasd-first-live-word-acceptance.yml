@@ -1,0 +1,80 @@
+name: RASD - first LIVE verified Word delivery (manual one-shot only)
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type SEND_ONE_VERIFIED_RASD_WORD'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: rasd-scheduled-monitor-private-ledger
+  cancel-in-progress: false
+jobs:
+  owner-first-live:
+    if: github.ref == 'refs/heads/main' && github.actor == 'Hatem1984' && github.run_attempt == 1 && inputs.confirmation == 'SEND_ONE_VERIFIED_RASD_WORD'
+    runs-on: ubuntu-latest
+    environment: rasd-production
+    timeout-minutes: 20
+    env:
+      RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
+      RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
+      RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
+      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install verified original publisher capture libraries
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --with-deps chromium
+      - name: Production offline safety gate
+        run: python -m unittest discover -s tests -p test_scheduled_rasd.py -q
+      - name: Send at most one previously unsent, genuine recent Word
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import tempfile
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from scheduled_rasd import (CAIRO, cairo_window, digest_key,
+                                      discover_interval_news, prepare_word,
+                                      protected_credentials, reserve_stories,
+                                      send_one_word)
+          sender, recipient, password, ledger = protected_credentials()
+          config = json.loads(Path("sources.json").read_text(encoding="utf-8"))
+          now = datetime.now(timezone.utc)
+          _, day, _ = cairo_window(now)
+          state, _ = ledger.read()
+          candidates = discover_interval_news(config, now)
+          fresh = [news for news in candidates if news["id"] not in state["entries"]]
+          if not fresh:
+              print("RASD_FIRST_LIVE_ACCEPTANCE=HOLD_NO_NEW_APPROVED_SOURCE_STORY", flush=True)
+              raise SystemExit(2)
+          if len(fresh) > 15:
+              print("RASD_FIRST_LIVE_ACCEPTANCE=HOLD_EXCESSIVE_UNSENT_NEWS", flush=True)
+              raise SystemExit(2)
+          article = fresh[0]
+          title = "رصد | اعتماد إرسال Word الحقيقي الأول | " + day
+          with tempfile.TemporaryDirectory(prefix="rasd-first-mail-") as folder:
+              word, verified = prepare_word(
+                  [article], config, Path(folder), title=title,
+                  start=now.astimezone(CAIRO).isoformat(),
+                  end=now.astimezone(CAIRO).isoformat(),
+              )
+              assert len(verified) == 1 and verified[0]["status"] == "verified"
+              print("RASD_FIRST_LIVE_ORIGINAL_PUBLISHER_WORD=PASS", flush=True)
+              reserve_stories(ledger, [article], day)
+              print("RASD_FIRST_LIVE_DURABLE_PRIVATE_RESERVATION=PASS", flush=True)
+              receipt = send_one_word(
+                  word, sender=sender, recipient=recipient, password=password,
+                  subject=title, key=digest_key("first-live:" + article["id"]))
+              ledger.mark_smtp_accepted(article["id"], receipt)
+              print("RASD_FIRST_LIVE_SMTP_ACCEPTED_AND_LEDGER=PASS", flush=True)
+              print("RASD_FIRST_LIVE_INBOX_VERIFICATION=PENDING", flush=True)
+          PY
