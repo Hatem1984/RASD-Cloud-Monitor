@@ -100,7 +100,7 @@ class OfficialDailySecurity(unittest.TestCase):
             self.assertEqual(
                 ledger.reserve.call_args.args[0],
                 worker.digest_key("official-ministry-original-daily:2026-10-22:visual-correction-v2"))
-            self.assertIn("تصحيح", mail.call_args.kwargs["subject"])
+            self.assertIn("مصححة", mail.call_args.kwargs["subject"])
             self.assertIn("CORRECTED.docx", mail.call_args.args[0].name)
             self.assertEqual(ledger.mark_smtp_accepted.call_count, 1)
             with patch.dict(os.environ, env, clear=True):
