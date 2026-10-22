@@ -95,6 +95,20 @@ def accept_staged_image(staged: Path, destination: Path) -> dict:
             "sha256": hashlib.sha256(raw).hexdigest(), "quality": quality}
 
 
+def headline_visible_in_viewport(box: dict | None, viewport: dict | None) -> bool:
+    """Visual frame must contain real, readable publisher headline geometry."""
+    try:
+        if not box or not viewport:
+            return False
+        width, height = viewport["width"], viewport["height"]
+        return (900 <= width <= 1500 and height >= 700 and
+                0 <= box["x"] and box["x"] + box["width"] <= width + 8 and
+                55 <= box["y"] <= min(460, height - 200) and
+                box["width"] >= 320 and box["height"] >= 16)
+    except (KeyError, ValueError, TypeError):
+        return False
+
+
 def capture_publisher(url: str, publisher: str, destination: Path,
                       timeout_ms: int = 26000) -> dict:
     """Capture only a publicly published article within an approved publisher."""
@@ -127,12 +141,27 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                     return {"ok": False, "reason": "page_content_unavailable"}
                 if "التخطيط" not in (title + " " + body) and "planning" not in (title + " " + body).lower():
                     return {"ok": False, "reason": "not_a_planning_article"}
-                # Frame the genuine story headline; do not create a synthetic
-                # cover or crop an article photo into fake page evidence.
-                headline = page.locator("h1").filter(has_text=title[:15]).first
-                if headline.count():
-                    headline.scroll_into_view_if_needed(timeout=4000)
-                page.wait_for_timeout(800)
+                # Scroll the ORIGINAL publisher page so its genuine H1
+                # and article lead, not a large ad masthead, fill the
+                # screenshot. Never alter DOM text, source or access rights.
+                headline = page.locator("h1").first
+                if not headline.count():
+                    return {"ok": False, "reason": "missing_original_headline"}
+                actual_headline = " ".join(
+                    headline.inner_text(timeout=8000).split())
+                if (len(actual_headline) < 18 or
+                        actual_headline not in " ".join(body.split())):
+                    return {"ok": False, "reason": "original_headline_not_in_article"}
+                headline.scroll_into_view_if_needed(timeout=4000)
+                headline.evaluate(
+                    """element => window.scrollTo(
+                        0, Math.max(0, window.scrollY +
+                           element.getBoundingClientRect().top - 120)
+                    )""")
+                page.wait_for_timeout(450)
+                if not headline_visible_in_viewport(
+                        headline.bounding_box(), page.viewport_size):
+                    return {"ok": False, "reason": "original_headline_out_of_frame"}
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 with TemporaryDirectory(prefix=".rasd-capture-", dir=destination.parent) as temp:
                     staged = Path(temp) / "candidate.jpg"
