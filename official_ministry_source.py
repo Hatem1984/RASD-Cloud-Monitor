@@ -241,25 +241,62 @@ def _read_original(page, url: str, keywords: list[str], target_day: date, image:
         return {"status": "HOLD", "reason": "publisher_date_mismatch_or_missing"}
     image.parent.mkdir(parents=True, exist_ok=True)
     try:
+        # The original Ministry page currently leaves its documented
+        # QueryLoader2 progress overlay (#qLoverlay) over the content when
+        # optional third-party scripts are blocked by the safety allowlist.
+        # Its on-scroll animation likewise leaves the PUBLISHED title at
+        # opacity=0. Reveal ONLY these display-only UI decorations after
+        # checking real publisher HTTP/status/title/body/date above. Never
+        # remove captcha/challenge elements or alter article text/metadata.
+        page.evaluate("""() => {
+            const loader = document.getElementById("qLoverlay");
+            if (loader) loader.remove();
+            document.querySelectorAll(".animate-onscroll").forEach(element => {
+                element.style.opacity = "1";
+                element.style.visibility = "visible";
+            });
+            window.scrollTo(0, 0);
+        }""")
         page.locator("h1").first.scroll_into_view_if_needed(timeout=4000)
-    except Exception:
-        return {"status": "HOLD", "reason": "original_headline_not_visible"}
-    with tempfile.TemporaryDirectory(prefix="rasd-official-frame-", dir=image.parent) as td:
-        proof = {"ok": False, "reason": "screenshot_too_small"}
-        # A genuine but text-heavy original page may compress below the
-        # acceptance floor in a single viewport. Try the same article's
-        # full rendered page; never skip actual JPEG or visual checks.
-        for full_page in (False, True):
-            staged = Path(td) / (
-                "publisher-full.jpg" if full_page else "publisher-view.jpg")
-            page.screenshot(path=str(staged), type="jpeg", quality=85,
-                            full_page=full_page, timeout=15000)
+        position = page.locator("h1").first.bounding_box()
+        viewport = page.viewport_size
+        if (not position or not viewport or
+                not 900 <= viewport["width"] <= 1400 or
+                not 0 <= position["x"] < viewport["width"] - 350 or
+                position["width"] < 450):
+            return {"status": "HOLD", "reason": "original_headline_not_framed"}
+        # Never screenshot full_page: CSS overflow from the original
+        # section widens screenshots to 6170 px, shrinking text in Word.
+        # This is a fixed document-coordinate clip of the ORIGINAL
+        # publisher DOM, with title + date + initial article content.
+        document_y = page.evaluate("window.scrollY") + position["y"]
+        top = max(0, int(document_y) - 45)
+        with tempfile.TemporaryDirectory(prefix="rasd-official-frame-",
+                                          dir=image.parent) as td:
+            staged = Path(td) / "original-visible.jpg"
+            page.screenshot(
+                path=str(staged), type="jpeg", quality=90,
+                full_page=True,
+                clip={"x": 0, "y": top,
+                      "width": viewport["width"], "height": 1100},
+                animations="disabled", timeout=15000)
+            from PIL import Image
+            from capture_public import image_quality
+            with Image.open(staged) as photo:
+                dimensions = photo.size
+            visual = image_quality(staged)
+            # Prevent a well-formed SHA on a mostly blank page becoming
+            # an accepted Word evidence photograph again.
+            if (not 900 <= dimensions[0] <= 1400 or
+                    not 800 <= dimensions[1] <= 1200 or
+                    not visual["accepted"] or
+                    visual.get("luminance_stddev", 0) < 28 or
+                    visual.get("dark_fraction", 0) < 0.06):
+                return {"status": "HOLD",
+                        "reason": "original_page_unreadable_visual_qa"}
             proof = accept_staged_image(staged, image)
-            if proof["ok"]:
-                break
-            if proof["reason"] not in (
-                    "screenshot_too_small", "visual_qa_blank_or_low_content"):
-                break
+    except Exception:
+        return {"status": "HOLD", "reason": "original_visible_capture_failed"}
     if not proof["ok"]:
         return {"status": "HOLD", "reason": proof["reason"]}
     return {
