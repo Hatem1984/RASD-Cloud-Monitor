@@ -63,7 +63,10 @@ def scheduled_phase(cron: str, now: datetime) -> str:
     if cron == HALF_HOUR_CRON:
         return "skip" if local.hour == 22 and local.minute < 30 else "interval"
     if cron == DAILY_CRON:
-        return "rollup" if local.hour == 22 and local.minute < 30 else "skip"
+        # GitHub schedule may start late. Continue accepting this day's
+        # 22:00 report within the SAME Cairo hour; private rollup CAS still
+        # prevents a second delivery. Never cross into the next hour/day.
+        return "rollup" if local.hour == 22 else "skip"
     raise ValueError("unknown_schedule_event")
 
 
@@ -457,18 +460,55 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 return {"status": "rollup_already_reserved_or_sent", "smtp_accepted": False}
             stories = news_for_rollup(state, day, config)
             if not stories:
-                return {"status": "no_confirmed_items_for_daily_rollup", "smtp_accepted": False}
-            title = "رصد | التقرير المجمع للأخبار المرسلة | " + day
-            doc, _ = prepare_word(stories, config, output, title=title,
-                                  start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
-                                  end=day+" 22:00 القاهرة")
+                # No accepted verified newsroom items is itself a genuine
+                # daily operational fact. Deliver an explicitly labelled
+                # ZERO-news status Word, NOT a fabricated news report.
+                # No candidate or fake image is inserted.
+                title = "رصد | تقرير حالة الرصد: لا أخبار مصوّرة مُسلّمة | " + day
+                report = {
+                    "title": title,
+                    "display_window_start": "الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
+                    "display_window_end": day + " 22:00 القاهرة",
+                    "coverage": "NO_ACCEPTED_VERIFIED_NEWS",
+                    "verified_links": 0,
+                    "articles": [],
+                    "sources": [],
+                    "limitations": (
+                        "هذا تقرير حالة تشغيل وليس تقرير تغطية صحفية كاملة. "
+                        "لم تُقبل أي رسائل نصف ساعية تحتوي صور صفحات ناشرين "
+                        "موثقة ضمن نافذة الـ24 ساعة المنتهية عند 22:00 القاهرة. "
+                        "العدد صفر يخص الرسائل المقبولة في سجل التسليم الخاص "
+                        "ولا يثبت عدم نشر أخبار في السوق؛ قد تكون أخبار "
+                        "منشورة لكن التقاط صفحة الناشر أو قراءة RSS معلقًا."
+                    ),
+                }
+                doc = output / "RASD-Daily-No-Verified-News-Status.docx"
+                render_docx(report, doc)
+                from docx import Document
+                if (not doc.is_file() or
+                        not 3000 <= doc.stat().st_size <= MAX_WORD_BYTES or
+                        Document(doc).inline_shapes):
+                    doc.unlink(missing_ok=True)
+                    raise RuntimeError("daily_status_word_integrity_hold")
+                no_news = True
+            else:
+                title = "رصد | التقرير المجمع للأخبار المرسلة | " + day
+                doc, _ = prepare_word(stories, config, output, title=title,
+                                      start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
+                                      end=day+" 22:00 القاهرة")
+                no_news = False
             reservation = ledger.reserve(rollup_key, recipient)
             if reservation != "reserved":
                 return {"status": "rollup_not_reserved", "smtp_accepted": False}
             receipt = send_one_word(doc, sender=sender, recipient=recipient,
                                     password=password, subject=title, key=rollup_key)
             ledger.mark_smtp_accepted(rollup_key, receipt)
-            return {"status": "daily_smtp_accepted_unconfirmed_inbox", "items": len(stories)}
+            return {
+                "status": ("daily_no_verified_news_status_smtp_accepted_unconfirmed_inbox"
+                           if no_news else "daily_smtp_accepted_unconfirmed_inbox"),
+                "items": len(stories),
+                "is_explicit_zero_accepted_news_notice": no_news,
+            }
     raise RuntimeError("unsupported_scheduled_mode")
 
 
