@@ -205,7 +205,7 @@ class LocalPrivateOwnerReviewTests(unittest.TestCase):
 
     def test_no_owner_files_upload_or_external_workflow_created(self):
         root = Path(__file__).resolve().parents[1]
-        cli = (root / "gate61_owner_private_visual_review.py").read_text()
+        cli = (root / "gate61_owner_private_visual_review.py").read_text(encoding="utf-8")
         self.assertNotIn("requests.", cli)
         self.assertNotIn("urlopen(", cli)
         self.assertNotIn("smtplib", cli)
