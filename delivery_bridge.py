@@ -155,6 +155,31 @@ class PrivateGitHubLedger:
         state, sha = self.read()
         self.write(complete_entry(state, article_key, now_iso(), message_id), sha)
 
+    def mark_smtp_accepted_many(self, article_keys: list[str],
+                                message_id: str) -> None:
+        """Atomically accept one Word email containing several news articles.
+
+        Validate ALL article reservations before the single private CAS PUT.
+        If CAS/readback fails after SMTP, preserve all reservations for
+        owner reconciliation; NEVER automatically send a second copy.
+        """
+        if (not isinstance(article_keys, list) or not 1 <= len(article_keys) <= 15
+                or len(set(article_keys)) != len(article_keys)):
+            raise ValueError("invalid_newsroom_email_article_batch")
+        state, sha = self.read()
+        for key in article_keys:
+            if not isinstance(key, str) or not HEX_ID.fullmatch(key):
+                raise ValueError("invalid_article_id")
+            if (key not in state["entries"] or
+                    state["entries"][key].get("status") != "reserved" or
+                    state["entries"][key].get("kind") != "interval_item"):
+                raise RuntimeError("batch_reservation_not_eligible")
+        accepted_at = now_iso()
+        final = state
+        for key in article_keys:
+            final = complete_entry(final, key, accepted_at, message_id)
+        self.write(final, sha)
+
 
 def build_email(article: dict, screenshot: bytes, sender: str) -> EmailMessage:
     """Only one sender/recipient; identity is from protected Actions secrets."""
