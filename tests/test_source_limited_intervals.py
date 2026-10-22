@@ -146,8 +146,10 @@ class SourceLimitedOriginals(unittest.TestCase):
         self.assertTrue(outcome["source_limited"])
         self.assertEqual(outcome["original_screenshots_held"], 1)
         self.assertIn("تغطية جزئية", sent.call_args.kwargs["subject"])
-        self.assertEqual(ledger.mark_smtp_accepted.call_count, 1)
-        self.assertEqual(ledger.mark_smtp_accepted.call_args.args[0], good["id"])
+        self.assertEqual(ledger.mark_smtp_accepted_many.call_count, 1)
+        self.assertEqual(
+            ledger.mark_smtp_accepted_many.call_args.args[0], [good["id"]])
+        ledger.mark_smtp_accepted.assert_not_called()
 
     def test_discovery_default_still_holds_failed_feed(self):
         observed = {"sources": DEGRADED, "matched_public_articles": [],
