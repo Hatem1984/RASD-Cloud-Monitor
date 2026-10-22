@@ -38,12 +38,12 @@ class ZeroNewsDailyStatus(unittest.TestCase):
             self.assertIn("لا أخبار مصوّرة",kw["subject"])
             mailed.append((kw["key"],word.name))
             return "<rasd-fixture-daily@gmail.com>"
-        with patch.object(rasd,"require_github_scheduler"), \\
-             patch.object(rasd,"scheduled_phase",return_value="rollup"), \\
+        with patch.object(rasd,"require_github_scheduler"), \
+             patch.object(rasd,"scheduled_phase",return_value="rollup"), \
              patch.object(rasd,"protected_credentials",
                           return_value=("owner-sender@gmail.com","approved@example.org",
-                                        "offline-password",ledger)), \\
-             patch.object(rasd,"news_for_rollup",return_value=[]), \\
+                                        "offline-password",ledger)), \
+             patch.object(rasd,"news_for_rollup",return_value=[]), \
              patch.object(rasd,"send_one_word",side_effect=fake_smtp):
             result=rasd.run_scheduled(
                 "rollup",datetime(2026,10,22,19,5,tzinfo=timezone.utc))
@@ -61,13 +61,13 @@ class ZeroNewsDailyStatus(unittest.TestCase):
         day="2026-10-22"
         rollup_key=rasd.digest_key("rollup:"+day)
         ledger.read.return_value=({"entries":{rollup_key:{"status":"reserved"}}},"sha")
-        with patch.object(rasd,"require_github_scheduler"), \\
-             patch.object(rasd,"scheduled_phase",return_value="rollup"), \\
+        with patch.object(rasd,"require_github_scheduler"), \
+             patch.object(rasd,"scheduled_phase",return_value="rollup"), \
              patch.object(rasd,"protected_credentials",
                           return_value=("owner-sender@gmail.com","approved@example.org",
-                                        "offline-password",ledger)), \\
+                                        "offline-password",ledger)), \
              patch.object(rasd,"news_for_rollup",
-                          side_effect=AssertionError("reopened accepted news")), \\
+                          side_effect=AssertionError("reopened accepted news")), \
              patch.object(rasd,"send_one_word",
                           side_effect=AssertionError("duplicate SMTP")):
             result=rasd.run_scheduled(
