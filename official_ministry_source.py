@@ -280,25 +280,37 @@ def _read_original(page, url: str, keywords: list[str], target_day: date, image:
                 clip={"x": 0, "y": top,
                       "width": viewport["width"], "height": 1100},
                 animations="disabled", timeout=15000)
-            from PIL import Image
+            from PIL import Image, ImageStat
             from capture_public import image_quality
             with Image.open(staged) as photo:
                 dimensions = photo.size
+                # Ensure the publisher headline band contains visible dark
+                # text rather than trusting contrast from a sidebar or photo.
+                top_band = photo.convert("L").crop(
+                    (0, 0, photo.width, min(140, photo.height)))
+                top_stats = ImageStat.Stat(top_band)
+                top_dark = sum(top_band.histogram()[:180]) / (
+                    top_band.width * top_band.height)
+                top_stddev = top_stats.stddev[0]
             visual = image_quality(staged)
-            # Prevent a well-formed SHA on a mostly blank page becoming
-            # an accepted Word evidence photograph again.
+            # A readable but text-heavy publisher page may have a low global
+            # dark fraction; enforce visible headline pixels separately.
+            # The historical blank 6170px image fails dimensions as well.
             print(
                 "RASD_ORIGINAL_VISIBLE_QA"
                 f" width={dimensions[0]} height={dimensions[1]}"
                 f" stddev={visual.get('luminance_stddev', 0)}"
-                f" dark_fraction={visual.get('dark_fraction', 0)}",
+                f" dark_fraction={visual.get('dark_fraction', 0)}"
+                f" headline_dark={top_dark:.4f}"
+                f" headline_stddev={top_stddev:.2f}",
                 flush=True,
             )
             if (not 900 <= dimensions[0] <= 1400 or
                     not 800 <= dimensions[1] <= 1200 or
                     not visual["accepted"] or
                     visual.get("luminance_stddev", 0) < 28 or
-                    visual.get("dark_fraction", 0) < 0.06):
+                    visual.get("dark_fraction", 0) < 0.03 or
+                    top_dark < 0.02 or top_stddev < 12):
                 return {"status": "HOLD",
                         "reason": "original_page_unreadable_visual_qa"}
             proof = accept_staged_image(staged, image)
