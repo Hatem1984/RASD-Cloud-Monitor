@@ -61,8 +61,10 @@ def require_official_scheduled_send(now: datetime) -> None:
     owner_push = (
         os.getenv("GITHUB_EVENT_NAME") == "push"
         and os.getenv("GITHUB_ACTOR") == "Hatem1984"
-        and os.getenv("RASD_OWNER_PUSH_CONFIRM")
-            == "RASD-OWNER-ONCE-2026-10-22-VERIFIED-OFFICIAL-WORD"
+        and os.getenv("RASD_OWNER_PUSH_CONFIRM") in {
+            "RASD-OWNER-ONCE-2026-10-22-VERIFIED-OFFICIAL-WORD",
+            "RASD-OWNER-VISUAL-CORRECTION-2026-10-22",
+        }
         and current.date() == date(2026, 10, 22)
         and current.hour in (22, 23)
     )
@@ -115,7 +117,21 @@ def build_official_daily(output: Path, *, target_date: date,
                 if original.get("status") != "verified":
                     if original.get("reason") == "publisher_date_mismatch_or_missing":
                         continue  # Outside today's verified original publication window.
-                    raise RuntimeError("official_original_page_hold")
+                    allowed_capture_holds = {
+                        "publisher_page_unavailable",
+                        "publisher_redirect_changed_identity",
+                        "missing_original_headline",
+                        "official_page_content_unavailable",
+                        "saved_ministry_keywords_missing",
+                        "original_headline_not_visible",
+                        "original_headline_not_framed",
+                        "original_page_unreadable_visual_qa",
+                        "original_visible_capture_failed",
+                    }
+                    failure = original.get("reason", "")
+                    if failure not in allowed_capture_holds:
+                        failure = "other_original_proof"
+                    raise RuntimeError("official_original_hold_" + failure)
                 if original["published_date_cairo"] != target_date.isoformat():
                     raise RuntimeError("official_date_evidence_mismatch")
                 accepted.append(original)
@@ -181,11 +197,28 @@ def run(*, mode: str, output: Path, clock: datetime | None = None,
             "source_scope": "official_ministry_not_newsroom",
         }
     sender, recipient, password, ledger = protected_credentials()
-    key = digest_key("official-ministry-original-daily:" + day.isoformat())
+    correction = (
+        os.environ.get("GITHUB_EVENT_NAME") == "push"
+        and os.environ.get("RASD_OWNER_PUSH_CONFIRM")
+            == "RASD-OWNER-VISUAL-CORRECTION-2026-10-22"
+    )
+    if correction and day != date(2026, 10, 22):
+        raise RuntimeError("official_visual_correction_wrong_date")
+    key = digest_key(
+        "official-ministry-original-daily:" + day.isoformat()
+        + (":visual-correction-v2" if correction else ""))
     reserved = ledger.reserve(key, recipient)
     if reserved != "reserved":
         raise RuntimeError("official_daily_private_duplicate_hold")
-    subject = "رصد | نشرة البيانات الرسمية المصورة — " + day.isoformat()
+    subject = (
+        "رصد | نسخة مصححة — صورة الخبر الرسمية واضحة | " + day.isoformat()
+        if correction else
+        "رصد | نشرة البيانات الرسمية المصورة — " + day.isoformat())
+    if correction:
+        corrected = word.with_name(
+            f"RASD-Official-Original-{day.isoformat()}-CORRECTED.docx")
+        word.rename(corrected)
+        word = corrected
     receipt = send_one_word(
         word, sender=sender, recipient=recipient, password=password,
         subject=subject, key=key)
@@ -213,8 +246,27 @@ def main():
                 raise RuntimeError("official_send_cannot_persist_public_output")
             result = run(mode="proof", output=args.outdir)
             print(json.dumps(result, ensure_ascii=False, sort_keys=True), flush=True)
-    except Exception:
-        # Do not print secrets, SMTP exceptions or content from web publishers.
+    except Exception as exc:
+        # Only predefined operator-facing categories. Never print raw HTTP
+        # bodies, URLs, SMTP responses, tokens or unexpected exception text.
+        reason = str(exc)
+        allowlisted = {
+            "official_original_hold_" + s for s in (
+                "publisher_page_unavailable",
+                "publisher_redirect_changed_identity",
+                "missing_original_headline",
+                "official_page_content_unavailable",
+                "saved_ministry_keywords_missing",
+                "original_headline_not_visible",
+                "original_headline_not_framed",
+                "original_page_unreadable_visual_qa",
+                "original_visible_capture_failed",
+                "other_original_proof",
+            )
+        }
+        if args.mode == "proof":
+            safe = reason if reason in allowlisted else "other_proof_hold"
+            print("RASD_OFFICIAL_PROOF_REASON=" + safe, flush=True)
         print("RASD_OFFICIAL_DAILY=HOLD_NO_UNVERIFIED_DELIVERY", flush=True)
         raise SystemExit(2) from None
 

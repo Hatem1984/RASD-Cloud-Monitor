@@ -10,6 +10,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 from unittest.mock import Mock, patch
+from PIL import Image, ImageDraw
 
 from monitor import _ministry_term_present
 from monitor import article_id
@@ -46,11 +47,31 @@ def fake_page(body: str):
     page = Mock()
     page.url = URL
     page.goto.return_value.status = 200
+    page.viewport_size = {"width": 1200, "height": 900}
+    page.evaluate.side_effect = lambda expr: (
+        0 if expr == "window.scrollY" else None)
+    heading = Mock(
+        inner_text=Mock(return_value=TITLE),
+        bounding_box=Mock(return_value={
+            "x": 50, "y": 219, "width": 1120, "height": 51,
+        }),
+    )
     page.locator.side_effect = lambda selector: (
-        Mock(first=Mock(inner_text=Mock(return_value=TITLE)))
+        Mock(first=heading)
         if selector == "h1"
         else Mock(inner_text=Mock(return_value=body))
     )
+    def genuine_fixture_pixels(**options):
+        # Offline publisher-frame fixture, never sent or claimed real.
+        picture = Image.new("RGB", (1200, 1100), "white")
+        brush = ImageDraw.Draw(picture)
+        brush.rectangle((0, 0, 1199, 200), fill="#f3f5f8")
+        for y in (20, 50, 80, 110):
+            brush.rectangle((60, y, 1100, y + 12), fill="#224466")
+        for y in range(210, 1050, 25):
+            brush.rectangle((30, y, 1100, y + 11), fill="#324c60")
+        picture.save(options["path"], "JPEG", quality=90)
+    page.screenshot.side_effect = genuine_fixture_pixels
     return page
 
 
