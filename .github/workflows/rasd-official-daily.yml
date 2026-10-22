@@ -6,12 +6,8 @@ on:
       - 'gate75-*'
       - 'gate77-*'
       - 'gate78-*'
-      - main
   workflow_dispatch:  # Preview only; never access private delivery secrets
   schedule:
-    - cron: '0 19 22 10 *'   # Owner-directed one-time 22 Oct 2026 at 22:00 Cairo
-    - cron: '30 19 22 10 *'  # 22:30 Cairo backup; private CAS prevents duplicate
-    - cron: '0 20 22 10 *'   # 23:00 Cairo final backup; date guard rejects future years
     - cron: '0 19,20 * * *' # Future daily, only after explicit production opt-in
 
 permissions:
@@ -46,14 +42,8 @@ jobs:
   guarded-official-one-send:
     if: >-
       github.ref == 'refs/heads/main' &&
-      ((github.event_name == 'schedule' &&
-        (vars.RASD_OFFICIAL_AUTOMATION_ENABLED == 'true' ||
-         github.event.schedule == '0 19 22 10 *' ||
-         github.event.schedule == '30 19 22 10 *' ||
-         github.event.schedule == '0 20 22 10 *')) ||
-       (github.event_name == 'push' && github.actor == 'Hatem1984' &&
-        (github.event.head_commit.message == 'RASD-OWNER-ONCE-2026-10-22-VERIFIED-OFFICIAL-WORD' ||
-         github.event.head_commit.message == 'RASD-OWNER-VISUAL-CORRECTION-2026-10-22')))
+      github.event_name == 'schedule' &&
+      vars.RASD_OFFICIAL_AUTOMATION_ENABLED == 'true'
     concurrency:
       group: rasd-scheduled-monitor-private-ledger
       cancel-in-progress: false
