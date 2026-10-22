@@ -117,7 +117,9 @@ def validate_story(item: dict, config: dict) -> None:
         raise ValueError("incomplete_story")
 
 
-def discover_interval_news(config: dict, now: datetime, *, inspector=inspect) -> list[dict]:
+def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
+                           allow_degraded: bool = False,
+                           source_records: list[dict] | None = None) -> list[dict]:
     """Read ALL current saved-keyword matches before deciding the per-email cap.
 
     The 15-story cap belongs to each *new* message, not an entire 24-hour
@@ -130,7 +132,11 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect) ->
                          require_complete_items=True)
     if observed.get("matched_article_pool_truncated") or len(observed["matched_public_articles"]) > 200:
         raise RuntimeError("news_inventory_silent_truncation_hold")
-    if any(s["status"] != "ok" for s in observed["sources"]):
+    if source_records is not None:
+        source_records.extend({
+            "feed_id": s["feed_id"], "status": s["status"]
+        } for s in observed["sources"])
+    if not allow_degraded and any(s["status"] != "ok" for s in observed["sources"]):
         raise RuntimeError("source_not_healthy")
     newest = {}
     for original in observed["matched_public_articles"]:
@@ -194,6 +200,95 @@ def prepare_word(items: list[dict], config: dict, output: Path,
         raise RuntimeError("gmail_attachment_size_hold")
     return dest, verified
 
+
+
+
+def prepare_source_limited_verified_word(items: list[dict], config: dict,
+                                        output: Path, *, title: str,
+                                        start: str, end: str,
+                                        source_records: list[dict],
+                                        capture=proof_capture
+                                        ) -> tuple[Path, list[dict], int, bool]:
+    """Real original screenshots ONLY; blocked articles remain eligible for retry.
+
+    A newsletter is explicitly marked source-limited when an approved feed or
+    publisher page fails. This deliberately does not pretend complete coverage.
+    Any integrity/identity exception stops the entire delivery before reserve.
+    """
+    if not items or len(items) > MAX_BATCH:
+        raise ValueError("invalid_source_limited_batch")
+    if len({a.get("id") for a in items}) != len(items):
+        raise ValueError("duplicate_source_limited_article")
+    expected_ids = [f["id"] for f in config["feeds"]]
+    if (len(source_records) != len(expected_ids) or
+            [s.get("feed_id") for s in source_records] != expected_ids or
+            any(s.get("status") not in {"ok", "failed"} for s in source_records)):
+        raise ValueError("source_health_metadata_missing_or_untrusted")
+    # Fail before network/image I/O for ANY unsafe candidate.
+    for article in items:
+        validate_story(article, config)
+    output.mkdir(parents=True, exist_ok=True)
+    selected, verified = [], []
+    rejected = 0
+    for index, item in enumerate(items, 1):
+        screenshot = output / f"publisher-{index:03d}.jpg"
+        proof = capture(item, config["feeds"], screenshot)
+        if proof.get("status") != "verified":
+            # A known original-page refusal remains a traceable HOLD, not a
+            # fabricated picture or an accepted ledger entry.
+            if proof.get("status") != "hold":
+                raise RuntimeError("invalid_original_capture_receipt")
+            rejected += 1
+            continue
+        digest = proof.get("sha256")
+        if (not isinstance(digest, str) or
+                re.fullmatch(r"[0-9a-f]{64}", digest) is None or
+                not screenshot.is_file() or
+                hashlib.sha256(screenshot.read_bytes()).hexdigest() != digest):
+            raise RuntimeError("original_capture_digest_mismatch")
+        selected.append({**item, "evidence_image_path": str(screenshot)})
+        verified.append({"id": item["id"], "status": "verified",
+                         "sha256": digest})
+    if not selected:
+        raise RuntimeError("no_original_publisher_page_verified")
+    degraded = bool(rejected or any(s["status"] != "ok" for s in source_records))
+    source_rows = [{
+        "feed_id": row["feed_id"], "status": row["status"],
+        "verified_links": sum(
+            item["source"] == next(
+                f["name"] for f in config["feeds"]
+                if f["id"] == row["feed_id"])
+            for item in selected),
+        "error_type": None if row["status"] == "ok" else "original_feed_unavailable",
+    } for row in source_records]
+    limitations = (
+        "كل صورة في التقرير ملتقطة من صفحة الناشر الأصلية ومطابقة لبصمة"
+        " JPEG الموجودة فعليًا داخل ملف Word. المطابقة على مستوى"
+        " الرابط المنشور، وليست تجميعًا تحريريًا للأحداث المستقلة."
+    )
+    if degraded:
+        limitations += (
+            f" تغطية جزئية معلنة: {rejected} روابط مطابقة تعذر إثبات صورها؛"
+            f" {sum(s['status'] != 'ok' for s in source_records)}"
+            " مصادر RSS لم تكن متاحة. الروابط المعلقة لم تُحسب"
+            " كأخبار مُسلّمة ويمكن فحصها لاحقًا."
+        )
+    report = {
+        "title": title + (" — نطاق جزئي" if degraded else ""),
+        "display_window_start": start, "display_window_end": end,
+        "coverage": "SOURCE_LIMITED" if degraded else "HEALTHY",
+        "verified_links": len(selected), "articles": selected,
+        "sources": source_rows, "limitations": limitations,
+    }
+    word = output / "RASD-News-With-Original-Screenshots.docx"
+    render_docx(report, word)
+    if not word_images_match_capture_digests(word, verified):
+        word.unlink(missing_ok=True)
+        raise RuntimeError("word_screenshot_identity_hold")
+    if not 3000 <= word.stat().st_size <= MAX_WORD_BYTES:
+        word.unlink(missing_ok=True)
+        raise RuntimeError("gmail_attachment_size_hold")
+    return word, selected, rejected, degraded
 
 
 def prepare_first_verified_word(candidates: list[dict], config: dict, output: Path,
@@ -328,23 +423,31 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     with tempfile.TemporaryDirectory(prefix="rasd-scheduled-") as folder:
         output = Path(folder)
         if mode == "interval":
-            available = discover_interval_news(config, now)
+            health = []
+            available = discover_interval_news(
+                config, now, allow_degraded=True, source_records=health)
             stories = [a for a in available if a["id"] not in state["entries"]]
             if not stories:
                 return {"status": "no_new_verified_news", "smtp_accepted": False}
             if len(stories) > MAX_BATCH:
                 raise RuntimeError("more_than_15_unsent_articles_manual_review")
-            title = "رصد | الأخبار الجديدة — نصف ساعة | " + window
-            doc, _ = prepare_word(stories, config, output, title=title,
-                                  start=start.astimezone(CAIRO).isoformat(),
-                                  end=now.astimezone(CAIRO).isoformat())
-            reserve_stories(ledger, stories, day)
-            message_key = digest_key("interval:" + window + ":" + ",".join(x["id"] for x in stories))
+            title = "رصد | الأخبار المصورة الموثقة — نصف ساعة | " + window
+            doc, delivered, held_count, limited = prepare_source_limited_verified_word(
+                stories, config, output, title=title,
+                start=start.astimezone(CAIRO).isoformat(),
+                end=now.astimezone(CAIRO).isoformat(), source_records=health)
+            # Only successfully captured/embedded originals enter private CAS.
+            # Blocked items remain unsent, so later scheduled scans can retry.
+            reserve_stories(ledger, delivered, day)
+            message_key = digest_key("interval:" + window + ":".join(x["id"] for x in delivered))
+            subject = title + (" [تغطية جزئية]" if limited else "")
             receipt = send_one_word(doc, sender=sender, recipient=recipient,
-                                    password=password, subject=title, key=message_key)
-            for article in stories:
+                                    password=password, subject=subject, key=message_key)
+            for article in delivered:
                 ledger.mark_smtp_accepted(article["id"], receipt)
-            return {"status": "smtp_accepted_unconfirmed_inbox", "items": len(stories)}
+            return {"status": "smtp_accepted_unconfirmed_inbox",
+                    "items": len(delivered), "source_limited": limited,
+                    "original_screenshots_held": held_count}
         if mode == "rollup":
             rollup_key = digest_key("rollup:" + day)
             if rollup_key in state["entries"]:
