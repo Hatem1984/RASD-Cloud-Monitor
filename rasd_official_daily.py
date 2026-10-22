@@ -117,7 +117,21 @@ def build_official_daily(output: Path, *, target_date: date,
                 if original.get("status") != "verified":
                     if original.get("reason") == "publisher_date_mismatch_or_missing":
                         continue  # Outside today's verified original publication window.
-                    raise RuntimeError("official_original_page_hold")
+                    allowed_capture_holds = {
+                        "publisher_page_unavailable",
+                        "publisher_redirect_changed_identity",
+                        "missing_original_headline",
+                        "official_page_content_unavailable",
+                        "saved_ministry_keywords_missing",
+                        "original_headline_not_visible",
+                        "original_headline_not_framed",
+                        "original_page_unreadable_visual_qa",
+                        "original_visible_capture_failed",
+                    }
+                    failure = original.get("reason", "")
+                    if failure not in allowed_capture_holds:
+                        failure = "other_original_proof"
+                    raise RuntimeError("official_original_hold_" + failure)
                 if original["published_date_cairo"] != target_date.isoformat():
                     raise RuntimeError("official_date_evidence_mismatch")
                 accepted.append(original)
@@ -232,8 +246,27 @@ def main():
                 raise RuntimeError("official_send_cannot_persist_public_output")
             result = run(mode="proof", output=args.outdir)
             print(json.dumps(result, ensure_ascii=False, sort_keys=True), flush=True)
-    except Exception:
-        # Do not print secrets, SMTP exceptions or content from web publishers.
+    except Exception as exc:
+        # Only predefined operator-facing categories. Never print raw HTTP
+        # bodies, URLs, SMTP responses, tokens or unexpected exception text.
+        reason = str(exc)
+        allowlisted = {
+            "official_original_hold_" + s for s in (
+                "publisher_page_unavailable",
+                "publisher_redirect_changed_identity",
+                "missing_original_headline",
+                "official_page_content_unavailable",
+                "saved_ministry_keywords_missing",
+                "original_headline_not_visible",
+                "original_headline_not_framed",
+                "original_page_unreadable_visual_qa",
+                "original_visible_capture_failed",
+                "other_original_proof",
+            )
+        }
+        if args.mode == "proof":
+            safe = reason if reason in allowlisted else "other_proof_hold"
+            print("RASD_OFFICIAL_PROOF_REASON=" + safe, flush=True)
         print("RASD_OFFICIAL_DAILY=HOLD_NO_UNVERIFIED_DELIVERY", flush=True)
         raise SystemExit(2) from None
 
