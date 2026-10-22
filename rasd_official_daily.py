@@ -46,10 +46,17 @@ def require_official_scheduled_send(now: datetime) -> None:
         "GITHUB_REF": "refs/heads/main",
         "GITHUB_RUN_ATTEMPT": "1",
         "GITHUB_WORKFLOW_REF": OFFICIAL_WORKFLOW,
-        "RASD_OFFICIAL_AUTOMATION_ENABLED": "true",
     }
     if any(os.getenv(key) != val for key, val in expected.items()):
         raise RuntimeError("official_daily_not_authorized")
+    kind = os.getenv("RASD_JOB_CRON")
+    owner_oneoff = (kind == "0 19 22 10 *"
+                    and current.date() == date(2026, 10, 22)
+                    and current.hour == 22)
+    persistent = (kind == "0 19,20 * * *"
+                  and os.getenv("RASD_OFFICIAL_AUTOMATION_ENABLED") == "true")
+    if not (owner_oneoff or persistent):
+        raise RuntimeError("official_daily_not_explicitly_scheduled")
     if not os.getenv("GITHUB_RUN_ID", "").isdigit():
         raise RuntimeError("official_run_identity_missing")
 
