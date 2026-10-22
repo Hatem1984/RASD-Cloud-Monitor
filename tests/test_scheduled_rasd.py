@@ -1,10 +1,11 @@
 """Only offline/mocked tests. No network or real SMTP/private ledger calls."""
+import hashlib
 import os
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import scheduled_rasd as subject
 from monitor import article_id
@@ -69,6 +70,41 @@ class ScheduledRASDSecurity(unittest.TestCase):
         already_sent = {a["id"]: {"status": "smtp_accepted"} for a in result[:17]}
         unsent = [a for a in result if a["id"] not in already_sent]
         self.assertEqual(len(unsent), 1)
+
+    def test_production_credential_normalization_matches_cloud_preflight(self):
+        """Google grouped app-password and copied PAT must normalize in memory."""
+        recipient = "approved-recipient@example.com"
+        digest = hashlib.sha256(recipient.encode()).hexdigest()
+        mock_ledger = MagicMock()
+        mock_ledger.read.return_value = ({"approved_recipient_sha256": digest}, "sha")
+        env = {
+            "RASD_GMAIL_SENDER": "sender@gmail.com",
+            "RASD_REPORT_TO": recipient,
+            "RASD_GMAIL_APP_PASSWORD": " abcd efgh ijkl mnop \\n",
+            "RASD_PRIVATE_LEDGER_TOKEN": "  github_pat_mock_credential_123456  \\n",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            with patch.object(subject, "PrivateGitHubLedger",
+                              return_value=mock_ledger) as factory:
+                sender, to, password, ledger = subject.protected_credentials()
+        self.assertEqual((sender, to), ("sender@gmail.com", recipient))
+        self.assertEqual(password, "abcdefghijklmnop")
+        self.assertIs(ledger, mock_ledger)
+        factory.assert_called_once_with("github_pat_mock_credential_123456")
+
+    def test_whitespace_only_credentials_hold_before_private_network(self):
+        env = {
+            "RASD_GMAIL_SENDER": "sender@gmail.com",
+            "RASD_REPORT_TO": "approved-recipient@example.com",
+            "RASD_GMAIL_APP_PASSWORD": "  \\n    ",
+            "RASD_PRIVATE_LEDGER_TOKEN": "  \\n    ",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            with patch.object(subject, "PrivateGitHubLedger") as factory:
+                with self.assertRaisesRegex(RuntimeError,
+                                            "missing_protected_credentials"):
+                    subject.protected_credentials()
+        factory.assert_not_called()
 
     def test_sender_must_not_be_recipient(self):
         variables = {'RASD_GMAIL_SENDER': 'owner@gmail.com',
