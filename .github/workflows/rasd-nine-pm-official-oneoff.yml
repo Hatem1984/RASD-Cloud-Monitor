@@ -1,0 +1,69 @@
+name: RASD — one-time official publisher Word pilot at 21:00 Cairo 22 Oct
+
+on:
+  push:
+    branches:
+      - 'gate9pm-*'
+  workflow_dispatch:  # NO-SEND proof mode only; cannot deliver mail
+  schedule:
+    - cron: '0 18 22 10 *' # On 22 Oct 2026 = 21:00 Cairo (UTC+3)
+
+permissions:
+  contents: read
+
+# Proof runs have no private ledger access and may execute independently.
+# The actual send alone shares the existing serial private-CAS group.
+jobs:
+  publisher-proof-no-send:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install bounded browser and Word verification dependencies
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --only-shell chromium
+      - name: Check code and strict one-off tests before publisher I/O
+        run: |
+          python -m compileall -q .
+          python -m unittest discover -s tests -p test_nine_pm_official.py -v
+      - name: Original Ministry page and exact-image Word — ephemeral, no send
+        env:
+          RASD_GMAIL_SENDER: ""
+          RASD_REPORT_TO: ""
+          RASD_GMAIL_APP_PASSWORD: ""
+          RASD_PRIVATE_LEDGER_TOKEN: ""
+        run: python rasd_nine_pm_official.py --mode proof
+
+  protected-oneoff-send:
+    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: rasd-scheduled-monitor-private-ledger
+      cancel-in-progress: false
+    environment: rasd-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
+      RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
+      RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
+      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install publisher screenshot dependencies
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --only-shell chromium
+      - name: Offline safety gates
+        run: |
+          python -m compileall -q .
+          python -m unittest discover -s tests -p test_nine_pm_official.py -v
+      - name: Single authorized time-window Word delivery
+        run: python rasd_nine_pm_official.py --mode send
