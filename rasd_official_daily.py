@@ -61,8 +61,10 @@ def require_official_scheduled_send(now: datetime) -> None:
     owner_push = (
         os.getenv("GITHUB_EVENT_NAME") == "push"
         and os.getenv("GITHUB_ACTOR") == "Hatem1984"
-        and os.getenv("RASD_OWNER_PUSH_CONFIRM")
-            == "RASD-OWNER-ONCE-2026-10-22-VERIFIED-OFFICIAL-WORD"
+        and os.getenv("RASD_OWNER_PUSH_CONFIRM") in {
+            "RASD-OWNER-ONCE-2026-10-22-VERIFIED-OFFICIAL-WORD",
+            "RASD-OWNER-VISUAL-CORRECTION-2026-10-22",
+        }
         and current.date() == date(2026, 10, 22)
         and current.hour in (22, 23)
     )
@@ -181,11 +183,28 @@ def run(*, mode: str, output: Path, clock: datetime | None = None,
             "source_scope": "official_ministry_not_newsroom",
         }
     sender, recipient, password, ledger = protected_credentials()
-    key = digest_key("official-ministry-original-daily:" + day.isoformat())
+    correction = (
+        os.environ.get("GITHUB_EVENT_NAME") == "push"
+        and os.environ.get("RASD_OWNER_PUSH_CONFIRM")
+            == "RASD-OWNER-VISUAL-CORRECTION-2026-10-22"
+    )
+    if correction and day != date(2026, 10, 22):
+        raise RuntimeError("official_visual_correction_wrong_date")
+    key = digest_key(
+        "official-ministry-original-daily:" + day.isoformat()
+        + (":visual-correction-v2" if correction else ""))
     reserved = ledger.reserve(key, recipient)
     if reserved != "reserved":
         raise RuntimeError("official_daily_private_duplicate_hold")
-    subject = "رصد | نشرة البيانات الرسمية المصورة — " + day.isoformat()
+    subject = (
+        "رصد | نسخة مصححة — صورة الخبر الرسمية واضحة | " + day.isoformat()
+        if correction else
+        "رصد | نشرة البيانات الرسمية المصورة — " + day.isoformat())
+    if correction:
+        corrected = word.with_name(
+            f"RASD-Official-Original-{day.isoformat()}-CORRECTED.docx")
+        word.rename(corrected)
+        word = corrected
     receipt = send_one_word(
         word, sender=sender, recipient=recipient, password=password,
         subject=subject, key=key)
