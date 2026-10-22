@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "scope": "Egyptian Ministry of Planning - publicly published news only",
+  "keywords": [
+    "وزارة التخطيط",
+    "وزير التخطيط",
+    "وزيرة التخطيط",
+    "التخطيط والتنمية الاقتصادية"
+  ],
+  "feeds": [
+    {
+      "id": "hapi",
+      "name": "Hapi native news RSS",
+      "url": "https://hapijournal.com/feed/",
+      "allowed_article_hosts": [
+        "hapijournal.com",
+        "www.hapijournal.com"
+      ]
+    },
+    {
+      "id": "almasryalyoum",
+      "name": "Al Masry Al Youm native news RSS",
+      "url": "https://www.almasryalyoum.com/rss/rssfeeds",
+      "allowed_article_hosts": [
+        "www.almasryalyoum.com",
+        "almasryalyoum.com"
+      ]
+    },
+    {
+      "id": "shorouk",
+      "name": "Al Shorouk native Economy RSS",
+      "url": "https://www.shorouknews.com/Economy/rss",
+      "allowed_article_hosts": [
+        "www.shorouknews.com"
+      ]
+    }
+  ],
+  "max_feed_bytes": 1500000,
+  "recent_hours": 72
+}
