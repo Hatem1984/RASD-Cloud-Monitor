@@ -1,0 +1,134 @@
+name: RASD — protected Gmail + private ledger connectivity (NO SEND)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-protected-connection-preflight
+  cancel-in-progress: false
+
+jobs:
+  protected-connection-preflight:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    environment: rasd-production
+    env:
+      RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
+      RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
+      RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
+      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+    steps:
+      - name: Read/write isolated private QA marker and authenticate SMTP (NO EMAIL)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          """Live protected I/O test: no email messages, no public data output."""
+          import base64
+          import hashlib
+          import hmac
+          import json
+          import os
+          import re
+          import smtplib
+          import ssl
+          import sys
+          from urllib.parse import quote
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError, URLError
+
+          def hold(label):
+              print("RASD_PREFLIGHT_" + label + "=HOLD", flush=True)
+              return False
+          def passed(label):
+              print("RASD_PREFLIGHT_" + label + "=PASS", flush=True)
+              return True
+
+          sender = os.environ.get("RASD_GMAIL_SENDER", "").strip().casefold()
+          recipient = os.environ.get("RASD_REPORT_TO", "").strip().casefold()
+          password = os.environ.get("RASD_GMAIL_APP_PASSWORD", "")
+          token = os.environ.get("RASD_PRIVATE_LEDGER_TOKEN", "")
+          if (not re.fullmatch(r"[^@\s]+@gmail\.com", sender)
+                  or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", recipient)
+                  or sender == recipient or len(password) < 12 or len(token) < 16):
+              hold("SECRET_CONTRACT")
+              sys.exit(2)
+          passed("SECRET_CONTRACT")
+
+          owner_repo = "Hatem1984/RASD-Pilot"
+          branch = "rasd-private-delivery-state"
+          root = "https://api.github.com/repos/" + owner_repo + "/contents/"
+          headers = {
+              "Authorization": "Bearer " + token,
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "RASD-protected-owner-connection-check",
+              "Content-Type": "application/json",
+          }
+          def github(method, path, body=None, ref=None):
+              url = root + quote(path, safe="/")
+              if ref:
+                  url += "?ref=" + quote(ref, safe="")
+              data = json.dumps(body, separators=(",", ":")).encode() if body is not None else None
+              req = Request(url, data=data, method=method, headers=headers)
+              with urlopen(req, timeout=16) as response:
+                  return json.loads(response.read(1_000_000).decode())
+
+          read_ok = False
+          try:
+              item = github("GET", "delivery-state.json", ref=branch)
+              assert item["encoding"] == "base64"
+              ledger = json.loads(base64.b64decode(item["content"]))
+              assert ledger["schema_version"] == 2
+              assert isinstance(ledger["entries"], dict)
+              digest = hashlib.sha256(recipient.encode("utf-8")).hexdigest()
+              assert hmac.compare_digest(digest, ledger["approved_recipient_sha256"])
+              read_ok = passed("PRIVATE_LEDGER_READ_AND_RECIPIENT_MATCH")
+          except Exception:
+              hold("PRIVATE_LEDGER_READ_AND_RECIPIENT_MATCH")
+
+          # Isolated temporary file; NEVER mutate the true delivery-state.json.
+          # Two commits in the private QA branch prove the token's write authority.
+          write_ok = False
+          if read_ok:
+              test_path = "qa/rasd-connection-" + os.environ["GITHUB_RUN_ID"] + ".json"
+              created_sha = None
+              marker = json.dumps({"qa_only": True, "no_mail": True,
+                                   "run": os.environ["GITHUB_RUN_ID"]})
+              try:
+                  payload = {"message": "RASD isolated protected connection QA create",
+                             "branch": branch, "content": base64.b64encode(marker.encode()).decode()}
+                  created = github("PUT", test_path, body=payload)
+                  created_sha = created["content"]["sha"]
+                  got = github("GET", test_path, ref=branch)
+                  assert got["sha"] == created_sha
+                  assert base64.b64decode(got["content"]).decode() == marker
+                  github("DELETE", test_path, body={
+                      "message": "RASD isolated protected connection QA cleanup",
+                      "branch": branch, "sha": created_sha})
+                  created_sha = None
+                  write_ok = passed("PRIVATE_LEDGER_SCOPED_WRITE_READ_DELETE")
+              except Exception:
+                  # If failed after create, leave marker for deliberate private
+                  # operator cleanup; do NOT touch real ledger or conceal HOLD.
+                  hold("PRIVATE_LEDGER_SCOPED_WRITE_READ_DELETE")
+
+          smtp_ok = False
+          try:
+              with smtplib.SMTP_SSL("smtp.gmail.com", 465,
+                                    timeout=18, context=ssl.create_default_context()) as smtp:
+                  smtp.login(sender, password)
+                  # Deliberately NO sendmail()/send_message()/MAIL FROM.
+              smtp_ok = passed("GMAIL_SMTP_AUTH_NO_SEND")
+          except Exception:
+              hold("GMAIL_SMTP_AUTH_NO_SEND")
+
+          passed("NO_EMAIL_TRANSMITTED")
+          if not (read_ok and write_ok and smtp_ok):
+              sys.exit(3)
+          print("RASD_PROTECTED_CONNECTION_PREFLIGHT=PASS", flush=True)
+          PY
