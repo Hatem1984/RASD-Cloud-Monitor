@@ -27,16 +27,50 @@ class OfficialDailySecurity(unittest.TestCase):
     def test_one_off_owner_date_exact_cairo_clock(self):
         env = self.trusted_env()
         with patch.dict(os.environ, env, clear=True):
-            worker.require_official_scheduled_send(
-                datetime(2026, 10, 22, 19, 0, tzinfo=timezone.utc))
+            for allowed_cron, clock in [
+                ("0 19 22 10 *", datetime(2026, 10, 22, 19, tzinfo=timezone.utc)),
+                ("30 19 22 10 *", datetime(2026, 10, 22, 19, 30, tzinfo=timezone.utc)),
+                ("0 20 22 10 *", datetime(2026, 10, 22, 20, tzinfo=timezone.utc)),
+            ]:
+                os.environ["RASD_JOB_CRON"] = allowed_cron
+                worker.require_official_scheduled_send(clock)
+            os.environ["RASD_JOB_CRON"] = "0 19 22 10 *"
             for clock in [
                 datetime(2026, 10, 22, 18, 59, tzinfo=timezone.utc),
-                datetime(2026, 10, 22, 20, 0, tzinfo=timezone.utc),
+                datetime(2026, 10, 22, 21, 0, tzinfo=timezone.utc),
                 datetime(2027, 10, 22, 19, 0, tzinfo=timezone.utc),
             ]:
                 with self.subTest(clock=clock):
                     with self.assertRaises(RuntimeError):
                         worker.require_official_scheduled_send(clock)
+
+    def test_exact_owner_git_push_is_one_time_only(self):
+        env = self.trusted_env()
+        env.update({
+            "GITHUB_EVENT_NAME": "push",
+            "GITHUB_ACTOR": "Hatem1984",
+            "RASD_OWNER_PUSH_CONFIRM":
+                "RASD-OWNER-ONCE-2026-10-22-VERIFIED-OFFICIAL-WORD",
+            "RASD_JOB_CRON": "",
+        })
+        now = datetime(2026, 10, 22, 19, 8, tzinfo=timezone.utc)
+        with patch.dict(os.environ, env, clear=True):
+            worker.require_official_scheduled_send(now)
+            for key, forbidden in [
+                ("GITHUB_ACTOR", "another-user"),
+                ("RASD_OWNER_PUSH_CONFIRM", "wrong-message"),
+                ("GITHUB_RUN_ATTEMPT", "2"),
+                ("GITHUB_REF", "refs/heads/untrusted"),
+            ]:
+                original = os.environ[key]
+                os.environ[key] = forbidden
+                with self.subTest(key=key):
+                    with self.assertRaises(RuntimeError):
+                        worker.require_official_scheduled_send(now)
+                os.environ[key] = original
+            with self.assertRaises(RuntimeError):
+                worker.require_official_scheduled_send(
+                    datetime(2026, 10, 23, 19, tzinfo=timezone.utc))
 
     def test_manual_run_replay_and_other_repository_cannot_send(self):
         for key, value in [
