@@ -69,7 +69,9 @@ class FakePage:
         assert animations == "disabled" and clip["width"] <= 1400
         image = Image.new("RGB", (1200, 1100), "#ffffff")
         draw = ImageDraw.Draw(image)
-        draw.rectangle((0, 0, 1199, 170), fill="#193759")
+        draw.rectangle((0, 0, 1199, 170), fill="#f3f5f8")
+        for y in (20, 55, 90, 125):
+            draw.rectangle((70, y, 1100, y + 12), fill="#193759")
         for y in range(190, 1090, 28):
             draw.rectangle((50, y, 1100, y + 16), fill="#2f5067")
         image.save(path, format="JPEG", quality=quality)
