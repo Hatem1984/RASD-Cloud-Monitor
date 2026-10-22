@@ -2,6 +2,9 @@ name: RASD — protected Gmail + private ledger connectivity (NO SEND)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/rasd-protected-connection-preflight.yml']
 
 permissions:
   contents: read
@@ -12,7 +15,7 @@ concurrency:
 
 jobs:
   protected-connection-preflight:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 6
     environment: rasd-production
@@ -65,8 +68,8 @@ jobs:
 
           sender = os.environ.get("RASD_GMAIL_SENDER", "").strip().casefold()
           recipient = os.environ.get("RASD_REPORT_TO", "").strip().casefold()
-          password = os.environ.get("RASD_GMAIL_APP_PASSWORD", "")
-          token = os.environ.get("RASD_PRIVATE_LEDGER_TOKEN", "")
+          password = "".join(os.environ.get("RASD_GMAIL_APP_PASSWORD", "").split())
+          token = os.environ.get("RASD_PRIVATE_LEDGER_TOKEN", "").strip()
           if (not re.fullmatch(r"[^@\s]+@gmail\.com", sender)
                   or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", recipient)
                   or sender == recipient or len(password) < 12 or len(token) < 16):
