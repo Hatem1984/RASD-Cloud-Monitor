@@ -41,7 +41,6 @@ def require_official_scheduled_send(now: datetime) -> None:
     if current.hour not in (22, 23):
         raise RuntimeError("official_daily_outside_delivery_window")
     expected = {
-        "GITHUB_EVENT_NAME": "schedule",
         "GITHUB_REPOSITORY": "Hatem1984/RASD-Cloud-Monitor",
         "GITHUB_REF": "refs/heads/main",
         "GITHUB_RUN_ATTEMPT": "1",
@@ -57,7 +56,17 @@ def require_official_scheduled_send(now: datetime) -> None:
     )
     persistent = (kind == "0 19,20 * * *"
                   and os.getenv("RASD_OFFICIAL_AUTOMATION_ENABLED") == "true")
-    if not (owner_oneoff or persistent):
+    is_scheduled = (os.getenv("GITHUB_EVENT_NAME") == "schedule"
+                    and (owner_oneoff or persistent))
+    owner_push = (
+        os.getenv("GITHUB_EVENT_NAME") == "push"
+        and os.getenv("GITHUB_ACTOR") == "Hatem1984"
+        and os.getenv("RASD_OWNER_PUSH_CONFIRM")
+            == "RASD-OWNER-ONCE-2026-10-22-VERIFIED-OFFICIAL-WORD"
+        and current.date() == date(2026, 10, 22)
+        and current.hour in (22, 23)
+    )
+    if not (is_scheduled or owner_push):
         raise RuntimeError("official_daily_not_explicitly_scheduled")
     if not os.getenv("GITHUB_RUN_ID", "").isdigit():
         raise RuntimeError("official_run_identity_missing")
