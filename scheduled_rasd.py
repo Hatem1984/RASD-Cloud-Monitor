@@ -443,8 +443,11 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             subject = title + (" [تغطية جزئية]" if limited else "")
             receipt = send_one_word(doc, sender=sender, recipient=recipient,
                                     password=password, subject=subject, key=message_key)
-            for article in delivered:
-                ledger.mark_smtp_accepted(article["id"], receipt)
+            # SMTP accepts exactly one Word message containing N stories.
+            # Persist all N receipts together in ONE private CAS commit, not
+            # N separate writes that can leave a half-accepted daily rollup.
+            ledger.mark_smtp_accepted_many(
+                [article["id"] for article in delivered], receipt)
             return {"status": "smtp_accepted_unconfirmed_inbox",
                     "items": len(delivered), "source_limited": limited,
                     "original_screenshots_held": held_count}
