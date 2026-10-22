@@ -50,9 +50,11 @@ def require_official_scheduled_send(now: datetime) -> None:
     if any(os.getenv(key) != val for key, val in expected.items()):
         raise RuntimeError("official_daily_not_authorized")
     kind = os.getenv("RASD_JOB_CRON")
-    owner_oneoff = (kind == "0 19 22 10 *"
-                    and current.date() == date(2026, 10, 22)
-                    and current.hour == 22)
+    owner_oneoff = (
+        kind in {"0 19 22 10 *", "30 19 22 10 *", "0 20 22 10 *"}
+        and current.date() == date(2026, 10, 22)
+        and current.hour in (22, 23)
+    )
     persistent = (kind == "0 19,20 * * *"
                   and os.getenv("RASD_OFFICIAL_AUTOMATION_ENABLED") == "true")
     if not (owner_oneoff or persistent):
