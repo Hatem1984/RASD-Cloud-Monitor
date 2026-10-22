@@ -1,0 +1,71 @@
+name: RASD — original Ministry daily bulletin, verified Word to private Gmail
+
+on:
+  push:
+    branches:
+      - 'gate75-*'
+  workflow_dispatch:  # Preview only; never access private delivery secrets
+  schedule:
+    - cron: '0 19 22 10 *'   # Owner-directed one-time 22 Oct 2026 at 22:00 Cairo
+    - cron: '0 19,20 * * *' # Future daily, only after explicit production opt-in
+
+permissions:
+  contents: read
+
+jobs:
+  genuine-official-no-send-proof:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install strict original-page visual and Word tooling
+        run: |
+          python -m pip install -r requirements-test.txt 'playwright>=1.50,<2'
+          python -m playwright install --only-shell chromium
+      - name: Prove no-send offline security before visiting Ministry original pages
+        run: |
+          python -m compileall -q .
+          python -m unittest discover -s tests -p test_official_daily.py -v
+      - name: Genuine same-day Ministry source Word+screenshots ephemeral acceptance
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_REPORT_TO: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: python rasd_official_daily.py --mode proof
+
+  guarded-official-one-send:
+    if: >-
+      github.event_name == 'schedule' && github.ref == 'refs/heads/main' &&
+      (vars.RASD_OFFICIAL_AUTOMATION_ENABLED == 'true' ||
+       github.event.schedule == '0 19 22 10 *')
+    concurrency:
+      group: rasd-scheduled-monitor-private-ledger
+      cancel-in-progress: false
+    environment: rasd-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    env:
+      RASD_JOB_CRON: ${{ github.event.schedule }}
+      RASD_OFFICIAL_AUTOMATION_ENABLED: ${{ vars.RASD_OFFICIAL_AUTOMATION_ENABLED }}
+      RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
+      RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
+      RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
+      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install browser and secure Word verification
+        run: |
+          python -m pip install -r requirements-test.txt 'playwright>=1.50,<2'
+          python -m playwright install --only-shell chromium
+      - name: Offline auth, date and ledger safety gates
+        run: python -m unittest discover -s tests -p test_official_daily.py -v
+      - name: Genuinely pictured official daily Word to previously approved recipient
+        run: python rasd_official_daily.py --mode send
