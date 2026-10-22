@@ -44,6 +44,34 @@ class OfficialDailySecurity(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         worker.require_official_scheduled_send(clock)
 
+    def test_exact_owner_git_push_is_one_time_only(self):
+        env = self.trusted_env()
+        env.update({
+            "GITHUB_EVENT_NAME": "push",
+            "GITHUB_ACTOR": "Hatem1984",
+            "RASD_OWNER_PUSH_CONFIRM":
+                "RASD-OWNER-ONCE-2026-10-22-VERIFIED-OFFICIAL-WORD",
+            "RASD_JOB_CRON": "",
+        })
+        now = datetime(2026, 10, 22, 19, 8, tzinfo=timezone.utc)
+        with patch.dict(os.environ, env, clear=True):
+            worker.require_official_scheduled_send(now)
+            for key, forbidden in [
+                ("GITHUB_ACTOR", "another-user"),
+                ("RASD_OWNER_PUSH_CONFIRM", "wrong-message"),
+                ("GITHUB_RUN_ATTEMPT", "2"),
+                ("GITHUB_REF", "refs/heads/untrusted"),
+            ]:
+                original = os.environ[key]
+                os.environ[key] = forbidden
+                with self.subTest(key=key):
+                    with self.assertRaises(RuntimeError):
+                        worker.require_official_scheduled_send(now)
+                os.environ[key] = original
+            with self.assertRaises(RuntimeError):
+                worker.require_official_scheduled_send(
+                    datetime(2026, 10, 23, 19, tzinfo=timezone.utc))
+
     def test_manual_run_replay_and_other_repository_cannot_send(self):
         for key, value in [
             ("GITHUB_EVENT_NAME", "workflow_dispatch"),
