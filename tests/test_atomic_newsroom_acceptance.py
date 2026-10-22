@@ -26,7 +26,7 @@ def fake_state(statuses):
             })
     return {
         "schema_version":2,
-        "approved_recipient_sha256":"a"*24,
+        "approved_recipient_sha256":"a"*64,
         "entries":entries,
     }
 
