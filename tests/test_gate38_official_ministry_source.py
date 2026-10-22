@@ -31,6 +31,9 @@ class FakeElement:
     def scroll_into_view_if_needed(self, timeout=4000):
         return None
 
+    def bounding_box(self):
+        return {"x": 50, "y": 219, "width": 1120, "height": 50}
+
 
 class FakeLocator:
     def __init__(self, value):
@@ -46,6 +49,10 @@ class FakeLocator:
 
 class FakePage:
     url = SAMPLE
+    viewport_size = {"width": 1200, "height": 900}
+
+    def evaluate(self, script):
+        return 0 if script == "window.scrollY" else None
 
     def __init__(self, headline=HEADLINE, body=BODY, status=200):
         self.headline, self.body, self.status = headline, body, status
@@ -57,12 +64,13 @@ class FakePage:
     def locator(self, selector):
         return FakeLocator(self.headline if selector == "h1" else self.body)
 
-    def screenshot(self, path, type, quality, full_page, timeout):
-        assert type == "jpeg"
-        image = Image.new("RGB", (1200, 900), "#ffffff")
+    def screenshot(self, path, type, quality, full_page, clip, animations, timeout):
+        assert type == "jpeg" and full_page is True
+        assert animations == "disabled" and clip["width"] <= 1400
+        image = Image.new("RGB", (1200, 1100), "#ffffff")
         draw = ImageDraw.Draw(image)
         draw.rectangle((0, 0, 1199, 170), fill="#193759")
-        for y in range(190, 880, 28):
+        for y in range(190, 1090, 28):
             draw.rectangle((50, y, 1100, y + 16), fill="#2f5067")
         image.save(path, format="JPEG", quality=quality)
 
@@ -161,24 +169,28 @@ class OriginalMinistrySourceOfflineTests(unittest.TestCase):
             self.assertTrue(word_images_match_capture_digests(
                 word, [{"status": "verified", "sha256": receipt["sha256"]}]))
 
-    def test_genuine_full_page_fallback_rechecks_jpeg_instead_of_bypass(self):
-        class FirstFrameBlank(FakePage):
-            modes = []
-            def screenshot(self, path, type, quality, full_page, timeout):
-                self.modes.append(full_page)
-                if not full_page:
-                    Image.new("RGB", (1200, 900), "white").save(
-                        path, format="JPEG", quality=quality)
-                else:
-                    super().screenshot(path, type, quality, full_page, timeout)
+    def test_blank_or_giant_original_frame_never_promoted(self):
+        class BlankScreenshot(FakePage):
+            requests = []
+            def screenshot(self, path, type, quality, full_page, clip,
+                           animations, timeout):
+                self.requests.append((full_page, clip, animations))
+                Image.new("RGB", (1200, 1100), "white").save(
+                    path, format="JPEG", quality=quality)
         with tempfile.TemporaryDirectory() as work:
-            page = FirstFrameBlank()
-            destination = Path(work) / "verified.jpg"
+            page = BlankScreenshot()
+            destination = Path(work) / "blank.jpg"
             result = _read_original(
                 page, SAMPLE, ["وزير التخطيط"], date(2026, 10, 17), destination)
-            self.assertEqual(page.modes, [False, True])
-            self.assertEqual(result["status"], "verified")
-            self.assertTrue(destination.is_file())
+            self.assertEqual(result["status"], "HOLD")
+            self.assertEqual(result["reason"], "original_page_unreadable_visual_qa")
+            self.assertFalse(destination.exists())
+            self.assertEqual(len(page.requests), 1)
+            full_page, clip, animations = page.requests[0]
+            self.assertTrue(full_page)
+            self.assertLessEqual(clip["width"], 1400)
+            self.assertEqual(clip["height"], 1100)
+            self.assertEqual(animations, "disabled")
 
     def test_wrong_day_generic_headline_blocked_before_screenshot(self):
         with tempfile.TemporaryDirectory() as tmp:
