@@ -44,14 +44,14 @@ class PreviouslyAcceptedImageHold(unittest.TestCase):
             outgoing.append(kwargs)
             return "<rasd-status-only@gmail.com>"
 
-        with patch.object(worker, "require_github_scheduler"), \\
-             patch.object(worker, "scheduled_phase", return_value="rollup"), \\
+        with patch.object(worker, "require_github_scheduler"), \
+             patch.object(worker, "scheduled_phase", return_value="rollup"), \
              patch.object(worker, "protected_credentials", return_value=(
                  "source-sender@gmail.com", "approved@example.com",
-                 "test-password", ledger)), \\
-             patch.object(worker, "news_for_rollup", return_value=rows), \\
+                 "test-password", ledger)), \
+             patch.object(worker, "news_for_rollup", return_value=rows), \
              patch.object(worker, "prepare_word", side_effect=RuntimeError(
-                 "publisher_screenshot_hold")), \\
+                 "publisher_screenshot_hold")), \
              patch.object(worker, "send_one_word",
                           side_effect=assert_status_attachment):
             result = worker.run_scheduled(
@@ -67,14 +67,14 @@ class PreviouslyAcceptedImageHold(unittest.TestCase):
 
     def test_word_integrity_failure_is_never_downgraded_to_status(self):
         ledger, rows = self.setup_context()
-        with patch.object(worker, "require_github_scheduler"), \\
-             patch.object(worker, "scheduled_phase", return_value="rollup"), \\
+        with patch.object(worker, "require_github_scheduler"), \
+             patch.object(worker, "scheduled_phase", return_value="rollup"), \
              patch.object(worker, "protected_credentials", return_value=(
                  "source-sender@gmail.com", "approved@example.com",
-                 "test-password", ledger)), \\
-             patch.object(worker, "news_for_rollup", return_value=rows), \\
+                 "test-password", ledger)), \
+             patch.object(worker, "news_for_rollup", return_value=rows), \
              patch.object(worker, "prepare_word", side_effect=RuntimeError(
-                 "word_screenshot_identity_hold")), \\
+                 "word_screenshot_identity_hold")), \
              patch.object(worker, "send_one_word",
                           side_effect=AssertionError("mail must not be sent")):
             with self.assertRaisesRegex(RuntimeError,
