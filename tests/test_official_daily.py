@@ -72,6 +72,42 @@ class OfficialDailySecurity(unittest.TestCase):
                 worker.require_official_scheduled_send(
                     datetime(2026, 10, 23, 19, tzinfo=timezone.utc))
 
+    def test_owner_visual_correction_requires_single_day_and_distinct_cas_key(self):
+        env = self.trusted_env()
+        env.update({
+            "GITHUB_EVENT_NAME": "push",
+            "GITHUB_ACTOR": "Hatem1984",
+            "RASD_JOB_CRON": "",
+            "RASD_OWNER_PUSH_CONFIRM":
+                "RASD-OWNER-VISUAL-CORRECTION-2026-10-22",
+        })
+        ledger = MagicMock()
+        ledger.reserve.return_value = "reserved"
+        clock = datetime(2026, 10, 22, 20, 0, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / "original.docx"
+            file.write_bytes(b"mock_no_network")
+            with patch.dict(os.environ, env, clear=True), \
+                 patch.object(worker, "protected_credentials",
+                              return_value=("sender@gmail.com", "approved@example.com",
+                                            "mock-password", ledger)), \
+                 patch.object(worker, "send_one_word", return_value="<test-corrected>") as mail:
+                result = worker.run(
+                    mode="send", output=Path(tmp), clock=clock,
+                    builder=lambda *_args, **_kwargs:
+                        (file, [{"id": "fixture"}]))
+            self.assertEqual(result["count"], 1)
+            self.assertEqual(
+                ledger.reserve.call_args.args[0],
+                worker.digest_key("official-ministry-original-daily:2026-10-22:visual-correction-v2"))
+            self.assertIn("تصحيح", mail.call_args.kwargs["subject"])
+            self.assertIn("CORRECTED.docx", mail.call_args.args[0].name)
+            self.assertEqual(ledger.mark_smtp_accepted.call_count, 1)
+            with patch.dict(os.environ, env, clear=True):
+                with self.assertRaises(RuntimeError):
+                    worker.require_official_scheduled_send(
+                        datetime(2026, 10, 23, 20, tzinfo=timezone.utc))
+
     def test_manual_run_replay_and_other_repository_cannot_send(self):
         for key, value in [
             ("GITHUB_EVENT_NAME", "workflow_dispatch"),
