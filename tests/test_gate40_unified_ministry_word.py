@@ -114,7 +114,7 @@ def capture(url, publisher, destination):
 def execute(work, *, driver=FakeDriver, fail_hapi=False, include_rss=True,
             capture_fn=capture, now=NOW):
     config_path = Path(work) / "profile.json"
-    config_path.write_text(json.dumps(PROFILE, ensure_ascii=False))
+    config_path.write_text(json.dumps(PROFILE, ensure_ascii=False), encoding="utf-8")
     return build_unified_word(
         config_path, Path(work) / "out", target_day=DAY, now=now,
         fetch=lambda url, limit: feed(
@@ -311,7 +311,7 @@ class UnifiedOriginalPublisherWordTests(unittest.TestCase):
         ):
             with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:
                 source = Path(tmp) / "sources.json"
-                source.write_text(json.dumps(PROFILE, ensure_ascii=False))
+                source.write_text(json.dumps(PROFILE, ensure_ascii=False), encoding="utf-8")
                 result = build_unified_word(
                     source, Path(tmp) / "out", target_day=target, now=run_clock,
                     fetch=lambda url, limit: feed(url, limit, include_rss=False),
@@ -328,7 +328,7 @@ class UnifiedOriginalPublisherWordTests(unittest.TestCase):
                 execute(tmp, now=NOW.replace(tzinfo=None))
             config = Path(tmp) / "changed.json"
             changed = {**PROFILE, "keywords": ["اقتصاد"]}
-            config.write_text(json.dumps(changed))
+            config.write_text(json.dumps(changed), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "unified_saved_keywords_changed"):
                 build_unified_word(config, Path(tmp) / "out",
                                    target_day=DAY, now=NOW,
