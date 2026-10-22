@@ -287,6 +287,13 @@ def _read_original(page, url: str, keywords: list[str], target_day: date, image:
             visual = image_quality(staged)
             # Prevent a well-formed SHA on a mostly blank page becoming
             # an accepted Word evidence photograph again.
+            print(
+                "RASD_ORIGINAL_VISIBLE_QA"
+                f" width={dimensions[0]} height={dimensions[1]}"
+                f" stddev={visual.get('luminance_stddev', 0)}"
+                f" dark_fraction={visual.get('dark_fraction', 0)}",
+                flush=True,
+            )
             if (not 900 <= dimensions[0] <= 1400 or
                     not 800 <= dimensions[1] <= 1200 or
                     not visual["accepted"] or
