@@ -44,6 +44,21 @@ jobs:
           from urllib.request import Request, urlopen
           from urllib.error import HTTPError, URLError
 
+          def reason_class(error):
+              # Bounded code/class only: NEVER print server descriptions,
+              # HTTP bodies, credential bytes, SMTP replies or email addresses.
+              if isinstance(error, HTTPError):
+                  return "GITHUB_HTTP_" + str(error.code)
+              if isinstance(error, smtplib.SMTPAuthenticationError):
+                  return "GMAIL_AUTH_" + str(error.smtp_code)
+              if isinstance(error, smtplib.SMTPException):
+                  return "SMTP_PROTOCOL_" + type(error).__name__
+              if isinstance(error, ssl.SSLError):
+                  return "SSL_" + type(error).__name__
+              if isinstance(error, (URLError, OSError)):
+                  return "NETWORK_" + type(error).__name__
+              return "INTERNAL_" + type(error).__name__
+
           def hold(label):
               print("RASD_PREFLIGHT_" + label + "=HOLD", flush=True)
               return False
@@ -91,7 +106,8 @@ jobs:
               digest = hashlib.sha256(recipient.encode("utf-8")).hexdigest()
               assert hmac.compare_digest(digest, ledger["approved_recipient_sha256"])
               read_ok = passed("PRIVATE_LEDGER_READ_AND_RECIPIENT_MATCH")
-          except Exception:
+          except Exception as error:
+              print("RASD_PREFLIGHT_LEDGER_READ_ERROR_CLASS=" + reason_class(error), flush=True)
               hold("PRIVATE_LEDGER_READ_AND_RECIPIENT_MATCH")
 
           # Isolated temporary file; NEVER mutate the true delivery-state.json.
@@ -115,7 +131,8 @@ jobs:
                       "branch": branch, "sha": created_sha})
                   created_sha = None
                   write_ok = passed("PRIVATE_LEDGER_SCOPED_WRITE_READ_DELETE")
-              except Exception:
+              except Exception as error:
+                  print("RASD_PREFLIGHT_LEDGER_WRITE_ERROR_CLASS=" + reason_class(error), flush=True)
                   # If failed after create, leave marker for deliberate private
                   # operator cleanup; do NOT touch real ledger or conceal HOLD.
                   hold("PRIVATE_LEDGER_SCOPED_WRITE_READ_DELETE")
@@ -127,7 +144,8 @@ jobs:
                   smtp.login(sender, password)
                   # Deliberately NO sendmail()/send_message()/MAIL FROM.
               smtp_ok = passed("GMAIL_SMTP_AUTH_NO_SEND")
-          except Exception:
+          except Exception as error:
+              print("RASD_PREFLIGHT_GMAIL_ERROR_CLASS=" + reason_class(error), flush=True)
               hold("GMAIL_SMTP_AUTH_NO_SEND")
 
           passed("NO_EMAIL_TRANSMITTED")
