@@ -8,7 +8,11 @@ ROOT=Path(__file__).resolve().parents[1]
 class NewsroomDeploymentSafety(unittest.TestCase):
     def test_schedule_only_main_protected_environment_and_pause_switch(self):
         workflow=(ROOT/".github/workflows/rasd-scheduled.yml").read_text("utf-8")
-        self.assertIn("if: github.event_name == 'schedule' && github.ref == 'refs/heads/main' && vars.RASD_AUTOMATION_PAUSED != 'true'",workflow)
+        self.assertIn("vars.RASD_AUTOMATION_PAUSED != 'true'",workflow)
+        self.assertIn("github.event_name == 'schedule'",workflow)
+        self.assertIn("github.ref == 'refs/heads/main'",workflow)
+        self.assertIn("github.actor == 'Hatem1984'",workflow)
+        self.assertIn("github.event.head_commit.message == 'RASD-OWNER-DAILY-2026-10-23'",workflow)
         self.assertIn("environment: rasd-production",workflow)
         self.assertIn("RASD_AUTOMATION_ENABLED: 'true'",workflow)
         self.assertIn("RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}",workflow)
