@@ -1,0 +1,40 @@
+name: RASD Gate88 — Windows-hosted original publisher no-send QA
+
+on:
+  push:
+    branches:
+      - 'gate88-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-windows-original-no-send-qa
+  cancel-in-progress: true
+
+jobs:
+  windows-real-origin-qa:
+    runs-on: windows-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install read-only original page and Word dependencies
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --only-shell chromium
+      - name: Confirm capture and Word integrity offline
+        shell: pwsh
+        run: python -m unittest discover -s tests -p test_newsroom_headline_capture.py -v
+      - name: One original Hapi page to verified ephemeral Word — no Gmail or archive
+        shell: pwsh
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_REPORT_TO: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: python windows_original_no_send_probe.py
