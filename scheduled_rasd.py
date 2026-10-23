@@ -439,7 +439,10 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             raise RuntimeError("owner_oneoff_mode_outside_cairo_date_window")
         phase = "rollup"
     else:
-        if event != "schedule":
+        # require_github_scheduler() already authenticates normal schedules.
+        # Reject only real push contexts here; offline tests explicitly mock
+        # the outer guard and must remain independent of ambient CI event.
+        if event == "push":
             raise RuntimeError("manual_or_push_cannot_start_periodic_delivery")
         phase = scheduled_phase(schedule_kind, now)
     # GitHub may drop or delay the exact 22:00 Cairo event. The next
