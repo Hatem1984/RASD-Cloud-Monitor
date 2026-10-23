@@ -73,7 +73,6 @@ def scheduled_phase(cron: str, now: datetime) -> str:
 def require_github_scheduler() -> None:
     env = os.environ
     expected = {
-        "GITHUB_EVENT_NAME": "schedule",
         "GITHUB_REF": "refs/heads/main",
         "GITHUB_REPOSITORY": "Hatem1984/RASD-Cloud-Monitor",
         "GITHUB_RUN_ATTEMPT": "1",
@@ -84,6 +83,17 @@ def require_github_scheduler() -> None:
         raise RuntimeError("scheduled_execution_not_authorized")
     if not env.get("GITHUB_RUN_ID", "").isdigit():
         raise RuntimeError("invalid_run_identity")
+    event = env.get("GITHUB_EVENT_NAME")
+    if event == "schedule":
+        return
+    if (event != "push" or
+            env.get("GITHUB_ACTOR") != "Hatem1984" or
+            env.get("RASD_OWNER_PUSH_CONFIRM") !=
+                "RASD-OWNER-DAILY-2026-10-23"):
+        raise RuntimeError("owner_oneoff_delivery_not_authorized")
+    local = datetime.now(timezone.utc).astimezone(CAIRO)
+    if local.date().isoformat() != "2026-10-23" or local.hour != 22:
+        raise RuntimeError("owner_oneoff_delivery_outside_cairo_date_window")
 
 
 def protected_credentials() -> tuple[str, str, str, PrivateGitHubLedger]:
@@ -417,7 +427,24 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     require_github_scheduler()
     now = datetime.now(timezone.utc) if clock is None else clock
     schedule_kind = os.environ.get("RASD_JOB_CRON", "")
-    phase = scheduled_phase(schedule_kind, now)
+    owner_oneoff = mode == "rollup_owner_once"
+    event = os.environ.get("GITHUB_EVENT_NAME")
+    if owner_oneoff:
+        if event != "push" or schedule_kind:
+            raise RuntimeError("owner_oneoff_mode_event_mismatch")
+        # Additional live clock check beyond the environment authorization:
+        # this is a single 22:00–22:59 Cairo owner-requested catch-up.
+        local = now.astimezone(CAIRO)
+        if local.date().isoformat() != "2026-10-23" or local.hour != 22:
+            raise RuntimeError("owner_oneoff_mode_outside_cairo_date_window")
+        phase = "rollup"
+    else:
+        # require_github_scheduler() already authenticates normal schedules.
+        # Reject only real push contexts here; offline tests explicitly mock
+        # the outer guard and must remain independent of ambient CI event.
+        if event == "push":
+            raise RuntimeError("manual_or_push_cannot_start_periodic_delivery")
+        phase = scheduled_phase(schedule_kind, now)
     # GitHub may drop or delay the exact 22:00 Cairo event. The next
     # authentic half-hour schedule occurrence is allowed to reconcile ONE
     # missing daily bulletin from the most recent completed 22:00 window.
@@ -427,7 +454,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
         raise RuntimeError("daily_recovery_not_half_hour_schedule")
     if phase == "skip":
         return {"status": "skip_non_target_cairo_slot", "smtp_accepted": False}
-    if mode != phase and not (recovery and phase == "interval"):
+    if mode != phase and not (recovery and phase == "interval") and not owner_oneoff:
         raise RuntimeError("scheduled_mode_cron_mismatch")
     sender, recipient, password, ledger = protected_credentials()
     config = json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
@@ -488,7 +515,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             return {"status": "smtp_accepted_unconfirmed_inbox",
                     "items": len(delivered), "source_limited": limited,
                     "original_screenshots_held": held_count}
-        if mode in ("rollup", "rollup_recovery"):
+        if mode in ("rollup", "rollup_recovery", "rollup_owner_once"):
             rollup_key = digest_key("rollup:" + day)
             if rollup_key in state["entries"]:
                 return {"status": "rollup_already_reserved_or_sent", "smtp_accepted": False}
@@ -608,7 +635,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--mode",
-        choices=["interval", "rollup", "rollup_recovery", "dry_run"],
+        choices=["interval", "rollup", "rollup_recovery", "rollup_owner_once", "dry_run"],
         required=True)
     args = parser.parse_args()
     if args.mode == "dry_run":

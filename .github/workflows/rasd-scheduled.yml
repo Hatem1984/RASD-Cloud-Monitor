@@ -1,6 +1,9 @@
 name: RASD — 30-minute newsroom monitoring + Cairo daily rollup
 
 on:
+  push:
+    branches:
+      - main # protected send still requires exact owner push commit signal
   workflow_dispatch:  # Safe GitHub-hosted preview only: no credentials, no email
   schedule:
     - cron: '0,30 * * * *'
@@ -38,13 +41,19 @@ jobs:
     # workflow_dispatch or PR. Owner can suspend instantly using repository
     # Actions variable RASD_AUTOMATION_PAUSED=true (default not paused).
     # Publisher refusals and evidence failures STILL abort before private CAS.
-    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main' && vars.RASD_AUTOMATION_PAUSED != 'true'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      vars.RASD_AUTOMATION_PAUSED != 'true' &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'push' && github.actor == 'Hatem1984' &&
+        github.event.head_commit.message == 'RASD-OWNER-DAILY-2026-10-23'))
     runs-on: ubuntu-latest
     timeout-minutes: 24
     environment: rasd-production
     env:
       RASD_AUTOMATION_ENABLED: 'true' # Owner-authorized production activation in signed main release
       RASD_JOB_CRON: ${{ github.event.schedule }}
+      RASD_OWNER_PUSH_CONFIRM: ${{ github.event.head_commit.message }}
       RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
       RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
       RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
@@ -64,11 +73,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "$RASD_JOB_CRON" in
-            '0,30 * * * *') mode=interval ;;
-            '0 19,20 * * *') mode=rollup ;;
-            *) echo 'RASD_UNEXPECTED_SCHEDULE_HOLD'; exit 1 ;;
-          esac
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            if [ "$RASD_OWNER_PUSH_CONFIRM" != 'RASD-OWNER-DAILY-2026-10-23' ]; then
+              echo 'RASD_OWNER_PUSH_NOT_AUTHORIZED'
+              exit 1
+            fi
+            mode=rollup_owner_once
+          else
+            case "$RASD_JOB_CRON" in
+              '0,30 * * * *') mode=interval ;;
+              '0 19,20 * * *') mode=rollup ;;
+              *) echo 'RASD_UNEXPECTED_SCHEDULE_HOLD'; exit 1 ;;
+            esac
+          fi
           python scheduled_rasd.py --mode "$mode"
           # Reconcile at most the latest due 22:00 Cairo report when GitHub
           # missed its dedicated daily cron. Protected schedule-only worker
