@@ -416,14 +416,27 @@ def news_for_rollup(state: dict, day: str, config: dict) -> list[dict]:
 def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     require_github_scheduler()
     now = datetime.now(timezone.utc) if clock is None else clock
-    phase = scheduled_phase(os.environ.get("RASD_JOB_CRON", ""), now)
+    schedule_kind = os.environ.get("RASD_JOB_CRON", "")
+    phase = scheduled_phase(schedule_kind, now)
+    # GitHub may drop or delay the exact 22:00 Cairo event. The next
+    # authentic half-hour schedule occurrence is allowed to reconcile ONE
+    # missing daily bulletin from the most recent completed 22:00 window.
+    # Never allow manual_dispatch, PR, alternate cron, or unbounded replay.
+    recovery = mode == "rollup_recovery"
+    if recovery and schedule_kind != HALF_HOUR_CRON:
+        raise RuntimeError("daily_recovery_not_half_hour_schedule")
     if phase == "skip":
         return {"status": "skip_non_target_cairo_slot", "smtp_accepted": False}
-    if mode != phase:
+    if mode != phase and not (recovery and phase == "interval"):
         raise RuntimeError("scheduled_mode_cron_mismatch")
     sender, recipient, password, ledger = protected_credentials()
     config = json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
     window, day, start = cairo_window(now)
+    if recovery:
+        local = now.astimezone(CAIRO)
+        target_date = (local.date() if local.hour >= 22
+                       else local.date() - timedelta(days=1))
+        day = target_date.isoformat()
     state, _ = ledger.read()
     with tempfile.TemporaryDirectory(prefix="rasd-scheduled-") as folder:
         output = Path(folder)
@@ -475,7 +488,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             return {"status": "smtp_accepted_unconfirmed_inbox",
                     "items": len(delivered), "source_limited": limited,
                     "original_screenshots_held": held_count}
-        if mode == "rollup":
+        if mode in ("rollup", "rollup_recovery"):
             rollup_key = digest_key("rollup:" + day)
             if rollup_key in state["entries"]:
                 return {"status": "rollup_already_reserved_or_sent", "smtp_accepted": False}
@@ -593,7 +606,10 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["interval", "rollup", "dry_run"], required=True)
+    parser.add_argument(
+        "--mode",
+        choices=["interval", "rollup", "rollup_recovery", "dry_run"],
+        required=True)
     args = parser.parse_args()
     if args.mode == "dry_run":
         # NO credentials, private state, browser or SMTP.
