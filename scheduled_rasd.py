@@ -437,10 +437,29 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             if len(stories) > MAX_BATCH:
                 raise RuntimeError("more_than_15_unsent_articles_manual_review")
             title = "رصد | الأخبار المصورة الموثقة — نصف ساعة | " + window
-            doc, delivered, held_count, limited = prepare_source_limited_verified_word(
-                stories, config, output, title=title,
-                start=start.astimezone(CAIRO).isoformat(),
-                end=now.astimezone(CAIRO).isoformat(), source_records=health)
+            try:
+                doc, delivered, held_count, limited = prepare_source_limited_verified_word(
+                    stories, config, output, title=title,
+                    start=start.astimezone(CAIRO).isoformat(),
+                    end=now.astimezone(CAIRO).isoformat(), source_records=health)
+            except RuntimeError as exc:
+                # Every discovered, approved article was attempted, but NONE
+                # had a verified original-publisher screenshot. This is a
+                # source-access HOLD (not a system crash, fake success or
+                # authorization to email RSS-only text). Do not reserve or
+                # mutate private state: a later run can safely retry.
+                # Any other issue (digest, DOCX, corruption, credentials)
+                # remains a hard failure and must not be hidden.
+                if str(exc) != "no_original_publisher_page_verified":
+                    raise
+                return {
+                    "status": "hold_all_original_publisher_captures_unavailable",
+                    "items": 0,
+                    "eligible_articles": len(stories),
+                    "held_articles": len(stories),
+                    "smtp_accepted": False,
+                    "coverage_status": "SOURCE_ACCESS_HOLD_NO_DELIVERY",
+                }
             # Only successfully captured/embedded originals enter private CAS.
             # Blocked items remain unsent, so later scheduled scans can retry.
             reserve_stories(ledger, delivered, day)
@@ -584,6 +603,11 @@ def main() -> None:
         return
     try:
         result = run_scheduled(args.mode)
+        if result.get("status") == "hold_all_original_publisher_captures_unavailable":
+            print("::warning::RASD_SOURCE_ACCESS_HOLD: all approved original"
+                  " publisher pages unavailable to hosted browser;"
+                  " 0 emails, 0 private reservations; retry at next scheduled slot.",
+                  flush=True)
         print(json.dumps(result, ensure_ascii=False))
     except Exception:
         print("RASD_SCHEDULED_HOLD: inspect protected state; no blind resend")
