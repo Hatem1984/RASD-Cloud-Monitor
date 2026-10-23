@@ -92,7 +92,7 @@ def require_github_scheduler() -> None:
                 "RASD-OWNER-DAILY-2026-10-23"):
         raise RuntimeError("owner_oneoff_delivery_not_authorized")
     local = datetime.now(timezone.utc).astimezone(CAIRO)
-    if local.date() != date(2026, 10, 23) or local.hour != 22:
+    if local.date().isoformat() != "2026-10-23" or local.hour != 22:
         raise RuntimeError("owner_oneoff_delivery_outside_cairo_date_window")
 
 
@@ -435,7 +435,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
         # Additional live clock check beyond the environment authorization:
         # this is a single 22:00–22:59 Cairo owner-requested catch-up.
         local = now.astimezone(CAIRO)
-        if local.date() != date(2026, 10, 23) or local.hour != 22:
+        if local.date().isoformat() != "2026-10-23" or local.hour != 22:
             raise RuntimeError("owner_oneoff_mode_outside_cairo_date_window")
         phase = "rollup"
     else:
