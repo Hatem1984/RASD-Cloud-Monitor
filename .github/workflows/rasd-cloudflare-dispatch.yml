@@ -1,0 +1,65 @@
+name: RASD — Cloudflare cron production relay
+
+on:
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: 'Fixed external scheduler identity'
+        required: true
+        type: string
+      slot:
+        description: 'UTC scheduled slot ISO8601, validated by production worker'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Same lock and private-ledger CAS as BOTH existing native GitHub schedules.
+# Cloudflare, manual or delayed workflow launches may not send in parallel.
+concurrency:
+  group: rasd-scheduled-monitor-private-ledger
+  cancel-in-progress: false
+
+jobs:
+  protected-cloudflare-interval:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'Hatem1984' &&
+      inputs.origin == 'cloudflare-rasd-cron-v1' &&
+      vars.RASD_AUTOMATION_PAUSED != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    environment: rasd-production
+    env:
+      RASD_AUTOMATION_ENABLED: 'true'
+      RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
+      RASD_JOB_CRON: '7,37 * * * *'
+      RASD_CLOUDFLARE_ORIGIN: ${{ inputs.origin }}
+      RASD_CLOUDFLARE_SLOT: ${{ inputs.slot }}
+      RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
+      RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
+      RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
+      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install original publisher source capture
+        run: |
+          python -m pip install -r requirements-test.txt 'playwright>=1.50,<2'
+          python -m playwright install --only-shell chromium
+      - name: Run protected original-publisher newsroom interval
+        shell: bash
+        run: |
+          set -euo pipefail
+          interval_exit=0
+          python scheduled_rasd.py --mode interval || interval_exit=$?
+          rollup_exit=0
+          python scheduled_rasd.py --mode rollup_recovery || rollup_exit=$?
+          if [ "$interval_exit" -ne 0 ] || [ "$rollup_exit" -ne 0 ]; then
+            echo 'RASD_CLOUDFLARE_INTERVAL_OR_ROLLUP_HOLD'
+            exit 1
+          fi

@@ -36,6 +36,11 @@ BACKUP_WORKFLOW = (
     "Hatem1984/RASD-Cloud-Monitor/.github/workflows/"
     "rasd-schedule-backup.yml@refs/heads/main"
 )
+CLOUDFLARE_CRON = "7,37 * * * *"
+CLOUDFLARE_WORKFLOW = (
+    "Hatem1984/RASD-Cloud-Monitor/.github/workflows/"
+    "rasd-cloudflare-dispatch.yml@refs/heads/main"
+)
 DAILY_CRON = "0 19,20 * * *"
 MAX_WORD_BYTES = 8_000_000
 MAX_BATCH = 15  # Existing production limit, unchanged.
@@ -65,7 +70,7 @@ def scheduled_phase(cron: str, now: datetime) -> str:
     """
     _, _, _ = cairo_window(now)
     local = now.astimezone(CAIRO)
-    if cron in (HALF_HOUR_CRON, BACKUP_HALF_HOUR_CRON):
+    if cron in (HALF_HOUR_CRON, BACKUP_HALF_HOUR_CRON, CLOUDFLARE_CRON):
         return "skip" if local.hour == 22 and local.minute < 30 else "interval"
     if cron == DAILY_CRON:
         # GitHub schedule may start late. Continue accepting this day's
@@ -97,6 +102,27 @@ def require_github_scheduler() -> None:
              schedule_kind == BACKUP_HALF_HOUR_CRON)):
             return
         raise RuntimeError("unapproved_scheduled_workflow_or_cron")
+    if event == "workflow_dispatch":
+        # GitHub accepts this event only with a repository-scoped Actions:write
+        # token. Never trust user-supplied scheduling inputs without comparing
+        # the exact caller, workflow identity and a fresh UTC cron slot.
+        if (workflow_ref != CLOUDFLARE_WORKFLOW or
+                env.get("GITHUB_ACTOR") != "Hatem1984" or
+                schedule_kind != CLOUDFLARE_CRON or
+                env.get("RASD_CLOUDFLARE_ORIGIN") != "cloudflare-rasd-cron-v1"):
+            raise RuntimeError("cloudflare_dispatch_not_authorized")
+        try:
+            slot = datetime.fromisoformat(env.get("RASD_CLOUDFLARE_SLOT", ""))
+        except (TypeError, ValueError):
+            raise RuntimeError("cloudflare_dispatch_slot_invalid") from None
+        if (slot.tzinfo is None or slot.utcoffset() != timedelta(0) or
+                slot.minute not in (7, 37) or
+                slot.second != 0 or slot.microsecond != 0):
+            raise RuntimeError("cloudflare_dispatch_slot_invalid")
+        delay = datetime.now(timezone.utc) - slot.astimezone(timezone.utc)
+        if not timedelta(seconds=-30) <= delay <= timedelta(minutes=20):
+            raise RuntimeError("cloudflare_dispatch_slot_expired")
+        return
     # Backup is strictly schedule-only: it must never turn a manual push or
     # a workflow_dispatch into a protected mail-sending entrypoint.
     if workflow_ref != EXPECTED_WORKFLOW:
@@ -514,7 +540,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     # missing daily bulletin from the most recent completed 22:00 window.
     # Never allow manual_dispatch, PR, alternate cron, or unbounded replay.
     recovery = mode == "rollup_recovery"
-    if recovery and schedule_kind not in (HALF_HOUR_CRON, BACKUP_HALF_HOUR_CRON):
+    if recovery and schedule_kind not in (HALF_HOUR_CRON, BACKUP_HALF_HOUR_CRON, CLOUDFLARE_CRON):
         raise RuntimeError("daily_recovery_not_half_hour_schedule")
     if phase == "skip" and not recovery:
         return {"status": "skip_non_target_cairo_slot", "smtp_accepted": False}
