@@ -17,7 +17,7 @@ class SourceHoldStatus(unittest.TestCase):
     def run_case(self, reason):
         ledger = MagicMock()
         ledger.read.return_value = ({"entries": {}}, "sha")
-        rows = [{"id": "a"*24}]
+        rows = [{"id": "a"*24,"published_at_cairo":"2026-10-24 13:00 EEST"}]
         def find(config, clock, *, allow_degraded, source_records):
             source_records.extend({"feed_id": f["id"], "status": "ok"}
                                   for f in config["feeds"])
