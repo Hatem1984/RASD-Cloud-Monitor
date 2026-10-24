@@ -1,0 +1,23 @@
+name: RASD Cloudflare clock — offline Node security checks
+on:
+  push:
+    paths:
+      - 'cloudflare-rasd-clock/**'
+      - '.github/workflows/rasd-cloudflare-ci.yml'
+  pull_request:
+    paths:
+      - 'cloudflare-rasd-clock/**'
+      - '.github/workflows/rasd-cloudflare-ci.yml'
+permissions:
+  contents: read
+jobs:
+  cloudflare-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test guarded Cloudflare Cron Worker without network or secrets
+        run: node --test cloudflare-rasd-clock/clock.test.mjs
