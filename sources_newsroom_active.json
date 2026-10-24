@@ -37,7 +37,7 @@
     {
       "id": "alborsa",
       "name": "Alborsa native Egyptian Economy RSS",
-      "url": "https://www.alborsaanews.com/category/%D8%A7%D9%84%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%89/feed/",
+      "url": "https://www.alborsaanews.com/category/%D8%A7%D9%84%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%89/feed",
       "allowed_article_hosts": [
         "www.alborsaanews.com",
         "alborsaanews.com"
