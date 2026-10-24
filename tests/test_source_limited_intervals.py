@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import tempfile
+import os
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,6 +53,13 @@ def fixture_capture(article: dict, feeds: list, target: Path) -> dict:
 
 
 class SourceLimitedOriginals(unittest.TestCase):
+    def setUp(self):
+        # Only this offline fixture emulates a genuinely scheduled worker.
+        # Production event authentication remains strictly fail-closed.
+        self._scheduled_env = patch.dict(os.environ, {"GITHUB_EVENT_NAME": "schedule"})
+        self._scheduled_env.start()
+        self.addCleanup(self._scheduled_env.stop)
+
     def build(self, stories, status=HEALTHY, *, capture=fixture_capture):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
