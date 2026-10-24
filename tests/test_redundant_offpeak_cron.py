@@ -8,6 +8,13 @@ import scheduled_rasd as worker
 
 
 class RedundantOffpeakCron(unittest.TestCase):
+    def setUp(self):
+        # Only this offline fixture emulates a genuinely scheduled worker.
+        # Production event authentication remains strictly fail-closed.
+        self._scheduled_env = patch.dict(os.environ, {"GITHUB_EVENT_NAME": "schedule"})
+        self._scheduled_env.start()
+        self.addCleanup(self._scheduled_env.stop)
+
     def test_two_chances_per_halfhour_both_share_utc_slot_and_recovery_key(self):
         self.assertEqual(worker.HALF_HOUR_CRON, "7,18,37,48 * * * *")
         for minute in (7, 18):
