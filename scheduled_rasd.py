@@ -602,10 +602,23 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             else:
                 title = "رصد | التقرير المجمع للأخبار المرسلة | " + day
                 try:
-                    doc, _ = prepare_word(
-                        stories, config, output, title=title,
-                        start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
-                        end=day + " 22:00 القاهرة")
+                    if os.environ.get("RASD_DAILY_SENT_ARCHIVE_ENABLED") == "true":
+                        # Production daily report is ONE consolidated copy
+                        # of already DELIVERED originals, never a new browser
+                        # visit that the publisher may now block.
+                        from daily_sent_consolidator import consolidate_sent_words
+                        doc, _ = consolidate_sent_words(
+                            stories, state, output, sender=sender,
+                            recipient=recipient, app_password=password,
+                            title=title,
+                            start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
+                            end=day + " 22:00 القاهرة", config=config)
+                    else:
+                        # Offline legacy/test mode: no IMAP and no new sends.
+                        doc, _ = prepare_word(
+                            stories, config, output, title=title,
+                            start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
+                            end=day + " 22:00 القاهرة")
                     photo_hold = False
                 except RuntimeError as exc:
                     # A publisher can revoke public browser access AFTER an
