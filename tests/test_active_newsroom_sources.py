@@ -18,19 +18,21 @@ class ActiveNewsroomProfile(unittest.TestCase):
         self.assertEqual(active["keywords"], a["keywords"])
         self.assertEqual(active["keywords"], s["keywords"])
         self.assertEqual(active["feeds"][:2], a["feeds"])
-        self.assertEqual(active["feeds"][2:], s["feeds"])
+        self.assertEqual(active["feeds"][2:3], s["feeds"])
+        self.assertEqual(active["feeds"][3]["id"], "alborsa")
         self.assertEqual([x["id"] for x in active["feeds"]],
-                         ["hapi", "almasryalyoum", "shorouk"])
+                         ["hapi", "almasryalyoum", "shorouk", "alborsa"])
         self.assertEqual(active["recent_hours"], a["recent_hours"])
         self.assertEqual(active["max_feed_bytes"], a["max_feed_bytes"])
-        self.assertEqual(len(active["feeds"]), 3)
+        self.assertEqual(len(active["feeds"]), 4)
         for item in active["feeds"]:
             self.assertIn(item["url"], APPROVED_FEED_URLS)
             self.assertTrue(item["url"].startswith("https://"))
             self.assertTrue(all(
                 domain in {"hapijournal.com", "www.hapijournal.com",
                            "almasryalyoum.com", "www.almasryalyoum.com",
-                           "www.shorouknews.com"}
+                           "www.shorouknews.com", "www.alborsaanews.com",
+                           "alborsaanews.com"}
                 for domain in item["allowed_article_hosts"]))
 
     def test_original_shorouk_page_is_an_approved_newsroom_publisher(self):
@@ -43,7 +45,7 @@ class ActiveNewsroomProfile(unittest.TestCase):
     def test_no_railway_dependency_or_unreviewed_external_feed(self):
         active = json.loads((ROOT / "sources_newsroom_active.json").read_text(encoding="utf-8"))
         self.assertNotIn("railway", json.dumps(active).lower())
-        self.assertEqual(len({x["url"] for x in active["feeds"]}), 3)
+        self.assertEqual(len({x["url"] for x in active["feeds"]}), 4)
 
 
 if __name__ == "__main__":
