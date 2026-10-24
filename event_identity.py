@@ -53,11 +53,35 @@ def same_event(a,b):
 
 
 def distinct_events(incoming,history=()):
-    """Return chosen and suppressed; reserved items also bar duplicate attempts."""
-    chosen,duplicates=[],[]
-    for item in incoming:
-        if any(same_event(item,prev) for prev in (*history,*chosen)):
+    """Keep one event and retain other ORIGINAL publishers as source citations.
+
+    Historical already-delivered events must never be resent. New same-event
+    articles from different publishers are cited inside the one chosen Word
+    rather than disappearing or becoming two emails.
+    """
+    chosen, duplicates = [], []
+    for original in incoming:
+        item = dict(original)
+        if any(same_event(item, prev) for prev in history):
             duplicates.append(item)
-        else:
+            continue
+        first = next((row for row in chosen if same_event(item, row)), None)
+        if first is None:
+            item.setdefault("supporting_sources", [])
             chosen.append(item)
-    return chosen,duplicates
+            continue
+        duplicates.append(item)
+        # Display only publisher-native URLs and metadata already validated
+        # by the discovery feed. Never substitute these for primary JPEG.
+        if (item.get("source") != first.get("source")
+                and item.get("url") != first.get("url")
+                and not any(s.get("url") == item.get("url")
+                            for s in first["supporting_sources"])
+                and len(first["supporting_sources"]) < 8):
+            first["supporting_sources"].append({
+                "source": item["source"],
+                "headline": item["headline"],
+                "url": item["url"],
+                "published_display_cairo": item.get("published_display_cairo", ""),
+            })
+    return chosen, duplicates
