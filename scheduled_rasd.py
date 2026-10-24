@@ -251,6 +251,15 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
             # fabricated picture or an accepted ledger entry.
             if proof.get("status") != "hold":
                 raise RuntimeError("invalid_original_capture_receipt")
+            # Finite pre-approved categories only; never log URLs, bodies,
+            # exception strings or credentials from the original website.
+            safe_reason = proof.get("reason")
+            from gate11_runner import SAFE_CAPTURE_FAILURE_CODES
+            if safe_reason not in SAFE_CAPTURE_FAILURE_CODES:
+                safe_reason = "other"
+            print("::warning::RASD_ORIGINAL_IMAGE_HOLD"
+                  f" publisher={item['source']!r} reason={safe_reason}",
+                  flush=True)
             rejected += 1
             continue
         digest = proof.get("sha256")
