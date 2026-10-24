@@ -98,7 +98,7 @@ def require_github_scheduler() -> None:
     approved = ((marker == "RASD-OWNER-DAILY-2026-10-23"
                  and day == "2026-10-23" and local.hour == 22)
                 or (marker == "RASD-OWNER-NEWSROOM-2026-10-24"
-                    and day == "2026-10-24"))
+                    and day == "2026-10-24" and 14 <= local.hour < 21))
     if not approved:
         raise RuntimeError("owner_oneoff_delivery_outside_cairo_date_window")
 
@@ -139,7 +139,8 @@ def validate_story(item: dict, config: dict) -> None:
 
 def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                            allow_degraded: bool = False,
-                           source_records: list[dict] | None = None) -> list[dict]:
+                           source_records: list[dict] | None = None,
+                           age_hours: int = 24) -> list[dict]:
     """Read ALL current saved-keyword matches before deciding the per-email cap.
 
     The 15-story cap belongs to each *new* message, not an entire 24-hour
@@ -167,7 +168,7 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
         if stamp.tzinfo is None or stamp.utcoffset() is None:
             raise RuntimeError("publisher_date_unverifiable")
         stamp = stamp.astimezone(timezone.utc)
-        if not checked - timedelta(hours=24) <= stamp <= checked:
+        if not checked - timedelta(hours=age_hours) <= stamp <= checked:
             continue
         row = {"id": candidate["id"], "headline": candidate["headline"],
                "publisher_excerpt": candidate.get("publisher_excerpt", ""),
@@ -444,6 +445,10 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     now = datetime.now(timezone.utc) if clock is None else clock
     schedule_kind = os.environ.get("RASD_JOB_CRON", "")
     owner_oneoff = mode in {"rollup_owner_once", "interval_owner_once"}
+    if mode == "interval_owner_once" and (
+            os.environ.get("RASD_OWNER_PUSH_CONFIRM") !=
+            "RASD-OWNER-NEWSROOM-2026-10-24"):
+        raise RuntimeError("wrong_owner_newsroom_marker")
     event = os.environ.get("GITHUB_EVENT_NAME")
     if owner_oneoff:
         if event != "push" or schedule_kind:
@@ -460,7 +465,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             or
             (mode == "interval_owner_once"
              and marker == "RASD-OWNER-NEWSROOM-2026-10-24"
-             and local.date().isoformat() == "2026-10-24")
+             and local.date().isoformat() == "2026-10-24" and 14 <= local.hour < 21)
         )
         if not approved:
             raise RuntimeError("owner_oneoff_mode_outside_cairo_date_window")
@@ -503,13 +508,20 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
         if mode in ("interval", "interval_owner_once"):
             health = []
             available = discover_interval_news(
-                config, now, allow_degraded=True, source_records=health)
+                config, now, allow_degraded=True, source_records=health,
+                **({"age_hours":48} if mode == "interval_owner_once" else {}))
+            if mode == "interval_owner_once":
+                # Retrospective only: strictly Oct23 publisher timestamps.
+                available = [a for a in available
+                             if a["published_at_cairo"].startswith("2026-10-23 ")]
             stories = [a for a in available if a["id"] not in state["entries"]]
             if not stories:
                 return {"status": "no_new_verified_news", "smtp_accepted": False}
             if len(stories) > MAX_BATCH:
                 raise RuntimeError("more_than_15_unsent_articles_manual_review")
-            title = "رصد | الأخبار المصورة الموثقة — نصف ساعة | " + window
+            title = ("رصد | استدراك أخبار 23 أكتوبر بصور ناشريها الأصلية"
+                     if mode == "interval_owner_once" else
+                     "رصد | الأخبار المصورة الموثقة — نصف ساعة | " + window)
             try:
                 doc, delivered, held_count, limited = prepare_source_limited_verified_word(
                     stories, config, output, title=title,
