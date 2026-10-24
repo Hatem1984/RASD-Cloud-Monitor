@@ -148,6 +148,8 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
     """
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("naive_news_clock_forbidden")
+    if type(age_hours) is not int or age_hours not in (24, 48):
+        raise ValueError("unapproved_newsroom_lookback")
     checked = now.astimezone(timezone.utc)
     observed = inspector(config, now=checked, article_limit=200,
                          require_complete_items=True)
