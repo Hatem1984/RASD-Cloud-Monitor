@@ -1,0 +1,36 @@
+name: RASD Gate94 — actual original newsroom Word (no send)
+on:
+  push:
+    branches:
+      - 'gate94-*'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  alborsa-source-word:
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact current publishing and original screenshot dependencies
+        run: |
+          python -m pip install -r requirements-test.txt 'playwright>=1.50,<2'
+          python -m playwright install --only-shell chromium
+      - name: Native RSS to real original JPEG and verified Word — never emails
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: python rasd_live_alborsa_no_send.py
+      - name: Preserve only one-day original source proof if accepted
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-alborsa-real-original-word-no-send
+          path: rasd-live-qa/
+          if-no-files-found: ignore
+          retention-days: 1
