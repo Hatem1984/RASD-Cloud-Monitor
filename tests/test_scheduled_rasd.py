@@ -125,9 +125,11 @@ class ScheduledRASDSecurity(unittest.TestCase):
         second = dict(story)
         second['url'] = 'https://hapijournal.com/second-news'
         second['id'] = article_id(second['url'])
+        second['headline'] = 'وزير التخطيط يوقع اتفاقًا لتمويل المشروعات الصناعية'
         third = dict(story)
         third['url'] = 'https://hapijournal.com/third-news'
         third['id'] = article_id(third['url'])
+        third['headline'] = 'وزارة التخطيط تعلن ضوابط الإنفاق الاستثماري'
         state = {'entries': {
             story['id']: {'status': 'smtp_accepted',
                           'accepted_at': '2026-10-20T20:30:00+00:00',
