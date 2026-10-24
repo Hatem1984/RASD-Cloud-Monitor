@@ -13,9 +13,22 @@ const GH_HEADERS = {
 };
 
 function githubToken(env) {
-  const token = env.GH_ACTIONS_TOKEN;
-  if (typeof token !== "string" || token.length < 25) {
-    throw new Error("missing_cloudflare_github_token");
+  // Cloudflare may show the secret NAME in settings even when the latest
+  // runtime cannot access a valid token. Report ONLY a status code, never a
+  // value, prefix, length or object dump.
+  const raw = env.GH_ACTIONS_TOKEN;
+  if (raw === undefined || raw === null) {
+    throw new Error("github_secret_binding_unavailable");
+  }
+  if (typeof raw !== "string") {
+    throw new Error("github_secret_binding_nontext");
+  }
+  const token = raw.trim();
+  if (token.length < 40) {
+    throw new Error("github_secret_binding_too_short");
+  }
+  if (!token.startsWith("github_pat_")) {
+    throw new Error("github_secret_binding_wrong_format");
   }
   return token;
 }
@@ -72,7 +85,9 @@ async function dispatch(controller, env) {
 function safeFailure(error) {
   const known = [
     "unapproved_cron", "invalid_scheduled_timestamp", "invalid_scheduled_minute",
-    "scheduled_slot_outside_freshness_window", "missing_cloudflare_github_token",
+    "scheduled_slot_outside_freshness_window",
+    "github_secret_binding_unavailable", "github_secret_binding_nontext",
+    "github_secret_binding_too_short", "github_secret_binding_wrong_format",
   ];
   const message = error instanceof Error ? error.message : "";
   return known.includes(message) || /^github_(token_workflow_read|workflow_dispatch)_http_\d{3}$/.test(message)
