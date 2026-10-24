@@ -78,6 +78,10 @@ class MergeActualDeliveredWord(unittest.TestCase):
             im = Image.new("RGB", (1200, 900), "#f9f9f9")
             draw = ImageDraw.Draw(im)
             draw.rectangle((0, 0, 1199, 190), fill="#224466")
+            # Images must be distinct: real publisher evidence is not
+            # interchangeable across two different article identities.
+            draw.rectangle((50, 35, 250+int(story["id"][0] == "b")*320, 90),
+                           fill="#d1e8fa")
             for y in range(240, 860, 23):
                 draw.rectangle((40, y, 1160, y+13), fill="#183146")
             im.save(picture, "JPEG", quality=88)
