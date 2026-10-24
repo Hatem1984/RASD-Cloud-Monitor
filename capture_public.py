@@ -110,6 +110,26 @@ def headline_visible_in_viewport(box: dict | None, viewport: dict | None) -> boo
         return False
 
 
+
+def visible_article_image_missing(rows: list[dict]) -> bool:
+    """Never accept a prominent publisher article photo that did not load.
+
+    The browser supplies geometry and native image load state from the
+    untouched original page. This is not a substitute photo or a bypass.
+    Missing images outside the screenshot viewport are irrelevant.
+    """
+    if not isinstance(rows, list):
+        return True
+    for row in rows:
+        if (not isinstance(row, dict) or
+                type(row.get("visible")) is not bool or
+                type(row.get("loaded")) is not bool):
+            return True
+        if row["visible"] and not row["loaded"]:
+            return True
+    return False
+
+
 def capture_publisher(url: str, publisher: str, destination: Path,
                       timeout_ms: int = 26000) -> dict:
     """Capture only a publicly published article within an approved publisher."""
@@ -159,10 +179,30 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                         0, Math.max(0, window.scrollY +
                            element.getBoundingClientRect().top - 120)
                     )""")
-                page.wait_for_timeout(450)
+                # Lazy article media gets a bounded opportunity to load
+                # from the already-approved publisher origin. No outside CDN,
+                # retry of a 401/403, DOM alteration or generated replacement.
+                page.wait_for_timeout(1600)
                 if not headline_visible_in_viewport(
                         headline.bounding_box(), page.viewport_size):
                     return {"ok": False, "reason": "original_headline_out_of_frame"}
+                photo_states = page.evaluate("""() => {
+                    const imgs = document.querySelectorAll(
+                        'article img, .entry-content img, .post-content img, .article-content img');
+                    return Array.from(imgs).map(img => {
+                        const r = img.getBoundingClientRect();
+                        const style = getComputedStyle(img);
+                        const visible = r.width >= 300 && r.height >= 150 &&
+                            r.bottom > 0 && r.top < innerHeight &&
+                            r.right > 0 && r.left < innerWidth &&
+                            style.visibility !== 'hidden' &&
+                            style.display !== 'none';
+                        return {visible: visible,
+                                loaded: img.complete && img.naturalWidth >= 80};
+                    });
+                }""")
+                if visible_article_image_missing(photo_states):
+                    return {"ok": False, "reason": "original_article_image_not_loaded"}
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 with TemporaryDirectory(prefix=".rasd-capture-", dir=destination.parent) as temp:
                     staged = Path(temp) / "candidate.jpg"

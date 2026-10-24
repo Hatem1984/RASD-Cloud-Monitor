@@ -28,6 +28,7 @@ SAFE_CAPTURE_FAILURE_CODES = frozenset({
     "publisher_server_error",
     "redirect_outside_publisher", "page_content_unavailable",
     "not_a_planning_article", "screenshot_too_small",
+    "original_article_image_not_loaded",
     "visual_qa_too_small_dimensions", "visual_qa_blank_or_low_content",
     "visual_qa_invalid_image", "invalid_jpeg_signature",
     "TimeoutError", "Error", "url_mismatch", "title_mismatch",
