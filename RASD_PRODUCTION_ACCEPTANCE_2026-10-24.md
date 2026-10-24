@@ -35,3 +35,23 @@ _Last evidence collected and reviewed: 2026-10-24, approximately 17:12 Cairo. Th
 - Visual/editorial caveat: this manual QA script still labels the file `NO EMAIL` and passes raw ISO timestamps, while the **production interval** passes readable Arabic Cairo dates after PR #102. A QA file is NOT a proof that an unattended production email was received.
 - Hapi original publisher refuses access on the hosted job; nothing about the three Alborsa screenshots changes the Hapi HOLD. The independent owner-authorized live protected run 40101102976 sent **zero** emails, by design.
 - The 22:00 Cairo actual daily-send Inbox acceptance and consecutive scheduled interval verification remain **OPEN**; verify after the real 22:00 wall-clock window, never infer them from the test.
+
+
+## Gate 105 — latest actual SMTP/Inbox reconciliation and daily rollup QA (24 Oct, ~18:23 Cairo)
+
+**This section supersedes the earlier snapshot on receipt integrity and accepted daily item counts. It does not close the 30-minute or 22:00 delivery acceptance gates.**
+
+- The genuine unattended [schedule run 40103393038](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/40103393038) at ~17:38 Cairo ended with a generic workflow failure **after** a source-limited, original-page Word arrived in the connected recipient Inbox. The independently inspected recipient Word contained one article and its original-publisher screenshot; the private durable acceptance ledger recorded its successful SMTP receipt. This mismatch demonstrates why a workflow failure must not be treated as proof of failed or missing email.
+- [PR #105](https://github.com/Hatem1984/RASD-Cloud-Monitor/pull/105) changes post-SMTP error handling: an ambiguous GitHub receipt write/readback is reconciled by a **read-only** private-ledger comparison of every article key, the exact SMTP acceptance timestamp, and the exact Message-ID. Only an exact durable match can recover successfully; absent, conflicting, or unreadable receipts remain manual HOLD. **No SMTP replay, no private write retry.** Public errors now show only allowlisted diagnostic codes, not exception bodies, URLs or credentials. Periodic report titles use human-readable Cairo local time instead of RTL-broken UTC ISO.
+- Verified [GitHub CI run 40106597358](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/40106597358): **522/522** offline tests passed; the separate public-feed read-only QA job succeeded.
+- Owner-authorized [read-only daily consolidation run 40106719902](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/40106719902): `RASD_DAILY_LIVE_READONLY=VERIFIED UNIQUE_ACCEPTED_NEWS=3 ORIGINAL_PHOTOS_IN_ONE_WORD=3 WORD_BYTES=491384 EMAIL_SENT=0 LEDGER_WRITES=0`. This is an actual Gmail Sent archive + private-acceptance-state reconciliation of three previously delivered newsroom items, and a Word assembly test, **not** a new daily email or Inbox acceptance claim. The main release SHA for this probe was `5cb88f5df374ebf62f3341d909d045415301a324`; the workflow and main CI both completed successfully.
+
+### Remaining conditions before declaring the final fully accepted version
+
+1. **30-minute scan SLA:** GitHub-hosted cron is best effort; observed gaps remain. The 72-hour lookback only recovers stories still exposed in native RSS. A strict interval guarantee requires a separately approved, reliable scheduling service. Railway remains explicitly prohibited.
+2. **Publisher access:** Original Hapi pages may return refusal; do not bypass 401/403, substitute fabricated images or silently treat a HOLD as a sent article. Alborsa originals were successfully captured and delivered. Any missing native RSS or original article image must be declared partial.
+3. **Consecutive genuine production sends:** Review multiple unattended runs, original-publisher Word integrity and unique event identities across providers; one successful Inbox Word does not prove the entire long-run process.
+4. **22:00 Cairo daily delivery:** The first actual complete daily send, receipt in the connected Inbox, image/article comparison and exact one-report-per-day idempotency must be checked **after** that event; the current three-item read-only probe does not meet this requirement.
+5. **Long-run operational stability:** Continue failure category / ledger / Inbox audits without blind retries or disclosing private state.
+
+**Release verdict:** The latest production code and receipt fix are **published and tested**. The six requested end-to-end acceptance gates are **not all complete**, so an unconditional 100% completion assertion is not justified. No Railway use or extra hosting dependency was introduced.
