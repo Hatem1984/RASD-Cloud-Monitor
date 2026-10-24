@@ -561,8 +561,8 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             try:
                 doc, delivered, held_count, limited = prepare_source_limited_verified_word(
                     stories, config, output, title=title,
-                    start=start.astimezone(CAIRO).isoformat(),
-                    end=now.astimezone(CAIRO).isoformat(), source_records=health,
+                    start=cairo_display_time(start),
+                    end=cairo_display_time(now), source_records=health,
                     **({"pending_approved_news":waiting} if waiting else {}))
             except RuntimeError as exc:
                 # Every discovered, approved article was attempted, but NONE
