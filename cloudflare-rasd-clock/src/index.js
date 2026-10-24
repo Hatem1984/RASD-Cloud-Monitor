@@ -1,6 +1,5 @@
 // External RASD clock only: no Gmail credentials, private ledger or public trigger.
 const CRON = "7,37 * * * *";
-const DIAGNOSTIC_CRON = "* * * * *"; // TEMPORARY: remove after acceptance.
 const OWNER = "Hatem1984";
 const REPO = "RASD-Cloud-Monitor";
 const WORKFLOW = "rasd-cloudflare-dispatch.yml";
@@ -54,17 +53,6 @@ function scheduledSlot(controller) {
   return when.toISOString().replace(".000Z", "+00:00");
 }
 
-async function probeGithub(env) {
-  // Temporary AUTHENTICATED READ-ONLY connectivity diagnostic.
-  const response = await fetch(WORKFLOW_URL, {
-    headers: { ...GH_HEADERS, Authorization: `Bearer ${githubToken(env)}` },
-  });
-  console.log(`RASD_GITHUB_TOKEN_WORKFLOW_READ_HTTP_${response.status}`);
-  if (response.status !== 200) {
-    throw new Error(`github_token_workflow_read_http_${response.status}`);
-  }
-}
-
 async function dispatch(controller, env) {
   const slot = scheduledSlot(controller);
   const response = await fetch(`${WORKFLOW_URL}/dispatches`, {
@@ -99,10 +87,7 @@ export default {
     return new Response("Not Found", { status: 404 });
   },
   async scheduled(controller, env, ctx) {
-    const work = controller.cron === DIAGNOSTIC_CRON
-      ? probeGithub(env)
-      : dispatch(controller, env);
-    ctx.waitUntil(work.catch(error => {
+    ctx.waitUntil(dispatch(controller, env).catch(error => {
       console.error(`RASD_CRON_FAILURE_CODE=${safeFailure(error)}`);
       throw error;
     }));

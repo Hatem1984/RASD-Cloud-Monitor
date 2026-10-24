@@ -18,22 +18,20 @@ async function invoke(controller, env = config) {
   await pending;
 }
 
-test("temporary diagnostic only GETs GitHub workflow and cannot mail", async () => {
+test("one-minute diagnostic is rejected and cannot reach GitHub", async () => {
+  const errors = [];
   const requests = [];
-  const logs = [];
   globalThis.fetch = async (url, opts) => {
     requests.push({ url, opts });
-    return { status: 200 };
+    return { status: 204 };
   };
-  console.log = (message) => logs.push(message);
+  console.error = (message) => errors.push(message);
   try {
-    await invoke({ cron: "* * * * *", scheduledTime: Date.now() });
-    assert.equal(requests.length, 1);
-    assert.match(requests[0].url, /rasd-cloudflare-dispatch.yml$/);
-    assert.equal(requests[0].opts.method, undefined);
-    assert.ok(logs.includes("RASD_GITHUB_TOKEN_WORKFLOW_READ_HTTP_200"));
-    assert.ok(!logs.join("").includes(token));
-  } finally { globalThis.fetch = oldFetch; console.log = oldLog; }
+    await assert.rejects(invoke({ cron: "* * * * *", scheduledTime: Date.now() }));
+    assert.equal(requests.length, 0);
+    assert.ok(errors.some(x => x.includes("unapproved_cron")));
+    assert.ok(!errors.join("").includes(token));
+  } finally { globalThis.fetch = oldFetch; console.error = oldError; }
 });
 
 test("valid main cron sends one bounded protected dispatch, no token logs", async () => {
