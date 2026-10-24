@@ -439,22 +439,10 @@ def news_for_rollup(state: dict, day: str, config: dict) -> list[dict]:
         news.append(item)
     if len(news) > MAX_ROLLUP:
         raise RuntimeError("rollup_exceeds_60_verified_items_manual_review")
-    from event_identity import distinct_events, same_event
-    ordered = sorted(news, key=lambda x: (x["published_at_cairo"], x["id"]))
-    distinct, folded = distinct_events(ordered)
-    for secondary in folded:
-        primary = next((article for article in distinct
-                        if same_event(article, secondary)), None)
-        if primary is None:
-            raise RuntimeError("daily_event_grouping_identity_hold")
-        primary.setdefault("additional_publisher_sources", []).append({
-            "source": secondary["source"], "headline": secondary["headline"],
-            "url": secondary["url"]})
-    if folded:
-        print("RASD_ROLLUP_DUPLICATE_EVENT_COUNT=" + str(len(folded)),
-              flush=True)
-    return distinct
-
+    # All original items from each SENT Word must remain intact for Gmail
+    # archive attachment verification. Fresh future intervals are filtered
+    # for cross-publisher duplicates BEFORE sending and private reservation.
+    return sorted(news, key=lambda x: (x["published_at_cairo"], x["id"]))
 
 def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     require_github_scheduler()
