@@ -230,6 +230,7 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
                                         output: Path, *, title: str,
                                         start: str, end: str,
                                         source_records: list[dict],
+                                        pending_approved_news: int = 0,
                                         capture=proof_capture
                                         ) -> tuple[Path, list[dict], int, bool]:
     """Real original screenshots ONLY; blocked articles remain eligible for retry.
@@ -283,7 +284,10 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
                          "sha256": digest})
     if not selected:
         raise RuntimeError("no_original_publisher_page_verified")
-    degraded = bool(rejected or any(s["status"] != "ok" for s in source_records))
+    if not 0 <= pending_approved_news <= 200:
+        raise ValueError("invalid_deferred_news_count")
+    degraded = bool(rejected or pending_approved_news or
+                    any(s["status"] != "ok" for s in source_records))
     source_rows = [{
         "feed_id": row["feed_id"], "status": row["status"],
         "verified_links": sum(
@@ -304,6 +308,11 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
             f" {sum(s['status'] != 'ok' for s in source_records)}"
             " مصادر RSS لم تكن متاحة. الروابط المعلقة لم تُحسب"
             " كأخبار مُسلّمة ويمكن فحصها لاحقًا."
+        )
+    if pending_approved_news:
+        limitations += (
+            f" {pending_approved_news} أخبار جديدة معتمدة من RSS تنتظر فحص"
+            " الصورة الأصلية في دورة الرصد التالية؛ ولم تُحسب مُسلّمة."
         )
     report = {
         "title": title + (" — نطاق جزئي" if degraded else ""),
@@ -549,7 +558,8 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 doc, delivered, held_count, limited = prepare_source_limited_verified_word(
                     stories, config, output, title=title,
                     start=start.astimezone(CAIRO).isoformat(),
-                    end=now.astimezone(CAIRO).isoformat(), source_records=health)
+                    end=now.astimezone(CAIRO).isoformat(), source_records=health,
+                    **({"pending_approved_news":waiting} if waiting else {}))
             except RuntimeError as exc:
                 # Every discovered, approved article was attempted, but NONE
                 # had a verified original-publisher screenshot. This is a
