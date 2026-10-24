@@ -86,13 +86,20 @@ def require_github_scheduler() -> None:
     event = env.get("GITHUB_EVENT_NAME")
     if event == "schedule":
         return
-    if (event != "push" or
-            env.get("GITHUB_ACTOR") != "Hatem1984" or
-            env.get("RASD_OWNER_PUSH_CONFIRM") !=
-                "RASD-OWNER-DAILY-2026-10-23"):
+    marker = env.get("RASD_OWNER_PUSH_CONFIRM")
+    if (event != "push" or env.get("GITHUB_ACTOR") != "Hatem1984"
+            or marker not in {
+                "RASD-OWNER-DAILY-2026-10-23",
+                "RASD-OWNER-NEWSROOM-2026-10-24",
+            }):
         raise RuntimeError("owner_oneoff_delivery_not_authorized")
     local = datetime.now(timezone.utc).astimezone(CAIRO)
-    if local.date().isoformat() != "2026-10-23" or local.hour != 22:
+    day = local.date().isoformat()
+    approved = ((marker == "RASD-OWNER-DAILY-2026-10-23"
+                 and day == "2026-10-23" and local.hour == 22)
+                or (marker == "RASD-OWNER-NEWSROOM-2026-10-24"
+                    and day == "2026-10-24" and 14 <= local.hour < 21))
+    if not approved:
         raise RuntimeError("owner_oneoff_delivery_outside_cairo_date_window")
 
 
@@ -132,7 +139,8 @@ def validate_story(item: dict, config: dict) -> None:
 
 def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                            allow_degraded: bool = False,
-                           source_records: list[dict] | None = None) -> list[dict]:
+                           source_records: list[dict] | None = None,
+                           age_hours: int = 24) -> list[dict]:
     """Read ALL current saved-keyword matches before deciding the per-email cap.
 
     The 15-story cap belongs to each *new* message, not an entire 24-hour
@@ -140,6 +148,8 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
     """
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("naive_news_clock_forbidden")
+    if type(age_hours) is not int or age_hours not in (24, 48):
+        raise ValueError("unapproved_newsroom_lookback")
     checked = now.astimezone(timezone.utc)
     observed = inspector(config, now=checked, article_limit=200,
                          require_complete_items=True)
@@ -160,7 +170,7 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
         if stamp.tzinfo is None or stamp.utcoffset() is None:
             raise RuntimeError("publisher_date_unverifiable")
         stamp = stamp.astimezone(timezone.utc)
-        if not checked - timedelta(hours=24) <= stamp <= checked:
+        if not checked - timedelta(hours=age_hours) <= stamp <= checked:
             continue
         row = {"id": candidate["id"], "headline": candidate["headline"],
                "publisher_excerpt": candidate.get("publisher_excerpt", ""),
@@ -436,17 +446,32 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     require_github_scheduler()
     now = datetime.now(timezone.utc) if clock is None else clock
     schedule_kind = os.environ.get("RASD_JOB_CRON", "")
-    owner_oneoff = mode == "rollup_owner_once"
+    owner_oneoff = mode in {"rollup_owner_once", "interval_owner_once"}
+    if mode == "interval_owner_once" and (
+            os.environ.get("RASD_OWNER_PUSH_CONFIRM") !=
+            "RASD-OWNER-NEWSROOM-2026-10-24"):
+        raise RuntimeError("wrong_owner_newsroom_marker")
     event = os.environ.get("GITHUB_EVENT_NAME")
     if owner_oneoff:
         if event != "push" or schedule_kind:
             raise RuntimeError("owner_oneoff_mode_event_mismatch")
-        # Additional live clock check beyond the environment authorization:
-        # this is a single 22:00–22:59 Cairo owner-requested catch-up.
+        # One-time, exact owner-initiated backfill; never a regular push,
+        # workflow_dispatch, another account, or a different Cairo day.
         local = now.astimezone(CAIRO)
-        if local.date().isoformat() != "2026-10-23" or local.hour != 22:
+        marker = os.environ.get("RASD_OWNER_PUSH_CONFIRM")
+        approved = (
+            (mode == "rollup_owner_once"
+             and marker == "RASD-OWNER-DAILY-2026-10-23"
+             and local.date().isoformat() == "2026-10-23"
+             and local.hour == 22)
+            or
+            (mode == "interval_owner_once"
+             and marker == "RASD-OWNER-NEWSROOM-2026-10-24"
+             and local.date().isoformat() == "2026-10-24" and 14 <= local.hour < 21)
+        )
+        if not approved:
             raise RuntimeError("owner_oneoff_mode_outside_cairo_date_window")
-        phase = "rollup"
+        phase = "rollup" if mode == "rollup_owner_once" else "interval"
     else:
         # require_github_scheduler() already authenticates normal schedules.
         # Reject only real push contexts here; offline tests explicitly mock
@@ -482,16 +507,23 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     state, _ = ledger.read()
     with tempfile.TemporaryDirectory(prefix="rasd-scheduled-") as folder:
         output = Path(folder)
-        if mode == "interval":
+        if mode in ("interval", "interval_owner_once"):
             health = []
             available = discover_interval_news(
-                config, now, allow_degraded=True, source_records=health)
+                config, now, allow_degraded=True, source_records=health,
+                **({"age_hours":48} if mode == "interval_owner_once" else {}))
+            if mode == "interval_owner_once":
+                # Retrospective only: strictly Oct23 publisher timestamps.
+                available = [a for a in available
+                             if a["published_at_cairo"].startswith("2026-10-23 ")]
             stories = [a for a in available if a["id"] not in state["entries"]]
             if not stories:
                 return {"status": "no_new_verified_news", "smtp_accepted": False}
             if len(stories) > MAX_BATCH:
                 raise RuntimeError("more_than_15_unsent_articles_manual_review")
-            title = "رصد | الأخبار المصورة الموثقة — نصف ساعة | " + window
+            title = ("رصد | استدراك أخبار 23 أكتوبر بصور ناشريها الأصلية"
+                     if mode == "interval_owner_once" else
+                     "رصد | الأخبار المصورة الموثقة — نصف ساعة | " + window)
             try:
                 doc, delivered, held_count, limited = prepare_source_limited_verified_word(
                     stories, config, output, title=title,
@@ -650,7 +682,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--mode",
-        choices=["interval", "rollup", "rollup_recovery", "rollup_owner_once", "dry_run"],
+        choices=["interval", "interval_owner_once", "rollup", "rollup_recovery", "rollup_owner_once", "dry_run"],
         required=True)
     args = parser.parse_args()
     if args.mode == "dry_run":

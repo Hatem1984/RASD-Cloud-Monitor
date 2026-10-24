@@ -48,7 +48,8 @@ jobs:
       vars.RASD_AUTOMATION_PAUSED != 'true' &&
       (github.event_name == 'schedule' ||
        (github.event_name == 'push' && github.actor == 'Hatem1984' &&
-        github.event.head_commit.message == 'RASD-OWNER-DAILY-2026-10-23'))
+        (github.event.head_commit.message == 'RASD-OWNER-DAILY-2026-10-23' ||
+         github.event.head_commit.message == 'RASD-OWNER-NEWSROOM-2026-10-24'))) 
     runs-on: ubuntu-latest
     timeout-minutes: 24
     environment: rasd-production
@@ -76,11 +77,11 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = push ]; then
-            if [ "$RASD_OWNER_PUSH_CONFIRM" != 'RASD-OWNER-DAILY-2026-10-23' ]; then
-              echo 'RASD_OWNER_PUSH_NOT_AUTHORIZED'
-              exit 1
-            fi
-            mode=rollup_owner_once
+            case "$RASD_OWNER_PUSH_CONFIRM" in
+              'RASD-OWNER-DAILY-2026-10-23') mode=rollup_owner_once ;;
+              'RASD-OWNER-NEWSROOM-2026-10-24') mode=interval_owner_once ;;
+              *) echo 'RASD_OWNER_PUSH_NOT_AUTHORIZED'; exit 1 ;;
+            esac
           else
             case "$RASD_JOB_CRON" in
               '7,18,37,48 * * * *') mode=interval ;;
