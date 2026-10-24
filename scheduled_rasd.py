@@ -439,8 +439,10 @@ def news_for_rollup(state: dict, day: str, config: dict) -> list[dict]:
         news.append(item)
     if len(news) > MAX_ROLLUP:
         raise RuntimeError("rollup_exceeds_60_verified_items_manual_review")
+    # All original items from each SENT Word must remain intact for Gmail
+    # archive attachment verification. Fresh future intervals are filtered
+    # for cross-publisher duplicates BEFORE sending and private reservation.
     return sorted(news, key=lambda x: (x["published_at_cairo"], x["id"]))
-
 
 def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     require_github_scheduler()
@@ -516,7 +518,17 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 # Retrospective only: strictly Oct23 publisher timestamps.
                 available = [a for a in available
                              if a["published_at_cairo"].startswith("2026-10-23 ")]
-            stories = [a for a in available if a["id"] not in state["entries"]]
+            unsent = [a for a in available if a["id"] not in state["entries"]]
+            from event_identity import distinct_events
+            history = [v["news"] for v in state["entries"].values()
+                       if isinstance(v, dict)
+                       and v.get("kind") == "interval_item"
+                       and v.get("status") in ("reserved", "smtp_accepted")
+                       and isinstance(v.get("news"), dict)]
+            stories, repeated_events = distinct_events(unsent, history)
+            if repeated_events:
+                print("RASD_SAME_EVENT_HELD_COUNT=" + str(len(repeated_events)),
+                      flush=True)
             if not stories:
                 return {"status": "no_new_verified_news", "smtp_accepted": False}
             if len(stories) > MAX_BATCH:

@@ -28,23 +28,51 @@ SOURCE_LABELS = {
     "Hapi native news RSS": "جريدة حابي",
     "Al Masry Al Youm native news RSS": "المصري اليوم",
     "Al Shorouk native Economy RSS": "بوابة الشروق",
+    "Alborsa native Egyptian Economy RSS": "جريدة البورصة",
 }
 ARABIC_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
 
 
-def editorial_caution(headline: str) -> str:
-    """Conservative, headline-dependent interpretation, never a fabricated fact."""
-    if "يشيد" in headline or "مؤشرات" in headline:
-        return ("التغطية تنقل تقييمًا أو تصريحًا إيجابيًا عن مؤشرات اقتصادية؛"
-                " لا يعادل ذلك قياسًا مستقلاً ولا يثبت أثر سياسات محددة."
-                " يلزم فحص البيانات الأصلية والمنهجية قبل استخلاص نتائج.")
+def editorial_caution(headline: str, excerpt: str = "") -> str:
+    """Article-conditioned analytical reading, without unsupported outcomes.
+
+    Signal classification uses the publisher's OWN RSS title and excerpt.
+    Potential implications are labelled as scenarios and necessary evidence.
+    No claim of enacted laws, spending, completed works or causal impact.
+    """
+    text = (headline + " " + excerpt).casefold()
+    if "يشيد" in headline:
+        return ("التغطية تنقل تقييمًا أو تصريحًا إيجابيًا عن مؤشرات اقتصادية؛ "
+                "الدلالة المحتملة مشروطة بتعريف المؤشر وفترة القياس. "
+                "المتابعة: مراجعة البيانات الرسمية ومقارنتها بالخط الأساسي؛ "
+                "التصريح لا يثبت نجاح سياسة اقتصادية بذاته.")
     if "صندوق" in headline or "تمويل" in headline:
-        return ("الخبر يتناول مناقشة أو مقترحًا مرتبطًا بالتمويل؛"
-                " البحث أو الإعلان لا يثبت إنشاء الصندوق أو اعتماد المخصصات أو الصرف الفعلي."
-                " ينبغي متابعة القرارات والاتفاقيات المنشورة رسميًا.")
-    return ("هذه تغطية صحفية لتصريحات أو مباحثات؛ لا يكفي ورودها وحده"
-            " لإثبات صدور قرارات تنفيذية أو تحقق نتائج قابلة للقياس."
-            " ويستلزم التقييم متابعة المصادر الرسمية وتطور الحدث.")
+        return ("الدلالة المحتملة: مناقشة أداة تمويل محتملة؛ "
+                "البحث أو الإعلان لا يثبت إنشاء الصندوق أو اعتماد المخصصات "
+                "أو صرفها بالفعل. المتابعة: القرار الرسمي والجهة المنفذة "
+                "وشروط التمويل وتوقيت الإتاحة.")
+    if any(term in text for term in ("الدين", "اقتراض", "سداد")):
+        return ("الدلالة المحتملة: يرتبط الخبر بتركيبة التمويل أو إدارة الالتزامات؛ "
+                "تقييم أثره يحتاج أرقام الدين، آجال الاستحقاق، وتكلفة التمويل. "
+                "المتابعة: مقارنة التصريح ببيانات الموازنة والجهات الرسمية؛ "
+                "الخبر وحده لا يثبت خفض المديونية أو توقيع تمويل.")
+    if any(term in text for term in ("استثمار", "المشروعات", "الاستثمارات", "المستثمر")):
+        return ("الدلالة المحتملة: يتناول مناخ الاستثمار أو خطط المشروعات؛ "
+                "قد يؤثر التنفيذ مستقبلًا في تدفقات الاستثمار والفرص المتاحة. "
+                "المتابعة: تاريخ القرار والجهة المنفذة والمخصصات ومؤشرات التنفيذ؛ "
+                "مجرد الإعلان لا يثبت بدء المشروع أو تحقيق عائد.")
+    if any(term in text for term in ("تشريع", "قانون", "إصلاحات", "لائحة")):
+        return ("الدلالة المحتملة: يتعلق بإطار تنظيمي قد يؤثر على بيئة الأعمال. "
+                "المتابعة: تحديد ما إذا كان مقترحًا أم تشريعًا صادرًا، "
+                "والمواد التنفيذية وتاريخ النفاذ؛ لا نفترض إقرار قانون من تصريح.")
+    if any(term in text for term in ("مؤشرات", "نمو", "تضخم", "صادرات")):
+        return ("الدلالة المحتملة: مؤشرات اقتصادية واتجاه يحتاج تفسيرًا بالبيانات. "
+                "المتابعة: فترة القياس، المصدر الإحصائي، خط الأساس، "
+                "والمقارنة بالأشهر السابقة؛ التصريح ليس قياسًا مستقلًا.")
+    return ("الدلالة المحتملة: تصريح أو اجتماع يرتبط بعمل جهة التخطيط. "
+            "المتابعة: التحقق من صدور قرارات تنفيذية منشورة، وتحديد "
+            "مسؤوليات التنفيذ والمواعيد القابلة للقياس؛ "
+            "ذكر المبادرة صحفيًا لا يثبت إقرارها أو تنفيذها بالفعل.")
 
 
 def cairo_display_time(moment: datetime) -> str:
@@ -277,9 +305,11 @@ def render_docx(report: dict, destination: Path) -> None:
                 _rtl(summary)
                 summary.add_run("ملخص كما أورده الناشر في موجز RSS: ").bold = True
                 summary.add_run(article["publisher_excerpt"])
-                note = doc.add_paragraph()
-                _rtl(note)
-                note.add_run("قراءة تحليلية محدودة: " + editorial_caution(article["headline"]))
+            note = doc.add_paragraph()
+            _rtl(note)
+            note.add_run("تحليل تحريري مرتبط بموضوع الخبر: ").bold = True
+            note.add_run(editorial_caution(
+                article["headline"], article.get("publisher_excerpt", "")))
             if article.get("evidence_image_path"):
                 evidence_note = doc.add_paragraph()
                 _rtl(evidence_note)
