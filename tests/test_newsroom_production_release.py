@@ -21,7 +21,7 @@ class NewsroomDeploymentSafety(unittest.TestCase):
         self.assertIn("python scheduled_rasd.py --mode \"$mode\"",workflow)
         self.assertIn("group: rasd-scheduled-monitor-private-ledger",workflow)
         self.assertIn("cancel-in-progress: false",workflow)
-        self.assertIn("0,30 * * * *",workflow)
+        self.assertIn("7,18,37,48 * * * *",workflow)
 
     def test_non_send_manual_preview_keeps_no_secrets(self):
         workflow=(ROOT/".github/workflows/rasd-scheduled.yml").read_text("utf-8")

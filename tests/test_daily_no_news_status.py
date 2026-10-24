@@ -12,6 +12,13 @@ import scheduled_rasd as rasd
 
 
 class ZeroNewsDailyStatus(unittest.TestCase):
+    def setUp(self):
+        # Only this offline fixture emulates a genuinely scheduled worker.
+        # Production event authentication remains strictly fail-closed.
+        self._scheduled_env = patch.dict(os.environ, {"GITHUB_EVENT_NAME": "schedule"})
+        self._scheduled_env.start()
+        self.addCleanup(self._scheduled_env.stop)
+
     def test_github_delayed_daily_schedule_does_not_shift_next_date(self):
         # Oct 22 Cairo EEST (+03) corresponds to 19:00 UTC. 22:54 Cairo
         # must still be accepted as the same summary, 23:00 must never.

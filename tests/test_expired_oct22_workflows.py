@@ -19,7 +19,7 @@ class ExpiredOneOffScheduleCleanup(unittest.TestCase):
 
     def test_active_protected_newsroom_cron_remains_owner_approved(self):
         newsroom=(ROOT/".github/workflows/rasd-scheduled.yml").read_text("utf-8")
-        self.assertIn("cron: '0,30 * * * *'",newsroom)
+        self.assertIn("cron: '7,18,37,48 * * * *'",newsroom)
         self.assertIn("RASD_AUTOMATION_ENABLED: 'true'",newsroom)
         self.assertIn("environment: rasd-production",newsroom)
         self.assertIn("vars.RASD_AUTOMATION_PAUSED != 'true'",newsroom)

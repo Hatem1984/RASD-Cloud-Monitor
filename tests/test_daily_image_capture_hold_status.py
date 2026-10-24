@@ -1,6 +1,7 @@
 """Offline tests: real prior article + blocked re-capture must NOT disappear."""
 from __future__ import annotations
 
+import os
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +12,13 @@ import scheduled_rasd as worker
 
 
 class PreviouslyAcceptedImageHold(unittest.TestCase):
+    def setUp(self):
+        # Only this offline fixture emulates a genuinely scheduled worker.
+        # Production event authentication remains strictly fail-closed.
+        self._scheduled_env = patch.dict(os.environ, {"GITHUB_EVENT_NAME": "schedule"})
+        self._scheduled_env.start()
+        self.addCleanup(self._scheduled_env.stop)
+
     def story(self):
         link = "https://hapijournal.com/verified-earlier"
         return {

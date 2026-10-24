@@ -30,7 +30,7 @@ EXPECTED_WORKFLOW = (
     "Hatem1984/RASD-Cloud-Monitor/.github/workflows/"
     "rasd-scheduled.yml@refs/heads/main"
 )
-HALF_HOUR_CRON = "0,30 * * * *"
+HALF_HOUR_CRON = "7,18,37,48 * * * *"
 DAILY_CRON = "0 19,20 * * *"
 MAX_WORD_BYTES = 8_000_000
 MAX_BATCH = 15  # Existing production limit, unchanged.
@@ -251,6 +251,15 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
             # fabricated picture or an accepted ledger entry.
             if proof.get("status") != "hold":
                 raise RuntimeError("invalid_original_capture_receipt")
+            # Finite pre-approved categories only; never log URLs, bodies,
+            # exception strings or credentials from the original website.
+            safe_reason = proof.get("reason")
+            from gate11_runner import SAFE_CAPTURE_FAILURE_CODES
+            if safe_reason not in SAFE_CAPTURE_FAILURE_CODES:
+                safe_reason = "other"
+            print("::warning::RASD_ORIGINAL_IMAGE_HOLD"
+                  f" publisher={item['source']!r} reason={safe_reason}",
+                  flush=True)
             rejected += 1
             continue
         digest = proof.get("sha256")
@@ -452,9 +461,15 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     recovery = mode == "rollup_recovery"
     if recovery and schedule_kind != HALF_HOUR_CRON:
         raise RuntimeError("daily_recovery_not_half_hour_schedule")
-    if phase == "skip":
+    if phase == "skip" and not recovery:
         return {"status": "skip_non_target_cairo_slot", "smtp_accepted": False}
-    if mode != phase and not (recovery and phase == "interval") and not owner_oneoff:
+    # 22:07 and 22:18 Cairo are backup opportunities for the 22:00
+    # bulletin; NEVER issue another interval email during its window.
+    if recovery and phase == "skip":
+        local = now.astimezone(CAIRO)
+        if local.hour != 22 or local.minute < 7:
+            return {"status": "skip_non_target_cairo_slot", "smtp_accepted": False}
+    if mode != phase and not (recovery and phase in ("interval", "skip")) and not owner_oneoff:
         raise RuntimeError("scheduled_mode_cron_mismatch")
     sender, recipient, password, ledger = protected_credentials()
     config = json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
