@@ -557,7 +557,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 stories = stories[:MAX_BATCH]
             title = ("رصد | استدراك أخبار 23 أكتوبر بصور ناشريها الأصلية"
                      if mode == "interval_owner_once" else
-                     "رصد | أخبار جديدة من الفحص الدوري (تأخير محتمل) | " + window)
+                     "رصد | أخبار جديدة من الفحص الدوري | " + cairo_display_time(start))
             try:
                 doc, delivered, held_count, limited = prepare_source_limited_verified_word(
                     stories, config, output, title=title,
@@ -728,6 +728,37 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     raise RuntimeError("unsupported_scheduled_mode")
 
 
+
+# Only fixed, reviewed failure codes may leave the public GitHub runner.
+# Never print an exception's arbitrary text, URL, secret or private ledger.
+PUBLIC_SCHEDULED_HOLD_CODES = frozenset({
+    "private_ledger_commit_not_visible",
+    "private_ledger_commit_receipt_invalid",
+    "private_ledger_request_failed",
+    "private_ledger_read_invalid",
+    "private_ledger_payload_invalid",
+    "batch_reservation_not_eligible",
+    "news_already_reserved_or_sent",
+    "smtp_receipt_persistence_uncertain_manual_reconcile",
+    "smtp_uncertain_reconcile_sent_manually",
+    "word_screenshot_identity_hold",
+    "gmail_attachment_size_hold",
+    "source_not_healthy",
+    "news_inventory_silent_truncation_hold",
+    "rollup_exceeds_60_verified_items_manual_review",
+    "daily_status_word_integrity_hold",
+    "original_capture_digest_mismatch",
+})
+
+
+def safe_scheduled_hold_reason(error: Exception) -> str:
+    """Expose only allowlisted operational diagnosis; no raw exception text."""
+    if type(error) in (RuntimeError, ValueError):
+        if str(error) in PUBLIC_SCHEDULED_HOLD_CODES:
+            return str(error)
+    return "other_held_failure"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -749,7 +780,9 @@ def main() -> None:
                   " 0 emails, 0 private reservations; retry at next scheduled slot.",
                   flush=True)
         print(json.dumps(result, ensure_ascii=False))
-    except Exception:
+    except Exception as error:
+        print("RASD_SCHEDULED_HOLD_REASON="
+              + safe_scheduled_hold_reason(error), flush=True)
         print("RASD_SCHEDULED_HOLD: inspect protected state; no blind resend")
         raise SystemExit(1) from None
 
