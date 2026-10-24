@@ -138,11 +138,20 @@ jobs:
               *) echo 'RASD_UNEXPECTED_SCHEDULE_HOLD'; exit 1 ;;
             esac
           fi
-          python scheduled_rasd.py --mode "$mode"
-          # Reconcile at most the latest due 22:00 Cairo report when GitHub
-          # missed its dedicated daily cron. Protected schedule-only worker
-          # checks private CAS first; any reserved report is never resent.
-          # Fail-closed: only run after the normal interval step succeeded.
+          # Reconcile the most recent completed 22:00 Cairo window even if
+          # an unrelated interval-source verification failed. Both operations
+          # independently authenticate schedule + private CAS; neither
+          # retries an uncertain SMTP attempt. Preserve a failed interval's
+          # nonzero workflow exit after the recovery opportunity.
           if [ "$mode" = interval ]; then
-            python scheduled_rasd.py --mode rollup_recovery
+            interval_exit=0
+            python scheduled_rasd.py --mode interval || interval_exit=$?
+            recovery_exit=0
+            python scheduled_rasd.py --mode rollup_recovery || recovery_exit=$?
+            if [ "$interval_exit" -ne 0 ] || [ "$recovery_exit" -ne 0 ]; then
+              echo 'RASD_SCHEDULED_INTERVAL_OR_DAILY_RECOVERY_HOLD'
+              exit 1
+            fi
+          else
+            python scheduled_rasd.py --mode "$mode"
           fi
