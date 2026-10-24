@@ -332,15 +332,21 @@ def render_docx(report: dict, destination: Path) -> None:
     p = doc.add_paragraph()
     _rtl(p)
     p.add_run("حالة المصادر").bold = True
-    for feed in report["sources"]:
+    # Keep all source statuses in a compact paragraph: this avoids
+    # a near-empty third page without shrinking authentic screenshots.
+    if report["sources"]:
+        source_names = {"hapi": "جريدة حابي", "almasryalyoum": "المصري اليوم",
+                        "shorouk": "بوابة الشروق", "alborsa": "جريدة البورصة"}
+        source_statuses = []
+        for feed in report["sources"]:
+            name = source_names.get(feed["feed_id"], feed["feed_id"])
+            status = "متاح" if feed["status"] == "ok" else "تعذّر الوصول"
+            count = str(feed["verified_links"])
+            error = "، سبب: " + str(feed["error_type"]) if feed["error_type"] else ""
+            source_statuses.append(f"{name}: {status} ({count} روابط{error})")
         p = doc.add_paragraph()
         _rtl(p)
-        p.add_run(
-            {"hapi": "جريدة حابي", "almasryalyoum": "المصري اليوم"}.get(feed["feed_id"], feed["feed_id"]) +
-            ": " + ("متاح" if feed["status"] == "ok" else "تعذّر الوصول") +
-            " | روابط: " + str(feed["verified_links"]) +
-            (" | فشل: " + feed["error_type"] if feed["error_type"] else "")
-        )
+        p.add_run(" | ".join(source_statuses))
     p = doc.add_paragraph()
     _rtl(p)
     p.add_run("تنبيه منهجي: " + report["limitations"])
