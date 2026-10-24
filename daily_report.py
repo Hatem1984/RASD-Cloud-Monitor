@@ -186,16 +186,27 @@ def render_docx(report: dict, destination: Path) -> None:
 
     doc = Document()
     section = doc.sections[0]
-    section.top_margin = Inches(0.7)
-    section.bottom_margin = Inches(0.65)
-    section.left_margin = Inches(0.85)
-    section.right_margin = Inches(0.85)
+    if any(row.get("evidence_image_path") for row in report.get("articles", [])):
+        # Two-source original-photo bulletins formerly leaked the 2-line
+        # methodological note to an almost empty third page. Tighter but
+        # still comfortably printable margins preserve exact JPEG bytes.
+        section.top_margin = Inches(0.52)
+        section.bottom_margin = Inches(0.50)
+        section.left_margin = Inches(0.67)
+        section.right_margin = Inches(0.67)
+        compact_evidence = True
+    else:
+        section.top_margin = Inches(0.7)
+        section.bottom_margin = Inches(0.65)
+        section.left_margin = Inches(0.85)
+        section.right_margin = Inches(0.85)
+        compact_evidence = False
     styles = doc.styles
     styles["Normal"].font.name = "DejaVu Sans"
-    styles["Normal"].font.size = Pt(10)
+    styles["Normal"].font.size = Pt(9.5 if compact_evidence else 10)
     styles["Normal"].font.color.rgb = RGBColor(36, 52, 69)
     styles["Title"].font.name = "DejaVu Sans"
-    styles["Title"].font.size = Pt(17)
+    styles["Title"].font.size = Pt(15 if compact_evidence else 17)
     styles["Title"].font.color.rgb = RGBColor(8, 106, 128)
 
     p = doc.add_paragraph(style="Title")
@@ -303,6 +314,14 @@ def render_docx(report: dict, destination: Path) -> None:
     p = doc.add_paragraph()
     _rtl(p)
     p.add_run("تنبيه منهجي: " + report["limitations"])
+    if compact_evidence:
+        for paragraph in doc.paragraphs:
+            paragraph.paragraph_format.space_before = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(2)
+            paragraph.paragraph_format.line_spacing = 1.02
+        # Keep the final scope notice intact on one page, rather than
+        # isolating a fragment or changing meaning for aesthetics.
+        doc.paragraphs[-1].paragraph_format.keep_together = True
     doc.core_properties.title = report["title"]
     doc.core_properties.author = "RASD"
     destination.parent.mkdir(parents=True, exist_ok=True)
