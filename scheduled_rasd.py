@@ -531,11 +531,20 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                       flush=True)
             if not stories:
                 return {"status": "no_new_verified_news", "smtp_accepted": False}
-            if len(stories) > MAX_BATCH:
-                raise RuntimeError("more_than_15_unsent_articles_manual_review")
+            # Do not fail all delivery when an irregular GitHub cron lets
+            # more than one Word's worth of newly published stories accumulate.
+            # Oldest accepted publication goes first so backlog cannot age out
+            # solely because newer feed items repeatedly take priority.
+            stories = sorted(stories,
+                             key=lambda a: (a["published_at_cairo"], a["id"]))
+            waiting = max(0, len(stories) - MAX_BATCH)
+            if waiting:
+                print("::warning::RASD_VERIFIED_STORIES_BACKLOG_PENDING="
+                      + str(waiting), flush=True)
+                stories = stories[:MAX_BATCH]
             title = ("رصد | استدراك أخبار 23 أكتوبر بصور ناشريها الأصلية"
                      if mode == "interval_owner_once" else
-                     "رصد | الأخبار المصورة الموثقة — نصف ساعة | " + window)
+                     "رصد | أخبار جديدة من الفحص الدوري (تأخير محتمل) | " + window)
             try:
                 doc, delivered, held_count, limited = prepare_source_limited_verified_word(
                     stories, config, output, title=title,
@@ -554,8 +563,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 return {
                     "status": "hold_all_original_publisher_captures_unavailable",
                     "items": 0,
-                    "eligible_articles": len(stories),
+                    "eligible_articles": len(stories) + waiting,
                     "held_articles": len(stories),
+                    "waiting_articles": waiting,
                     "smtp_accepted": False,
                     "coverage_status": "SOURCE_ACCESS_HOLD_NO_DELIVERY",
                 }
@@ -563,7 +573,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             # Blocked items remain unsent, so later scheduled scans can retry.
             reserve_stories(ledger, delivered, day)
             message_key = digest_key("interval:" + window + ":" + ",".join(x["id"] for x in delivered))
-            subject = title + (" [تغطية جزئية]" if limited else "")
+            subject = title + (" [تغطية جزئية/متأخرة]" if limited or waiting else "")
             receipt = send_one_word(doc, sender=sender, recipient=recipient,
                                     password=password, subject=subject, key=message_key)
             # SMTP accepts exactly one Word message containing N stories.
@@ -572,8 +582,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             ledger.mark_smtp_accepted_many(
                 [article["id"] for article in delivered], receipt)
             return {"status": "smtp_accepted_unconfirmed_inbox",
-                    "items": len(delivered), "source_limited": limited,
-                    "original_screenshots_held": held_count}
+                    "items": len(delivered), "source_limited": bool(limited or waiting),
+                    "original_screenshots_held": held_count,
+                    "waiting_approved_news": waiting}
         if mode in ("rollup", "rollup_recovery", "rollup_owner_once"):
             rollup_key = digest_key("rollup:" + day)
             if rollup_key in state["entries"]:
