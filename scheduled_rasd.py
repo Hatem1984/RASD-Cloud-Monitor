@@ -140,15 +140,19 @@ def validate_story(item: dict, config: dict) -> None:
 def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                            allow_degraded: bool = False,
                            source_records: list[dict] | None = None,
-                           age_hours: int = 24) -> list[dict]:
+                           age_hours: int = 72) -> list[dict]:
     """Read ALL current saved-keyword matches before deciding the per-email cap.
 
-    The 15-story cap belongs to each *new* message, not an entire 24-hour
-    publisher inventory, which would otherwise block jobs after prior sends.
+    A bounded 72-hour recovery window catches publishable items after missed
+    GitHub scheduler runs, provided the original RSS still exposes them.
+    Previously reserved/sent items are filtered using the private ledger, and
+    a publisher image HOLD is never treated as a delivery. An RSS feed that
+    no longer exposes older entries cannot be reconstructed by this scan.
+    The 15-story cap applies to each new message, never the discovered pool.
     """
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("naive_news_clock_forbidden")
-    if type(age_hours) is not int or age_hours not in (24, 48):
+    if type(age_hours) is not int or age_hours not in (24, 48, 72):
         raise ValueError("unapproved_newsroom_lookback")
     checked = now.astimezone(timezone.utc)
     observed = inspector(config, now=checked, article_limit=200,
