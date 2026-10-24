@@ -101,6 +101,53 @@ class ScheduledRASDSecurity(unittest.TestCase):
                                         'unapproved_scheduled_workflow_or_cron'):
                 subject.require_github_scheduler()
 
+    def test_cloudflare_dispatch_requires_exact_origin_owner_workflow_cron_and_fresh_slot(self):
+        moment = datetime(2026, 10, 24, 16, 10, tzinfo=timezone.utc)
+        env = {
+            "GITHUB_EVENT_NAME": "workflow_dispatch",
+            "GITHUB_REF": "refs/heads/main",
+            "GITHUB_REPOSITORY": "Hatem1984/RASD-Cloud-Monitor",
+            "GITHUB_RUN_ATTEMPT": "1",
+            "GITHUB_RUN_ID": "777",
+            "GITHUB_ACTOR": "Hatem1984",
+            "GITHUB_WORKFLOW_REF": subject.CLOUDFLARE_WORKFLOW,
+            "RASD_AUTOMATION_ENABLED": "true",
+            "RASD_JOB_CRON": subject.CLOUDFLARE_CRON,
+            "RASD_CLOUDFLARE_ORIGIN": "cloudflare-rasd-cron-v1",
+            "RASD_CLOUDFLARE_SLOT": "2026-10-24T16:07:00+00:00",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            with patch.object(subject, "datetime") as clock:
+                clock.now.return_value = moment
+                clock.fromisoformat.side_effect = datetime.fromisoformat
+                subject.require_github_scheduler()
+                for name, invalid in (
+                    ("GITHUB_ACTOR", "unapproved-caller"),
+                    ("GITHUB_EVENT_NAME", "push"),
+                    ("GITHUB_WORKFLOW_REF", subject.BACKUP_WORKFLOW),
+                    ("RASD_JOB_CRON", subject.HALF_HOUR_CRON),
+                    ("RASD_CLOUDFLARE_ORIGIN", "fake-worker"),
+                    ("RASD_CLOUDFLARE_SLOT", "2026-10-24T15:37:00+00:00"),
+                    ("RASD_CLOUDFLARE_SLOT", "2026-10-24T16:17:00+00:00"),
+                    ("RASD_CLOUDFLARE_SLOT", "2026-10-24T16:07:00"),
+                    ("RASD_CLOUDFLARE_SLOT", "2026-10-24T16:08:00+00:00"),
+                ):
+                    with self.subTest(name=name, invalid=invalid):
+                        with patch.dict(os.environ, {name: invalid}):
+                            with self.assertRaises(RuntimeError):
+                                subject.require_github_scheduler()
+
+    def test_cloudflare_cron_shares_interval_and_daily_recovery_phase(self):
+        for hour in (19, 20):
+            instant = datetime(2026, 10, 24, hour, 7, tzinfo=timezone.utc)
+            self.assertIn(subject.scheduled_phase(subject.CLOUDFLARE_CRON, instant),
+                          ("skip", "interval"))
+        self.assertEqual(
+            subject.scheduled_phase(
+                subject.CLOUDFLARE_CRON,
+                datetime(2026, 10, 24, 16, 37, tzinfo=timezone.utc)),
+            "interval")
+
     def test_source_inventory_not_cut_to_15_before_deduplication(self):
         checked = datetime(2026, 10, 21, 12, 0, tzinfo=timezone.utc)
         config = {"feeds": [{"name": "Hapi native news RSS",
