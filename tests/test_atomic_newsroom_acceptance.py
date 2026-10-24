@@ -87,7 +87,7 @@ class AtomicNewsroomAcceptance(unittest.TestCase):
         a,b="a"*24,"b"*24
         ledger=self.make_ledger(fake_state({a:"reserved",b:"reserved"}))
         ledger.write.side_effect=RuntimeError("private_ledger_request_failed")
-        with self.assertRaisesRegex(RuntimeError,"private_ledger_request_failed"):
+        with self.assertRaisesRegex(RuntimeError,"smtp_receipt_persistence_uncertain_manual_reconcile"):
             ledger.mark_smtp_accepted_many([a,b],"<rasd-batch@gmail.com>")
         ledger.write.assert_called_once()
 
