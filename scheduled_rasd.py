@@ -31,6 +31,11 @@ EXPECTED_WORKFLOW = (
     "rasd-scheduled.yml@refs/heads/main"
 )
 HALF_HOUR_CRON = "7,18,37,48 * * * *"
+BACKUP_HALF_HOUR_CRON = "13,43 * * * *"
+BACKUP_WORKFLOW = (
+    "Hatem1984/RASD-Cloud-Monitor/.github/workflows/"
+    "rasd-schedule-backup.yml@refs/heads/main"
+)
 DAILY_CRON = "0 19,20 * * *"
 MAX_WORD_BYTES = 8_000_000
 MAX_BATCH = 15  # Existing production limit, unchanged.
@@ -60,7 +65,7 @@ def scheduled_phase(cron: str, now: datetime) -> str:
     """
     _, _, _ = cairo_window(now)
     local = now.astimezone(CAIRO)
-    if cron == HALF_HOUR_CRON:
+    if cron in (HALF_HOUR_CRON, BACKUP_HALF_HOUR_CRON):
         return "skip" if local.hour == 22 and local.minute < 30 else "interval"
     if cron == DAILY_CRON:
         # GitHub schedule may start late. Continue accepting this day's
@@ -76,7 +81,6 @@ def require_github_scheduler() -> None:
         "GITHUB_REF": "refs/heads/main",
         "GITHUB_REPOSITORY": "Hatem1984/RASD-Cloud-Monitor",
         "GITHUB_RUN_ATTEMPT": "1",
-        "GITHUB_WORKFLOW_REF": EXPECTED_WORKFLOW,
         "RASD_AUTOMATION_ENABLED": "true",
     }
     if any(env.get(k) != v for k, v in expected.items()):
@@ -84,8 +88,19 @@ def require_github_scheduler() -> None:
     if not env.get("GITHUB_RUN_ID", "").isdigit():
         raise RuntimeError("invalid_run_identity")
     event = env.get("GITHUB_EVENT_NAME")
+    workflow_ref = env.get("GITHUB_WORKFLOW_REF")
+    schedule_kind = env.get("RASD_JOB_CRON")
     if event == "schedule":
-        return
+        if ((workflow_ref == EXPECTED_WORKFLOW and
+             schedule_kind in (HALF_HOUR_CRON, DAILY_CRON)) or
+            (workflow_ref == BACKUP_WORKFLOW and
+             schedule_kind == BACKUP_HALF_HOUR_CRON)):
+            return
+        raise RuntimeError("unapproved_scheduled_workflow_or_cron")
+    # Backup is strictly schedule-only: it must never turn a manual push or
+    # a workflow_dispatch into a protected mail-sending entrypoint.
+    if workflow_ref != EXPECTED_WORKFLOW:
+        raise RuntimeError("backup_workflow_not_authorized_for_push")
     marker = env.get("RASD_OWNER_PUSH_CONFIRM")
     if (event != "push" or env.get("GITHUB_ACTOR") != "Hatem1984"
             or marker not in {
@@ -499,7 +514,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     # missing daily bulletin from the most recent completed 22:00 window.
     # Never allow manual_dispatch, PR, alternate cron, or unbounded replay.
     recovery = mode == "rollup_recovery"
-    if recovery and schedule_kind != HALF_HOUR_CRON:
+    if recovery and schedule_kind not in (HALF_HOUR_CRON, BACKUP_HALF_HOUR_CRON):
         raise RuntimeError("daily_recovery_not_half_hour_schedule")
     if phase == "skip" and not recovery:
         return {"status": "skip_non_target_cairo_slot", "smtp_accepted": False}
