@@ -5,7 +5,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from capture_public import (allowed_url, image_quality, capture_publisher,
-                            classify_publisher_http_status, accept_staged_image)
+                            classify_publisher_http_status, accept_staged_image,
+                            visible_article_image_missing)
 from screenshot_probe import choose_targets, REFERENCE
 
 
@@ -35,6 +36,16 @@ class BrowserSafetyTests(unittest.TestCase):
                                      "elwatannews.com", asset=True))
         self.assertFalse(allowed_url("https://tracker.example/script.js",
                                      "elwatannews.com", asset=True))
+
+    def test_unloaded_article_image_is_fail_closed_without_substituting_media(self):
+        self.assertTrue(visible_article_image_missing([
+            {"visible": True, "loaded": False}]))
+        self.assertFalse(visible_article_image_missing([
+            {"visible": False, "loaded": False},
+            {"visible": True, "loaded": True}]))
+        self.assertFalse(visible_article_image_missing([]))
+        self.assertTrue(visible_article_image_missing("untrusted-json"))
+        self.assertTrue(visible_article_image_missing([{}]))
 
     def test_blank_realistic_jpeg_is_rejected(self):
         with tempfile.TemporaryDirectory() as td:
