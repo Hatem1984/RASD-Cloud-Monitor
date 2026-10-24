@@ -6,7 +6,9 @@ on:
       - main # protected send still requires exact owner push commit signal
   workflow_dispatch:  # Safe GitHub-hosted preview only: no credentials, no email
   schedule:
-    - cron: '0,30 * * * *'
+    # Off-peak redundant slots: two independent opportunities per 30m window.
+    # GitHub scheduling is best effort; private CAS prevents duplicate email.
+    - cron: '7,18,37,48 * * * *'
     # 22:00 Africa/Cairo is 19:00 UTC in summer or 20:00 UTC in winter.
     # 22:00 interval trigger is skipped by runner to avoid competing mail.
     - cron: '0 19,20 * * *'
@@ -81,7 +83,7 @@ jobs:
             mode=rollup_owner_once
           else
             case "$RASD_JOB_CRON" in
-              '0,30 * * * *') mode=interval ;;
+              '7,18,37,48 * * * *') mode=interval ;;
               '0 19,20 * * *') mode=rollup ;;
               *) echo 'RASD_UNEXPECTED_SCHEDULE_HOLD'; exit 1 ;;
             esac
