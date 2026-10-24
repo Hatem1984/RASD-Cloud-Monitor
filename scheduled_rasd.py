@@ -86,13 +86,20 @@ def require_github_scheduler() -> None:
     event = env.get("GITHUB_EVENT_NAME")
     if event == "schedule":
         return
-    if (event != "push" or
-            env.get("GITHUB_ACTOR") != "Hatem1984" or
-            env.get("RASD_OWNER_PUSH_CONFIRM") !=
-                "RASD-OWNER-DAILY-2026-10-23"):
+    marker = env.get("RASD_OWNER_PUSH_CONFIRM")
+    if (event != "push" or env.get("GITHUB_ACTOR") != "Hatem1984"
+            or marker not in {
+                "RASD-OWNER-DAILY-2026-10-23",
+                "RASD-OWNER-NEWSROOM-2026-10-24",
+            }):
         raise RuntimeError("owner_oneoff_delivery_not_authorized")
     local = datetime.now(timezone.utc).astimezone(CAIRO)
-    if local.date().isoformat() != "2026-10-23" or local.hour != 22:
+    day = local.date().isoformat()
+    approved = ((marker == "RASD-OWNER-DAILY-2026-10-23"
+                 and day == "2026-10-23" and local.hour == 22)
+                or (marker == "RASD-OWNER-NEWSROOM-2026-10-24"
+                    and day == "2026-10-24"))
+    if not approved:
         raise RuntimeError("owner_oneoff_delivery_outside_cairo_date_window")
 
 
@@ -436,17 +443,28 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     require_github_scheduler()
     now = datetime.now(timezone.utc) if clock is None else clock
     schedule_kind = os.environ.get("RASD_JOB_CRON", "")
-    owner_oneoff = mode == "rollup_owner_once"
+    owner_oneoff = mode in {"rollup_owner_once", "interval_owner_once"}
     event = os.environ.get("GITHUB_EVENT_NAME")
     if owner_oneoff:
         if event != "push" or schedule_kind:
             raise RuntimeError("owner_oneoff_mode_event_mismatch")
-        # Additional live clock check beyond the environment authorization:
-        # this is a single 22:00–22:59 Cairo owner-requested catch-up.
+        # One-time, exact owner-initiated backfill; never a regular push,
+        # workflow_dispatch, another account, or a different Cairo day.
         local = now.astimezone(CAIRO)
-        if local.date().isoformat() != "2026-10-23" or local.hour != 22:
+        marker = os.environ.get("RASD_OWNER_PUSH_CONFIRM")
+        approved = (
+            (mode == "rollup_owner_once"
+             and marker == "RASD-OWNER-DAILY-2026-10-23"
+             and local.date().isoformat() == "2026-10-23"
+             and local.hour == 22)
+            or
+            (mode == "interval_owner_once"
+             and marker == "RASD-OWNER-NEWSROOM-2026-10-24"
+             and local.date().isoformat() == "2026-10-24")
+        )
+        if not approved:
             raise RuntimeError("owner_oneoff_mode_outside_cairo_date_window")
-        phase = "rollup"
+        phase = "rollup" if mode == "rollup_owner_once" else "interval"
     else:
         # require_github_scheduler() already authenticates normal schedules.
         # Reject only real push contexts here; offline tests explicitly mock
@@ -482,7 +500,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     state, _ = ledger.read()
     with tempfile.TemporaryDirectory(prefix="rasd-scheduled-") as folder:
         output = Path(folder)
-        if mode == "interval":
+        if mode in ("interval", "interval_owner_once"):
             health = []
             available = discover_interval_news(
                 config, now, allow_degraded=True, source_records=health)
@@ -650,7 +668,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--mode",
-        choices=["interval", "rollup", "rollup_recovery", "rollup_owner_once", "dry_run"],
+        choices=["interval", "interval_owner_once", "rollup", "rollup_recovery", "rollup_owner_once", "dry_run"],
         required=True)
     args = parser.parse_args()
     if args.mode == "dry_run":
