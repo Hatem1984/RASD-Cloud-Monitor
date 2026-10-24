@@ -36,7 +36,7 @@ def timestamp(item):
 
 
 def same_event(a,b):
-    if a.get("id")==b.get("id"):
+    if a.get("id") and a.get("id")==b.get("id"):
         return True
     t1,t2=timestamp(a),timestamp(b)
     if t1 is None or t2 is None or abs(t1-t2)>timedelta(hours=36):
