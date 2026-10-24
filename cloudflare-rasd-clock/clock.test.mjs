@@ -81,7 +81,7 @@ test("fail closed on invalid cron, old slot, missing secret", async () => {
     }, {}));
     assert.ok(errors.some(x => x.includes("scheduled_slot_outside_freshness_window")));
     assert.ok(errors.some(x => x.includes("invalid_scheduled_minute")));
-    assert.ok(errors.some(x => x.includes("missing_cloudflare_github_token")));
+    assert.ok(errors.some(x => x.includes("github_secret_binding_unavailable")));
     assert.ok(!errors.join("").includes(token));
   } finally { Date.now = oldNow; globalThis.fetch = oldFetch; console.error = oldError; }
 });
