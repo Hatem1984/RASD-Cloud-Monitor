@@ -121,9 +121,11 @@ def visible_article_image_missing(rows: list[dict]) -> bool:
     if not isinstance(rows, list):
         return True
     for row in rows:
-        if not isinstance(row, dict):
+        if (not isinstance(row, dict) or
+                type(row.get("visible")) is not bool or
+                type(row.get("loaded")) is not bool):
             return True
-        if row.get("visible") is True and row.get("loaded") is not True:
+        if row["visible"] and not row["loaded"]:
             return True
     return False
 
