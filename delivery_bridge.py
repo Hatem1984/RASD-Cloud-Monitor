@@ -178,7 +178,26 @@ class PrivateGitHubLedger:
         final = state
         for key in article_keys:
             final = complete_entry(final, key, accepted_at, message_id)
-        self.write(final, sha)
+        try:
+            self.write(final, sha)
+        except RuntimeError:
+            # An accepted SMTP message is never resent. If GitHub returned an
+            # ambiguous write/readback failure AFTER persisting the receipt,
+            # verify the EXACT per-article acceptance and Message-ID in the
+            # durable private ledger. A missing or conflicting result remains
+            # a manual HOLD; this code does not retry the POST/PUT or SMTP.
+            try:
+                current, _ = self.read()
+            except (RuntimeError, ValueError):
+                raise RuntimeError(
+                    "smtp_receipt_persistence_uncertain_manual_reconcile") from None
+            if any(
+                    current["entries"].get(key, {}).get("status") != "smtp_accepted" or
+                    current["entries"][key].get("message_id") != message_id or
+                    current["entries"][key].get("accepted_at") != accepted_at
+                    for key in article_keys):
+                raise RuntimeError(
+                    "smtp_receipt_persistence_uncertain_manual_reconcile") from None
 
 
 def build_email(article: dict, screenshot: bytes, sender: str) -> EmailMessage:
