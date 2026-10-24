@@ -35,6 +35,7 @@ class ScheduledRASDSecurity(unittest.TestCase):
                'GITHUB_REPOSITORY': 'Hatem1984/RASD-Cloud-Monitor',
                'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_RUN_ID': '1234',
                'GITHUB_WORKFLOW_REF': subject.EXPECTED_WORKFLOW,
+               'RASD_JOB_CRON': subject.HALF_HOUR_CRON,
                'RASD_AUTOMATION_ENABLED': 'true'}
         with patch.dict(os.environ, env, clear=True):
             with self.assertRaises(RuntimeError):
@@ -47,6 +48,57 @@ class ScheduledRASDSecurity(unittest.TestCase):
             os.environ['GITHUB_RUN_ATTEMPT'] = '1'
             os.environ.pop('RASD_AUTOMATION_ENABLED')
             with self.assertRaises(RuntimeError):
+                subject.require_github_scheduler()
+
+    def test_backup_schedule_is_authenticated_and_still_never_manual(self):
+        now = datetime(2026, 10, 24, 15, 43, tzinfo=timezone.utc)
+        self.assertEqual(subject.scheduled_phase(subject.BACKUP_HALF_HOUR_CRON, now),
+                         'interval')
+        self.assertEqual(
+            subject.scheduled_phase(
+                subject.BACKUP_HALF_HOUR_CRON,
+                datetime(2026, 10, 24, 19, 13, tzinfo=timezone.utc)), 'skip')
+        standard = {
+            'GITHUB_REF': 'refs/heads/main',
+            'GITHUB_REPOSITORY': 'Hatem1984/RASD-Cloud-Monitor',
+            'GITHUB_RUN_ATTEMPT': '1',
+            'GITHUB_RUN_ID': '12345',
+            'RASD_AUTOMATION_ENABLED': 'true',
+            'GITHUB_WORKFLOW_REF': subject.BACKUP_WORKFLOW,
+            'RASD_JOB_CRON': subject.BACKUP_HALF_HOUR_CRON,
+            'GITHUB_EVENT_NAME': 'schedule',
+        }
+        with patch.dict(os.environ, standard, clear=True):
+            subject.require_github_scheduler()
+            for mismatch_key, invalid in (
+                ('GITHUB_EVENT_NAME', 'workflow_dispatch'),
+                ('GITHUB_EVENT_NAME', 'push'),
+                ('GITHUB_WORKFLOW_REF', subject.EXPECTED_WORKFLOW),
+                ('GITHUB_WORKFLOW_REF',
+                 'Hatem1984/RASD-Cloud-Monitor/.github/workflows/bad.yml@refs/heads/main'),
+                ('RASD_JOB_CRON', subject.HALF_HOUR_CRON),
+                ('GITHUB_REF', 'refs/heads/test'),
+                ('GITHUB_RUN_ATTEMPT', '2'),
+            ):
+                with self.subTest(mismatch_key=mismatch_key, invalid=invalid):
+                    with patch.dict(os.environ, {mismatch_key: invalid}):
+                        with self.assertRaises(RuntimeError):
+                            subject.require_github_scheduler()
+
+    def test_primary_cron_cannot_claim_backup_workflow(self):
+        vars = {
+            'GITHUB_REF': 'refs/heads/main',
+            'GITHUB_REPOSITORY': 'Hatem1984/RASD-Cloud-Monitor',
+            'GITHUB_RUN_ATTEMPT': '1',
+            'GITHUB_RUN_ID': '12345',
+            'RASD_AUTOMATION_ENABLED': 'true',
+            'GITHUB_WORKFLOW_REF': subject.EXPECTED_WORKFLOW,
+            'RASD_JOB_CRON': subject.BACKUP_HALF_HOUR_CRON,
+            'GITHUB_EVENT_NAME': 'schedule',
+        }
+        with patch.dict(os.environ, vars, clear=True):
+            with self.assertRaisesRegex(RuntimeError,
+                                        'unapproved_scheduled_workflow_or_cron'):
                 subject.require_github_scheduler()
 
     def test_source_inventory_not_cut_to_15_before_deduplication(self):
