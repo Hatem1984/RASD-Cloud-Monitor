@@ -1,4 +1,5 @@
 """Offline test of scheduled source-access HOLD versus integrity corruption."""
+import os
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
@@ -6,6 +7,13 @@ import scheduled_rasd as worker
 
 
 class SourceHoldStatus(unittest.TestCase):
+    def setUp(self):
+        # Only this offline fixture emulates a genuinely scheduled worker.
+        # Production event authentication remains strictly fail-closed.
+        self._scheduled_env = patch.dict(os.environ, {"GITHUB_EVENT_NAME": "schedule"})
+        self._scheduled_env.start()
+        self.addCleanup(self._scheduled_env.stop)
+
     def run_case(self, reason):
         ledger = MagicMock()
         ledger.read.return_value = ({"entries": {}}, "sha")
