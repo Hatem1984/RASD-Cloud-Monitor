@@ -439,7 +439,7 @@ def news_for_rollup(state: dict, day: str, config: dict) -> list[dict]:
         news.append(item)
     if len(news) > MAX_ROLLUP:
         raise RuntimeError("rollup_exceeds_60_verified_items_manual_review")
-    from event_identity import distinct_events
+    from event_identity import distinct_events, same_event
     ordered = sorted(news, key=lambda x: (x["published_at_cairo"], x["id"]))
     distinct, folded = distinct_events(ordered)
     if folded:
