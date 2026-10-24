@@ -40,6 +40,7 @@ class NewsroomDeploymentSafety(unittest.TestCase):
             "GITHUB_REPOSITORY":"Hatem1984/RASD-Cloud-Monitor",
             "GITHUB_RUN_ATTEMPT":"1",
             "GITHUB_WORKFLOW_REF":EXPECTED_WORKFLOW,
+            "RASD_JOB_CRON":"7,18,37,48 * * * *",
             "GITHUB_RUN_ID":"12345",
             "RASD_AUTOMATION_ENABLED":"true",
         }
