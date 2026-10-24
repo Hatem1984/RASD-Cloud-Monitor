@@ -25,3 +25,13 @@
 6. Strong **strict** 30-minute execution requires an independently reliable scheduler/service. Adding more GitHub cron expressions cannot guarantee that SLA; it remains a blocker unless a separate permitted scheduling architecture is approved.
 
 _Last evidence collected and reviewed: 2026-10-24, approximately 17:12 Cairo. This is a checkpoint, **not** final closure._
+
+
+## Gate 94 — new post-release real Word evidence (read-only, 24 Oct 17:14 Cairo)
+
+- [Actual GitHub-hosted original-source run 40101593070](https://github.com/Hatem1984/RASD-Cloud-Monitor/actions/runs/40101593070) completed **SUCCESS**, using current main-derived code (branch `gate94-postrelease-original-word-recheck-20261024`).
+- Sanitized result: `RASD_ALBORSA_LIVE=VERIFIED_ORIGINAL_WORD ARTICLES=3 JPEG_HELD=0 SOURCE_LIMITED=False WORD_BYTES=524062 EMAILS_SENT=0 PRIVATE_LEDGER_WRITES=0`.
+- The preserved one-day artifact `rasd-alborsa-real-original-word-no-send` contained exactly one `DOCX` and three original-publisher `JPEG` captures. The artifact archive and Word were downloaded and independently examined: ZIP structure valid, 3 Word inline shapes, and each embedded Word JPEG SHA-256 exactly matches a captured original JPEG. The resulting Word rendered into three pages and all three original story screenshots were visually inspected. This is **real source evidence**, not synthetic test evidence.
+- Visual/editorial caveat: this manual QA script still labels the file `NO EMAIL` and passes raw ISO timestamps, while the **production interval** passes readable Arabic Cairo dates after PR #102. A QA file is NOT a proof that an unattended production email was received.
+- Hapi original publisher refuses access on the hosted job; nothing about the three Alborsa screenshots changes the Hapi HOLD. The independent owner-authorized live protected run 40101102976 sent **zero** emails, by design.
+- The 22:00 Cairo actual daily-send Inbox acceptance and consecutive scheduled interval verification remain **OPEN**; verify after the real 22:00 wall-clock window, never infer them from the test.
