@@ -1,6 +1,11 @@
 name: RASD — daily first-party source health observation (NO SEND)
 
 on:
+  # A change to THIS QA workflow on main also proves hosted source access once.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rasd-original-sources-health-daily.yml'
   workflow_dispatch:
   schedule:
     # Read-only daily observation; UTC and Cairo DST are not conflated.
