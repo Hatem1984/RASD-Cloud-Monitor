@@ -283,7 +283,12 @@ def render_docx(report: dict, destination: Path) -> None:
     if not report["articles"]:
         no_items = doc.add_paragraph()
         _rtl(no_items)
-        no_items.add_run("لم يُعثر على أخبار جديدة مطابقة في المصادر المتاحة خلال الفترة المحددة.")
+        if report.get("coverage") == "ORIGINAL_IMAGE_HOLD_NO_VERIFIED_DELIVERY":
+            no_items.add_run(
+                "رُصدت مواد مطابقة لكنها معلّقة ولم تُرسل، لتعذّر إثبات"
+                " صور صفحات الناشرين الأصلية. ستُفحص من جديد لاحقًا.")
+        else:
+            no_items.add_run("لم يُعثر على أخبار جديدة مطابقة في المصادر المتاحة خلال الفترة المحددة.")
     else:
         for index, article in enumerate(report["articles"], 1):
             p = doc.add_paragraph()

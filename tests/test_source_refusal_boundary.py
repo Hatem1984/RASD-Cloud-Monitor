@@ -30,6 +30,10 @@ class SourceHoldStatus(unittest.TestCase):
               patch.object(worker, "prepare_source_limited_verified_word",
                            side_effect=RuntimeError(reason)),
               patch.object(worker, "reserve_stories") as reserve,
+              patch.object(worker, "send_empty_interval_status",
+                           return_value={"status": "interval_image_hold_status_offline_only",
+                                         "items": 0, "held_articles": 1,
+                                         "smtp_accepted": False}) as operational_status,
               patch.object(worker, "send_one_word") as smtp):
             try:
                 result = worker.run_scheduled(
@@ -40,15 +44,19 @@ class SourceHoldStatus(unittest.TestCase):
         reserve.assert_not_called()
         smtp.assert_not_called()
         ledger.write.assert_not_called()
+        if reason == "no_original_publisher_page_verified":
+            operational_status.assert_called_once()
+            self.assertEqual(operational_status.call_args.kwargs["held_articles"], 1)
+        else:
+            operational_status.assert_not_called()
         return result, error
 
     def test_original_publisher_refusal_is_explicit_and_never_delivered(self):
         result, error = self.run_case("no_original_publisher_page_verified")
         self.assertIsNone(error)
         self.assertEqual(result["status"],
-                         "hold_all_original_publisher_captures_unavailable")
+                         "interval_image_hold_status_offline_only")
         self.assertEqual(result["items"], 0)
-        self.assertEqual(result["eligible_articles"], 1)
         self.assertEqual(result["held_articles"], 1)
         self.assertIs(result["smtp_accepted"], False)
 
