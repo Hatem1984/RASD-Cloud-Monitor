@@ -272,7 +272,7 @@ def render_docx(report: dict, destination: Path) -> None:
     styles["Normal"].font.size = Pt(9.5 if compact_evidence else 10)
     styles["Normal"].font.color.rgb = RGBColor(36, 52, 69)
     styles["Title"].font.name = "DejaVu Sans"
-    styles["Title"].font.size = Pt(15 if compact_evidence else 17)
+    styles["Title"].font.size = Pt(14 if compact_evidence else 14.5)
     styles["Title"].font.color.rgb = RGBColor(8, 106, 128)
 
     p = doc.add_paragraph(style="Title")
