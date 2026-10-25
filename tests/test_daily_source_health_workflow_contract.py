@@ -15,12 +15,14 @@ class PublicHealthWorkflowContract(unittest.TestCase):
         self.assertIn("28 8 * * *", y)
         self.assertIn("contents: read", y)
         self.assertIn("retention-days: 14", y)
+        self.assertIn("branches: [main]", y)
+        self.assertIn("\'.github/workflows/rasd-original-sources-health-daily.yml\'", y)
         self.assertIn("rasd-original-sources-redacted-health", y)
         self.assertIn("RASD_SOURCE_HEALTH_HOLD_NO_REPORT_NO_EMAIL", y)
         for forbidden in (
             "secrets.", "RASD_GMAIL", "PRIVATE_LEDGER", "SMTP",
             "wrangler", "deploy", "storage", "r2 bucket", "send_mail",
-            "push:", "pull_request:", "contents: write",
+            "pull_request:", "contents: write",
         ):
             # 'SMTP' and 'PRIVATE_LEDGER' are prohibited by design.
             self.assertNotIn(forbidden, y)
