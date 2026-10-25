@@ -57,6 +57,20 @@ def cairo_window(now: datetime) -> tuple[str, str, datetime]:
     return start.strftime("%Y-%m-%dT%H:%MZ"), start.astimezone(CAIRO).date().isoformat(), start
 
 
+def cairo_rollup_label(day: str) -> tuple[str, str]:
+    """Return Arabic day and Cairo-22:00 labels without RTL-broken ISO text.
+
+    Display-only: the immutable private-ledger day key stays ISO YYYY-MM-DD.
+    """
+    checked = date.fromisoformat(day)
+    due = datetime.combine(checked, time(22, 0), tzinfo=CAIRO)
+    whole = cairo_display_time(due)
+    label, sep, _clock = whole.partition("، الساعة ")
+    if not sep:
+        raise ValueError("cairo_day_display_invalid")
+    return label, whole
+
+
 def digest_key(value: str) -> str:
     return hashlib.sha256(("rasd-scheduled-v1:" + value).encode()).hexdigest()[:24]
 
@@ -678,7 +692,8 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     raise RuntimeError("daily_status_word_integrity_hold")
                 no_news = True
             else:
-                title = "رصد | التقرير المجمع للأخبار المرسلة | " + day
+                day_label, end_label = cairo_rollup_label(day)
+                title = "رصد | التقرير المجمع للأخبار المرسلة | " + day_label
                 try:
                     if os.environ.get("RASD_DAILY_SENT_ARCHIVE_ENABLED") == "true":
                         # Production daily report is ONE consolidated copy
@@ -690,7 +705,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                             recipient=recipient, app_password=password,
                             title=title,
                             start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
-                            end=day + " 22:00 القاهرة", config=config)
+                            end=end_label, config=config)
                     else:
                         # Offline legacy/test mode: no IMAP and no new sends.
                         doc, _ = prepare_word(
