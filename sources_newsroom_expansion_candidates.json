@@ -1,15 +1,15 @@
 {
   "version": 1,
   "checked_on": "2026-10-25",
-  "policy": "research_only_not_active_feed_not_in_gmail_delivery",
+  "policy": "publisher_candidates_are_not_prod_except_explicit_original_jsonld_verified_masrawy",
   "candidates": [
     {
       "id": "masrawy",
       "publisher": "مصراوي",
       "feed_url": "https://www.masrawy.com/rss/feed/35/%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1%20%D9%85%D8%B5%D8%B1-%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9",
-      "status": "HOLD_PUBLISHER_RSS_TIMESTAMP_HAS_NO_TIMEZONE",
-      "evidence": "no-redirect HTTPS 200; ten intact same-origin links; all 10 pubDate values were naive local-format and strict dated original RSS rejected",
-      "acceptance_gate": "Only promote if publisher-provided timezone-aware original timestamps can be verified; never derive publication time from scan time or guess Egypt offset"
+      "status": "ACTIVATED_WITH_SAME_PUBLISHER_NEWSARTICLE_EXPLICIT_TIMESTAMP_GATE",
+      "evidence": "RSS HTTPS 200 10 same-origin items with naive pubDate; publisher original article NewsArticle JSON-LD has explicit +03:00 dated timestamp and exact matching headline/local wall clock in live samples",
+      "acceptance_gate": "Production verifies EVERY RSS item against original Masrawy NewsArticle JSON-LD timezone-aware date + exact local wall-clock + same title; any disagreement or unavailable page HOLD; no time zone inference"
     },
     {
       "id": "youm7_reports",
