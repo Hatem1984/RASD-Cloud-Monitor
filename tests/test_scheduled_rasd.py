@@ -137,6 +137,47 @@ class ScheduledRASDSecurity(unittest.TestCase):
                             with self.assertRaises(RuntimeError):
                                 subject.require_github_scheduler()
 
+    def test_cloudflare_daily_requires_exact_cairo_2200_slot_and_github_owner(self):
+        base = {
+            "GITHUB_EVENT_NAME": "workflow_dispatch",
+            "GITHUB_REF": "refs/heads/main",
+            "GITHUB_REPOSITORY": "Hatem1984/RASD-Cloud-Monitor",
+            "GITHUB_RUN_ATTEMPT": "1", "GITHUB_RUN_ID": "7712",
+            "GITHUB_ACTOR": "Hatem1984",
+            "GITHUB_WORKFLOW_REF": subject.CLOUDFLARE_WORKFLOW,
+            "RASD_AUTOMATION_ENABLED": "true",
+            "RASD_JOB_CRON": subject.DAILY_CRON,
+            "RASD_CLOUDFLARE_ORIGIN": "cloudflare-rasd-daily-v1",
+        }
+        for live, inactive in (
+            ("2026-07-05T19:00:00+00:00", "2026-07-05T20:00:00+00:00"),
+            ("2026-12-05T20:00:00+00:00", "2026-12-05T19:00:00+00:00"),
+        ):
+            now = datetime.fromisoformat(live)
+            with patch.dict(os.environ, {
+                **base, "RASD_CLOUDFLARE_SLOT": live,
+            }, clear=True):
+                with patch.object(subject, "datetime") as clock:
+                    clock.fromisoformat.side_effect = datetime.fromisoformat
+                    clock.now.return_value = now
+                    subject.require_github_scheduler()
+                    for field, invalid in (
+                        ("RASD_CLOUDFLARE_SLOT", inactive),
+                        ("RASD_CLOUDFLARE_SLOT", live.replace(":00:00+", ":01:00+")),
+                        ("RASD_CLOUDFLARE_ORIGIN", "cloudflare-rasd-cron-v1"),
+                        ("RASD_JOB_CRON", subject.CLOUDFLARE_CRON),
+                        ("GITHUB_ACTOR", "unapproved-user"),
+                        ("GITHUB_REF", "refs/heads/unapproved"),
+                    ):
+                        with self.subTest(live=live, field=field, invalid=invalid):
+                            with patch.dict(os.environ, {field: invalid}):
+                                with self.assertRaises(RuntimeError):
+                                    subject.require_github_scheduler()
+                    clock.now.return_value = now.replace(minute=25)
+                    with self.assertRaisesRegex(RuntimeError,
+                                                "cloudflare_dispatch_slot_expired"):
+                        subject.require_github_scheduler()
+
     def test_cloudflare_cron_shares_interval_and_daily_recovery_phase(self):
         for hour in (19, 20):
             instant = datetime(2026, 10, 24, hour, 7, tzinfo=timezone.utc)
