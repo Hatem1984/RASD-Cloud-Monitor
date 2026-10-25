@@ -131,7 +131,7 @@ class HalfHourlyWordStatus(unittest.TestCase):
         self.ledger.reserve.assert_not_called()
 
     def test_live_interval_image_hold_routes_to_status_without_article_reservation(self):
-        story = {"id": "a"*24}
+        story = {"id": "a"*24, "published_at_cairo": "2026-10-25 14:30 EEST"}
         with (patch.object(rasd, "require_github_scheduler"),
               patch.object(rasd, "protected_credentials",
                            return_value=("source@gmail.com", "review@example.com",
