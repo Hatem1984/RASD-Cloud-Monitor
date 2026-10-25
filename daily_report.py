@@ -16,6 +16,34 @@ from zoneinfo import ZoneInfo
 from gate11_runner import candidate_from_feed
 from monitor import inspect, read_feed
 
+COVERAGE_LABELS = {
+    "HEALTHY": "أخبار موثقة بالصور من المصادر المتاحة",
+    "SOURCE_LIMITED": "تغطية جزئية مع مواد غير مستوفية",
+    "ORIGINAL_IMAGE_HOLD_NO_VERIFIED_DELIVERY": "لا أخبار جديدة مستوفية؛ توجد مواد معلقة",
+    "SOURCE_LIMITED_NO_VERIFIED_NEW_DELIVERY": "لا تسليم جديد؛ بعض المصادر غير متاحة",
+    "NO_VERIFIED_NEW_DELIVERY": "لا أخبار جديدة مستوفية للتسليم",
+    "CONSOLIDATED_PREVIOUSLY_SENT_ORIGINALS": "أخبار سبق تسليمها بصورها الأصلية",
+    "NO_ACCEPTED_VERIFIED_NEWS": "لا أخبار مصورة مسلّمة في هذه الفترة",
+    "PREVIOUSLY_ACCEPTED_NEWS_IMAGE_HOLD": "أخبار سبق تسليمها؛ إعادة صورها متعذرة",
+}
+HOLD_REASON_LABELS = {
+    "publisher_access_refused": "صفحة الناشر ترفض الوصول الآلي",
+    "not_a_planning_article": "لم يتأكد ارتباط صفحة الناشر بموضوع التخطيط",
+    "page_content_unavailable": "محتوى صفحة الناشر غير متاح للتحقق",
+    "original_article_image_not_loaded": "صورة الخبر الأصلية لم تُحمّل",
+    "publisher_rate_limited": "الناشر حدّد عدد محاولات الوصول",
+    "publisher_article_unavailable": "صفحة الخبر الأصلية غير متاحة",
+    "publisher_no_http_response": "تعذّر اتصال صفحة الناشر",
+    "publisher_server_error": "خطأ بخادم موقع الناشر",
+    "source_identity_mismatch": "تعذّر تأكيد تطابق هوية الناشر والرابط",
+    "title_mismatch": "عنوان الصفحة لا يطابق عنوان الخبر في المصدر",
+    "missing_original_headline": "العنوان الأصلي غير ظاهر",
+    "original_headline_out_of_frame": "العنوان غير ظاهر داخل الصورة",
+    "original_headline_not_in_article": "تعذّر إثبات العنوان داخل متن الصفحة",
+    "other": "تعذّر التحقق الفني من الصورة الأصلية",
+}
+
+
 CAIRO = ZoneInfo("Africa/Cairo")
 WINDOW_HOURS = 24
 MAX_ARTICLES = 15
@@ -244,7 +272,7 @@ def render_docx(report: dict, destination: Path) -> None:
     styles["Normal"].font.size = Pt(9.5 if compact_evidence else 10)
     styles["Normal"].font.color.rgb = RGBColor(36, 52, 69)
     styles["Title"].font.name = "DejaVu Sans"
-    styles["Title"].font.size = Pt(15 if compact_evidence else 17)
+    styles["Title"].font.size = Pt(14 if compact_evidence else 14.5)
     styles["Title"].font.color.rgb = RGBColor(8, 106, 128)
 
     p = doc.add_paragraph(style="Title")
@@ -255,10 +283,17 @@ def render_docx(report: dict, destination: Path) -> None:
     p.add_run("الفترة: " + report["display_window_start"] + " إلى " + report["display_window_end"])
     p = doc.add_paragraph()
     _rtl(p)
+    coverage = report["coverage"]
+    if coverage == "CONSOLIDATED_PREVIOUSLY_SENT_ORIGINALS":
+        count_label = "روابط الأخبار المسلّمة"
+        article_label = "أخبار مجمّعة من التسليم السابق"
+    else:
+        count_label = "روابط RSS التي أمكن فحصها"
+        article_label = "أخبار مصورة مستوفية"
     p.add_run(
-        "حالة المصادر: " + report["coverage"] +
-        " | روابط الناشرين المفحوصة: " + str(report["verified_links"]) +
-        " | مواد مطابقة في الفترة: " + str(len(report["articles"]))
+        "الحالة: " + COVERAGE_LABELS.get(coverage, coverage) +
+        " | " + count_label + ": " + str(report["verified_links"]) +
+        " | " + article_label + ": " + str(len(report["articles"]))
     )
 
     if report.get("preview_only"):
@@ -362,7 +397,9 @@ def render_docx(report: dict, destination: Path) -> None:
             _rtl(details)
             details.add_run(
                 "المصدر: " + SOURCE_LABELS.get(item["source"], item["source"])
-                + " | سبب التعليق: " + item["reason"]
+                + " | سبب التعليق: "
+                + HOLD_REASON_LABELS.get(item["reason"], "تعذّر فحص الدليل الأصلي")
+                + " [" + item["reason"] + "]"
                 + " | تاريخ الناشر: " + item["published_display_cairo"])
             link_para = doc.add_paragraph()
             _rtl(link_para)

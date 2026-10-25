@@ -27,6 +27,33 @@ APPROVED_PUBLISHERS = {
     "alborsaanews.com": frozenset({"alborsaanews.com", "www.alborsaanews.com"}),
     "masrawy.com": frozenset({"www.masrawy.com", "masrawy.com"}),
 }
+# An official Ministry programme may be named without the word "planning".
+# These exact topics preserve the narrow ministry brief and exclude generic economy news.
+PLANNING_TOPIC_NAMES = (
+    "وزارة التخطيط", "وزير التخطيط", "وزيرة التخطيط",
+    "التخطيط والتنمية الاقتصادية", "معهد التخطيط القومي",
+    "Ministry of Planning", "Planning Ministry",
+    "البرنامج الوطني للتحول الاقتصادي",
+    "السردية الوطنية للتنمية الاقتصادية",
+    "المبادرة الوطنية للمشروعات الخضراء الذكية",
+    "المراجعة الوطنية الطوعية لمصر",
+    "تقرير مصر الوطني الطوعي",
+    "المنظومة المتكاملة للتخطيط التنموي",
+    "الخطة الاستثمارية للدولة",
+    "National Planning Institute",
+    "Ministry of Planning and Economic Development",
+    "Egyptian Ministry of Planning",
+)
+
+
+def is_planning_publisher_page(title: str, body: str) -> bool:
+    """Match only the owner's saved official planning terms on a publisher page."""
+    if not isinstance(title, str) or not isinstance(body, str):
+        return False
+    from monitor import _ministry_term_present
+    return _ministry_term_present(title + " " + body, list(PLANNING_TOPIC_NAMES))
+
+
 CHALLENGE_WORDS = (
     "verify you are human", "just a moment...", "checking your browser",
     "captcha", "access denied",
@@ -197,7 +224,7 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                 body = page.locator("body").inner_text(timeout=10000).strip()
                 if len(body) < 180 or any(word in body[:1800].lower() for word in CHALLENGE_WORDS):
                     return {"ok": False, "reason": "page_content_unavailable"}
-                if "التخطيط" not in (title + " " + body) and "planning" not in (title + " " + body).lower():
+                if not is_planning_publisher_page(title, body):
                     return {"ok": False, "reason": "not_a_planning_article"}
                 # Scroll the ORIGINAL publisher page so its genuine H1
                 # and article lead, not a large ad masthead, fill the

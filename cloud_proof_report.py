@@ -90,6 +90,26 @@ def classify_failure(reason: str | None) -> str:
     return reason if isinstance(reason, str) and reason in SAFE_CAPTURE_FAILURE_CODES else "other"
 
 
+def original_headline_in_page_title(headline: str, page_title: str) -> bool:
+    """Allow typography/Arabic alef variants, not a different publisher headline.
+
+    The same news title can use straight quotation marks in HTML <title> and
+    curly marks in publisher RSS. Compare six leading *words*, not raw bytes.
+    Never use a fuzzy model, translated substitute or unrelated page.
+    """
+    import re
+    from monitor import _matchable_arabic
+    if not isinstance(headline, str) or not isinstance(page_title, str):
+        return False
+    source = re.sub(r"[^\w]+", " ", _matchable_arabic(headline)).strip()
+    actual = re.sub(r"[^\w]+", " ", _matchable_arabic(page_title)).strip()
+    words = source.split()
+    if len(words) < 3 or len(source) < 14:
+        return False
+    prefix = " ".join(words[:min(6, len(words))])
+    return bool(re.search(r"(?<!\w)" + re.escape(prefix) + r"(?!\w)", actual))
+
+
 def proof_capture(article: dict, feeds: list[dict], destination: Path,
                   *, capture=capture_publisher) -> dict:
     """Enforce URL provenance, article/title identity and actual JPEG integrity."""
@@ -109,7 +129,7 @@ def proof_capture(article: dict, feeds: list[dict], destination: Path,
     if (not result.get("actual_url") or
             canonical_url(result["actual_url"]) != canonical_url(article["url"])):
         return {"status": "hold", "reason": "url_mismatch"}
-    if article["headline"].strip()[:12] not in result.get("title", ""):
+    if not original_headline_in_page_title(article["headline"], result.get("title", "")):
         return {"status": "hold", "reason": "title_mismatch"}
     if not destination.is_file() or destination.stat().st_size < 8000:
         return {"status": "hold", "reason": "screenshot_too_small"}

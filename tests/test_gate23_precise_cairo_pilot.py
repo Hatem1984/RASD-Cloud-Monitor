@@ -140,7 +140,7 @@ class Gate23CairoPilotTests(unittest.TestCase):
             self.assertIn("فتح الخبر في موقع الناشر", text)
             self.assertIn("جريدة حابي", text)
             self.assertIn("بتوقيت القاهرة", text)
-            self.assertIn("مواد مطابقة في الفترة", text)
+            self.assertIn("أخبار مصورة مستوفية", text)
             self.assertNotIn("%d9", text.casefold())
             self.assertIn("https://hapijournal.com/planning-pilot-", links)
 
