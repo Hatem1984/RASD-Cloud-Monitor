@@ -117,23 +117,34 @@ def require_github_scheduler() -> None:
             return
         raise RuntimeError("unapproved_scheduled_workflow_or_cron")
     if event == "workflow_dispatch":
-        # GitHub accepts this event only with a repository-scoped Actions:write
-        # token. Never trust user-supplied scheduling inputs without comparing
-        # the exact caller, workflow identity and a fresh UTC cron slot.
+        # The single allowlisted Cloudflare workflow can dispatch TWO kinds:
+        # half-hour newsroom scan or exactly Cairo-22:00 daily rollup.
+        # Authenticated actor, exact origin/cron pairing and fresh UTC slot
+        # are checked again INSIDE protected GitHub before SMTP/ledger use.
+        origin = env.get("RASD_CLOUDFLARE_ORIGIN")
         if (workflow_ref != CLOUDFLARE_WORKFLOW or
                 env.get("GITHUB_ACTOR") != "Hatem1984" or
-                schedule_kind != CLOUDFLARE_CRON or
-                env.get("RASD_CLOUDFLARE_ORIGIN") != "cloudflare-rasd-cron-v1"):
+                (origin, schedule_kind) not in {
+                    ("cloudflare-rasd-cron-v1", CLOUDFLARE_CRON),
+                    ("cloudflare-rasd-daily-v1", DAILY_CRON),
+                }):
             raise RuntimeError("cloudflare_dispatch_not_authorized")
         try:
             slot = datetime.fromisoformat(env.get("RASD_CLOUDFLARE_SLOT", ""))
         except (TypeError, ValueError):
             raise RuntimeError("cloudflare_dispatch_slot_invalid") from None
         if (slot.tzinfo is None or slot.utcoffset() != timedelta(0) or
-                slot.minute not in (7, 37) or
                 slot.second != 0 or slot.microsecond != 0):
             raise RuntimeError("cloudflare_dispatch_slot_invalid")
-        delay = datetime.now(timezone.utc) - slot.astimezone(timezone.utc)
+        utc_slot = slot.astimezone(timezone.utc)
+        if origin == "cloudflare-rasd-cron-v1":
+            valid = utc_slot.minute in (7, 37)
+        else:
+            valid = (utc_slot.minute == 0 and utc_slot.hour in (19, 20)
+                     and utc_slot.astimezone(CAIRO).hour == 22)
+        if not valid:
+            raise RuntimeError("cloudflare_dispatch_slot_invalid")
+        delay = datetime.now(timezone.utc) - utc_slot
         if not timedelta(seconds=-30) <= delay <= timedelta(minutes=20):
             raise RuntimeError("cloudflare_dispatch_slot_expired")
         return

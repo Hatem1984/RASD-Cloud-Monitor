@@ -83,3 +83,42 @@ test("fail closed on invalid cron, old slot, missing secret", async () => {
     assert.ok(!errors.join("").includes(token));
   } finally { Date.now = oldNow; globalThis.fetch = oldFetch; console.error = oldError; }
 });
+
+test("daily Cairo 22:00 dispatch matches BOTH DST seasons and only one UTC candidate", async () => {
+  const captured = [];
+  globalThis.fetch = async (url, options) => {
+    captured.push(JSON.parse(options.body).inputs);
+    return { status: 204 };
+  };
+  const cases = [
+    { active: "2026-07-05T19:00:00Z", inactive: "2026-07-05T20:00:00Z" },
+    { active: "2026-12-05T20:00:00Z", inactive: "2026-12-05T19:00:00Z" },
+  ];
+  try {
+    for (const sample of cases) {
+      Date.now = () => Date.parse(sample.active) + 90_000;
+      await invoke({ cron: "0 19,20 * * *", scheduledTime: Date.parse(sample.active) });
+      assert.equal(captured.at(-1).origin, "cloudflare-rasd-daily-v1");
+      assert.equal(captured.at(-1).slot, sample.active.replace(".000Z", "+00:00").replace("Z", "+00:00"));
+      const before = captured.length;
+      Date.now = () => Date.parse(sample.inactive) + 90_000;
+      await invoke({ cron: "0 19,20 * * *", scheduledTime: Date.parse(sample.inactive) }, {});
+      assert.equal(captured.length, before, "inactive 19/20 candidate may not dispatch");
+    }
+    assert.equal(captured.length, 2);
+  } finally { Date.now = oldNow; globalThis.fetch = oldFetch; }
+});
+
+test("invalid daily minute, wrong UTC hour and stale daily event cannot call GitHub", async () => {
+  const called = [];
+  globalThis.fetch = async (...args) => { called.push(args); return { status: 204 }; };
+  try {
+    Date.now = () => Date.parse("2026-12-05T20:02:00Z");
+    for (const time of ["2026-12-05T20:01:00Z", "2026-12-05T18:00:00Z"]) {
+      await assert.rejects(invoke({ cron: "0 19,20 * * *", scheduledTime: Date.parse(time) }));
+    }
+    Date.now = () => Date.parse("2026-12-05T20:25:00Z");
+    await assert.rejects(invoke({ cron: "0 19,20 * * *", scheduledTime: Date.parse("2026-12-05T20:00:00Z") }));
+    assert.equal(called.length, 0);
+  } finally { Date.now = oldNow; globalThis.fetch = oldFetch; }
+});

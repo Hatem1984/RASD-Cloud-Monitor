@@ -63,3 +63,40 @@ jobs:
             echo 'RASD_CLOUDFLARE_INTERVAL_OR_ROLLUP_HOLD'
             exit 1
           fi
+
+  protected-cloudflare-cairo-daily:
+    # Exact one-of-two Cairo 22:00 candidate; actor and UTC slot also
+    # re-validated independently by scheduled_rasd.py before any private I/O.
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'Hatem1984' &&
+      inputs.origin == 'cloudflare-rasd-daily-v1' &&
+      vars.RASD_AUTOMATION_PAUSED != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    environment: rasd-production
+    env:
+      RASD_AUTOMATION_ENABLED: 'true'
+      RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
+      RASD_JOB_CRON: '0 19,20 * * *'
+      RASD_CLOUDFLARE_ORIGIN: ${{ inputs.origin }}
+      RASD_CLOUDFLARE_SLOT: ${{ inputs.slot }}
+      RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
+      RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
+      RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
+      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install original publisher report dependencies
+        run: |
+          python -m pip install -r requirements-test.txt 'playwright>=1.50,<2'
+          python -m playwright install --only-shell chromium
+      - name: Consolidate previously accepted original Word once (CAS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scheduled_rasd.py --mode rollup
