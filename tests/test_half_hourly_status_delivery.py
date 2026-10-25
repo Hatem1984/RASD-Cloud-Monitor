@@ -116,6 +116,8 @@ class HalfHourlyWordStatus(unittest.TestCase):
         text = " ".join(p.text for p in Document(send.call_args.args[0]).paragraphs)
         self.assertIn("تعذّر", text)
         self.assertIn("ستظل قابلة لإعادة الفحص", text)
+        self.assertIn("رُصدت مواد مطابقة لكنها معلّقة ولم تُرسل", text)
+        self.assertNotIn("لم يُعثر على أخبار جديدة مطابقة", text)
         self.assertEqual(len(Document(send.call_args.args[0]).inline_shapes), 0)
 
     def test_invalid_publisher_hold_count_fails_closed(self):
