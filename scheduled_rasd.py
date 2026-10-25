@@ -659,16 +659,17 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             if rollup_key in state["entries"]:
                 return {"status": "rollup_already_reserved_or_sent", "smtp_accepted": False}
             stories = news_for_rollup(state, day, config)
+            day_label, end_label = cairo_rollup_label(day)
             if not stories:
                 # No accepted verified newsroom items is itself a genuine
                 # daily operational fact. Deliver an explicitly labelled
                 # ZERO-news status Word, NOT a fabricated news report.
                 # No candidate or fake image is inserted.
-                title = "رصد | تقرير حالة الرصد: لا أخبار مصوّرة مُسلّمة | " + day
+                title = "رصد | تقرير حالة الرصد: لا أخبار مصوّرة مُسلّمة | " + day_label
                 report = {
                     "title": title,
                     "display_window_start": "الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
-                    "display_window_end": day + " 22:00 القاهرة",
+                    "display_window_end": end_label,
                     "coverage": "NO_ACCEPTED_VERIFIED_NEWS",
                     "verified_links": 0,
                     "articles": [],
@@ -692,7 +693,6 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     raise RuntimeError("daily_status_word_integrity_hold")
                 no_news = True
             else:
-                day_label, end_label = cairo_rollup_label(day)
                 title = "رصد | التقرير المجمع للأخبار المرسلة | " + day_label
                 try:
                     if os.environ.get("RASD_DAILY_SENT_ARCHIVE_ENABLED") == "true":
@@ -711,7 +711,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         doc, _ = prepare_word(
                             stories, config, output, title=title,
                             start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
-                            end=day + " 22:00 القاهرة")
+                            end=end_label)
                     photo_hold = False
                 except RuntimeError as exc:
                     # A publisher can revoke public browser access AFTER an
@@ -720,12 +720,12 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     if str(exc) != "publisher_screenshot_hold":
                         raise
                     title = ("رصد | تقرير حالة: أخبار مُرسلة وصورها غير متاحة"
-                             " لإعادة الالتقاط | " + day)
+                             " لإعادة الالتقاط | " + day_label)
                     report = {
                         "title": title,
                         "display_window_start":
                             "الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
-                        "display_window_end": day + " 22:00 القاهرة",
+                        "display_window_end": end_label,
                         "coverage": "PREVIOUSLY_ACCEPTED_NEWS_IMAGE_HOLD",
                         "verified_links": len(stories),
                         "articles": stories,  # Source URLs and titles, no images.
