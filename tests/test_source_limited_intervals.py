@@ -172,7 +172,7 @@ class SourceLimitedOriginals(unittest.TestCase):
             inspector=lambda *_args, **_kwargs: observed,
             allow_degraded=True, source_records=audit)
         self.assertEqual(rows, [])
-        self.assertEqual(audit, DEGRADED)
+        self.assertEqual(audit, [{**row, "verified_links": 0} for row in DEGRADED])
 
 
 if __name__ == "__main__":
