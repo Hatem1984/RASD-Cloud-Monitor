@@ -56,6 +56,31 @@ def allowed_url(url: str, publisher: str, *, asset: bool = False) -> bool:
         return False
 
 
+def suspicious_flat_lead_media(photo: Image.Image) -> bool:
+    """Conservative fail-closed clue for an unloaded giant publisher photo.
+
+    Genuine live evidence showed a uniformly grey 1200x900 publisher-page
+    hero occupying the main central left article area, while the headline
+    and ads kept the *whole* screenshot visually nonblank. Browser img
+    load-state checks can miss CSS/lazy/background placeholders.
+    This is a heuristic HOLD, never proof of deliberate publisher failure;
+    it neither edits screenshot pixels nor substitutes any photo.
+    """
+    width, height = photo.size
+    if width < 900 or height < 700:
+        return False
+    lead = photo.convert("RGB").crop((
+        int(width * 0.05), int(height * 0.42),
+        int(width * 0.63), int(height * 0.78),
+    ))
+    lead.thumbnail((160, 100))
+    stats = ImageStat.Stat(lead)
+    means, deviations = stats.mean, stats.stddev
+    return (230 <= min(means) and max(means) <= 252
+            and max(means) - min(means) <= 2.8
+            and max(deviations) <= 2.4)
+
+
 def image_quality(path: Path) -> dict:
     """Detect near-blank browser frames without OCR or external AI."""
     try:
@@ -67,8 +92,11 @@ def image_quality(path: Path) -> dict:
             hist = gray.histogram()
             dark_fraction = sum(hist[:180]) / (240 * 180)
             valid = stddev >= 12.0 and dark_fraction >= 0.01
-            return {"accepted": valid,
-                    "reason": "ok" if valid else "blank_or_low_content",
+            flat_lead = suspicious_flat_lead_media(photo) if valid else False
+            reason = ("blank_or_low_content" if not valid else
+                      "suspicious_flat_original_lead_media" if flat_lead else "ok")
+            return {"accepted": valid and not flat_lead,
+                    "reason": reason,
                     "luminance_stddev": round(stddev, 2),
                     "dark_fraction": round(dark_fraction, 4)}
     except (OSError, ValueError, UnidentifiedImageError):
