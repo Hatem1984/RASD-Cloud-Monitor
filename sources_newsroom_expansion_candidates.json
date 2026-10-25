@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "checked_on": "2026-10-25",
   "policy": "publisher_candidates_are_not_prod_except_explicit_original_jsonld_verified_masrawy",
   "candidates": [
@@ -34,6 +34,46 @@
       "status": "QA_ONLY_NOT_A_NATIVE_RSS",
       "evidence": "official publisher press listing exists; separate existing official-source QA; original unified production stage pending",
       "acceptance_gate": "dedicated non-RSS official-origin signed evidence and live unified Word/Gmail integration"
+    },
+    {
+      "id": "almal",
+      "publisher": "جريدة المال",
+      "page_url": "https://almalnews.com/Home/Index/rss/",
+      "status": "HOLD_HTML_NOT_NATIVE_RSS",
+      "evidence": "Read-only live fetch on 2026-10-25 returns news homepage HTML at path ending rss, not a verified RSS XML document.",
+      "acceptance_gate": "Find exact original-publisher native RSS feed; validate full XML, direct HTTPS article links and timezone-aware dates before activation."
+    },
+    {
+      "id": "elwatan",
+      "publisher": "جريدة الوطن المصرية",
+      "page_url": "https://www.elwatannews.com/",
+      "status": "HOLD_PROPOSED_RSS_404",
+      "evidence": "Egyptian publisher site accessible, but read-only check of https://www.elwatannews.com/rss on 2026-10-25 returned HTTP 404. Do not confuse it with similarly named non-Egyptian outlets.",
+      "acceptance_gate": "Verify original Egyptian publisher's working, nonredirecting native feed and original article timestamp identity."
+    },
+    {
+      "id": "cairo24",
+      "publisher": "القاهرة 24",
+      "page_url": "https://www.cairo24.com/economy",
+      "status": "HOLD_RSS_ACCESS_BLOCKED",
+      "evidence": "Read-only candidate https://www.cairo24.com/rss blocked bot fetcher on 2026-10-25; economy section publishes relevant ministry coverage but cannot establish an approved RSS feed.",
+      "acceptance_gate": "Original publisher native feed must be available to protected scheduled runner; do not bypass access restrictions or use scraped mirrors."
+    },
+    {
+      "id": "ahram_gate",
+      "publisher": "بوابة الأهرام",
+      "page_url": "https://gate.ahram.org.eg/",
+      "status": "HOLD_RSS_UNVERIFIED",
+      "evidence": "Read-only homepage fetch bot-blocked on 2026-10-25; publicly indexed newsroom has current economy coverage, but no safe native RSS endpoint verified.",
+      "acceptance_gate": "Obtain working publisher-owned native feed with exact host/date and source-page screenshot QA before production."
+    },
+    {
+      "id": "akhbarelyom",
+      "publisher": "أخبار اليوم",
+      "page_url": "https://akhbarelyom.com/",
+      "status": "HOLD_RSS_UNVERIFIED",
+      "evidence": "Live original publisher homepage opens on 2026-10-25, but no exact native RSS endpoint could be established during read-only research.",
+      "acceptance_gate": "Verify nonredirecting first-party RSS endpoint plus item date and article-host allowlist; no aggregator substitution."
     }
   ]
 }
