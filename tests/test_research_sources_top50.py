@@ -50,7 +50,7 @@ class TopFiftyResearchSourcesTests(unittest.TestCase):
             self.assertTrue(source["homepage_url"].startswith("https://"))
             self.assertNotIn("@", source["homepage_url"])
             self.assertIn(".", source["publisher_host"])
-        self.assertIn("not", self.data["production_rule"].lower())
+        self.assertIn("neither", self.data["production_rule"].lower())
         self.assertIn("criticism", self.data["verification_rule"])
 
     def test_query_generation_has_exact_50_source_scoped_non_network_queries(self):
