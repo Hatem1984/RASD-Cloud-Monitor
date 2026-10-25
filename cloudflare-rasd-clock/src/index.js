@@ -1,9 +1,11 @@
 // External RASD clock only: no Gmail credentials, private ledger or public trigger.
-const CRON = "7,37 * * * *";
+const INTERVAL_CRON = "7,37 * * * *";
+const DAILY_CRON = "0 19,20 * * *";
 const OWNER = "Hatem1984";
 const REPO = "RASD-Cloud-Monitor";
 const WORKFLOW = "rasd-cloudflare-dispatch.yml";
-const ORIGIN = "cloudflare-rasd-cron-v1";
+const INTERVAL_ORIGIN = "cloudflare-rasd-cron-v1";
+const DAILY_ORIGIN = "cloudflare-rasd-daily-v1";
 const WORKFLOW_URL = `https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW}`;
 const GH_HEADERS = {
   Accept: "application/vnd.github+json",
@@ -33,28 +35,49 @@ function githubToken(env) {
 }
 
 function scheduledSlot(controller) {
-  if (controller.cron !== CRON) throw new Error("unapproved_cron");
+  const daily = controller.cron === DAILY_CRON;
+  if (!daily && controller.cron !== INTERVAL_CRON) {
+    throw new Error("unapproved_cron");
+  }
   const value = controller.scheduledTime;
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new Error("invalid_scheduled_timestamp");
   }
   const when = new Date(value);
-  if (Number.isNaN(when.getTime()) || ![7, 37].includes(when.getUTCMinutes())) {
+  if (Number.isNaN(when.getTime())) throw new Error("invalid_scheduled_timestamp");
+  if (daily) {
+    if (when.getUTCMinutes() !== 0 || ![19, 20].includes(when.getUTCHours())) {
+      throw new Error("invalid_scheduled_minute");
+    }
+  } else if (![7, 37].includes(when.getUTCMinutes())) {
     throw new Error("invalid_scheduled_minute");
   }
-  // Cloudflare may represent scheduled time with second or millisecond jitter;
-  // the canonical minute is also strictly validated by GitHub. Do not skip an
-  // entire legitimate cron slot merely because seconds are not exactly zero.
   when.setUTCSeconds(0, 0);
   const delay = Date.now() - when.getTime();
   if (delay < -60_000 || delay > 18 * 60_000) {
     throw new Error("scheduled_slot_outside_freshness_window");
   }
-  return when.toISOString().replace(".000Z", "+00:00");
+  if (daily) {
+    // BOTH UTC candidates are configured to accommodate Egypt DST.
+    // Dispatch ONLY when the authentic Egypt local wall clock is 22:00.
+    // The other candidate is deliberately silent. No cost or Gmail activity.
+    const localHour = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Africa/Cairo", hour: "2-digit", hourCycle: "h23",
+    }).format(when);
+    if (localHour !== "22") return null;
+  }
+  return {
+    slot: when.toISOString().replace(".000Z", "+00:00"),
+    origin: daily ? DAILY_ORIGIN : INTERVAL_ORIGIN,
+  };
 }
 
 async function dispatch(controller, env) {
-  const slot = scheduledSlot(controller);
+  const event = scheduledSlot(controller);
+  if (event === null) {
+    console.log("RASD_CLOUDFLARE_DAILY_INACTIVE_CANDIDATE_SKIPPED");
+    return;
+  }
   const response = await fetch(`${WORKFLOW_URL}/dispatches`, {
     method: "POST",
     headers: {
@@ -62,7 +85,7 @@ async function dispatch(controller, env) {
       Authorization: `Bearer ${githubToken(env)}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ ref: "main", inputs: { origin: ORIGIN, slot } }),
+    body: JSON.stringify({ ref: "main", inputs: event }),
   });
   if (response.status !== 204) {
     throw new Error(`github_workflow_dispatch_http_${response.status}`);
