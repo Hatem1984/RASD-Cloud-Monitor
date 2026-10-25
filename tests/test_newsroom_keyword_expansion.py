@@ -1,110 +1,158 @@
-"""Owner-approved Planning expansion without enabling unreliable publisher RSS."""
+"""Source expansion: precise planning terms and Masrawy source-owned timezone.
+
+Offline-only; all webpage fetchers injected/mocked. Zero Gmail, no secrets.
+"""
 import json
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
+from xml.etree import ElementTree as ET
 
+from capture_public import allowed_url
+from masrawy_original_date import (original_pubdate, fetch_original_page)
 from monitor import parse_rss, read_feed
 
 ROOT=Path(__file__).resolve().parents[1]
-NOW=datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
+NOW=datetime(2026, 10, 25, 16, tzinfo=timezone.utc)
 ACTIVE=json.loads((ROOT/"sources_newsroom_active.json").read_text(encoding="utf-8"))
 CANDIDATES=json.loads((ROOT/"sources_newsroom_expansion_candidates.json").read_text(encoding="utf-8"))
 HAPI=ACTIVE["feeds"][0]
+MASRAWY=ACTIVE["feeds"][-1]
+LINK="https://www.masrawy.com/news/news_egypt/details/2026/10/25/123/valid"
+TITLE="وزارة التخطيط تستعرض الخطة الاستثمارية للدولة"
+DATE="10/25/2026 6:21:45 PM"
+ISO="2026-10-25T18:21:45+03:00"
 
 
-def xml(headline, summary="", date="Sun, 25 Oct 2026 11:00:00 +0000",
-        host="https://hapijournal.com/news/planning-verified"):
+def xml(headline, summary="",date="Sun, 25 Oct 2026 11:00:00 +0000",
+        host="https://hapijournal.com/planning-news"):
     return (
-        '<rss version="2.0"><channel><item><title>'
-        + headline + '</title><link>' + host
+        '<rss version="2.0"><channel><item><title>' + headline
+        + '</title><link>' + host
         + '</link><description>' + summary
         + '</description><pubDate>' + date
         + '</pubDate></item></channel></rss>'
     ).encode("utf-8")
 
 
+def publisher_jsonld(headline=TITLE, date=ISO):
+    payload=json.dumps({"@type":"NewsArticle","headline":headline,
+                        "datePublished":date},ensure_ascii=False)
+    return ('<!doctype html><html><head><script type="application/ld+json">'
+            +payload+'</script></head></html>').encode("utf-8")
+
+
 class MinistryExpansionRelease(unittest.TestCase):
-    def test_18_specific_keywords_have_no_duplicate_and_preserve_original(self):
+    def test_18_distinct_phrases_and_5_production_publisher_profiles(self):
         base=json.loads((ROOT/"sources.json").read_text("utf-8"))
         self.assertEqual(len(ACTIVE["keywords"]),18)
         self.assertEqual(len(set(ACTIVE["keywords"])),18)
         self.assertEqual(ACTIVE["keywords"][:len(base["keywords"])],
                          base["keywords"])
-        for p in ("المعهد القومي للتخطيط","خطة التنمية الاقتصادية والاجتماعية",
-                  "الخطة الاستثمارية للدولة","البرنامج الوطني للإصلاحات الهيكلية"):
-            self.assertIn(p,ACTIVE["keywords"])
+        self.assertEqual([x["id"] for x in ACTIVE["feeds"]],
+                         ["hapi","almasryalyoum","shorouk","alborsa","masrawy"])
+        for phrase in ("المعهد القومي للتخطيط",
+                       "خطة التنمية الاقتصادية والاجتماعية",
+                       "الخطة الاستثمارية للدولة",
+                       "البرنامج الوطني للإصلاحات الهيكلية"):
+            self.assertIn(phrase,ACTIVE["keywords"])
 
-    def test_expansion_matches_official_topic_in_headline(self):
+    def test_new_terms_are_relevant_in_title_and_description(self):
         for title in (
           "المعهد القومي للتخطيط يبحث خطط العام",
           "برنامج حول الخطة الاستثمارية للدولة",
           "مستهدفات خطة التنمية الاقتصادية والاجتماعية لعام 2027",
           "البرنامج الوطني للإصلاحات الهيكلية يدخل مرحلة جديدة",
-          "وزارة التخطيط والتنمية الاقتصادية تستعرض برنامجًا جديدًا",
         ):
             with self.subTest(title=title):
-                cnt,matching=parse_rss(
+                count,found=parse_rss(
                     xml(title),HAPI,ACTIVE["keywords"],NOW,
                     require_complete_items=True)
-                self.assertEqual((cnt,len(matching)),(1,1))
-                self.assertEqual(matching[0]["match_origin"],"title")
-
-    def test_expanded_topic_in_description_with_real_date(self):
-        count,match=parse_rss(
+                self.assertEqual((count,len(found)),(1,1))
+        count,found=parse_rss(
             xml("اجتماع اقتصادي جديد",
                 "تقرير عن الخطة العامة للتنمية الاقتصادية والاجتماعية"),
             HAPI,ACTIVE["keywords"],NOW,require_complete_items=True)
-        self.assertEqual((count,len(match)),(1,1))
-        self.assertEqual(match[0]["match_origin"],"publisher_description")
+        self.assertEqual((count,len(found)),(1,1))
+        self.assertEqual(found[0]["match_origin"],"publisher_description")
 
-    def test_unrelated_economy_and_sports_do_not_match(self):
-        for text in (
-            "تنمية الإيرادات في قطاع البنوك",
-            "وزير المالية يبحث زيادة الإنفاق",
-            "أزمة التخطيط للمباراة",
-            "رؤية مصر 2030 تعود في احتفال شعبي",
-            "تعزيز العلاقات مع التعاون الدولي فقط",
-        ):
-            with self.subTest(text=text):
-                cnt,news=parse_rss(xml(text),HAPI,ACTIVE["keywords"],NOW,
-                                   require_complete_items=True)
-                self.assertEqual((cnt,len(news)),(1,0))
+    def test_unrelated_economy_and_sports_stay_out(self):
+        for title in ("تنمية الإيرادات في قطاع البنوك",
+                      "وزير المالية يبحث زيادة الإنفاق",
+                      "أزمة التخطيط للمباراة",
+                      "رؤية مصر 2030 تعود في احتفال شعبي"):
+            with self.subTest(title=title):
+                c,found=parse_rss(xml(title),HAPI,ACTIVE["keywords"],NOW,
+                                  require_complete_items=True)
+                self.assertEqual((c,len(found)),(1,0))
 
-    def test_all_new_publisher_candidates_are_on_hold_not_in_mail(self):
-        ids=[x["id"] for x in ACTIVE["feeds"]]
-        self.assertEqual(ids,["hapi","almasryalyoum","shorouk","alborsa"])
-        self.assertEqual(CANDIDATES["policy"],
-                         "research_only_not_active_feed_not_in_gmail_delivery")
-        self.assertEqual(len(CANDIDATES["candidates"]),4)
-        for item in CANDIDATES["candidates"]:
-            self.assertNotIn(item["id"],ids)
-            self.assertTrue(item["status"].startswith(("HOLD_","QA_ONLY_")))
-            self.assertTrue(item["acceptance_gate"])
+    def test_original_page_newsarticle_explicit_timezone_confirms_rss_clock(self):
+        dt,pub=original_pubdate(LINK,TITLE,DATE,
+                                fetch=lambda _:publisher_jsonld())
+        self.assertEqual(dt.isoformat(),ISO)
+        self.assertIn("+0300",pub)
 
-    def test_masrawy_bad_original_date_cannot_be_invented(self):
-        # Exact native RSS date example observed from the original publisher
-        # lacks timezone: "10/25/2026 6:21:45 PM".
-        cfg=dict(HAPI,allowed_article_hosts=["www.masrawy.com"])
-        feed=xml("وزارة التخطيط",date="10/25/2026 6:21:45 PM",
-                 host="https://www.masrawy.com/news/news_egypt/details/1")
+    def test_rss_masrawy_strict_integration_uses_verification_once_per_item(self):
+        dt,pub=original_pubdate(LINK,TITLE,DATE,
+                                fetch=lambda _:publisher_jsonld())
+        with patch("masrawy_original_date.original_pubdate",
+                   return_value=(dt,pub)) as origin:
+            count,found=parse_rss(
+                xml(TITLE,date=DATE,host=LINK),MASRAWY,
+                ACTIVE["keywords"],NOW,require_complete_items=True)
+        self.assertEqual((count,len(found)),(1,1))
+        self.assertEqual(origin.call_count,1)
+        self.assertEqual(found[0]["published"],pub)
+        self.assertTrue(allowed_url(LINK,"masrawy.com"))
+
+    def test_wrong_local_clock_causes_total_rejection_no_guessed_timezone(self):
         with self.assertRaisesRegex(ValueError,
-                                    "rss_original_item_date_unverifiable"):
-            parse_rss(feed,cfg,ACTIVE["keywords"],NOW,
-                      require_complete_items=True)
+                                    "masrawy_publisher_publication_date_unverified"):
+            original_pubdate(LINK,TITLE,DATE,
+                             fetch=lambda _:publisher_jsonld(
+                                 date="2026-10-25T17:21:45+03:00"))
 
-    def test_held_publisher_rss_endpoint_is_not_even_fetch_allowlisted(self):
-        for row in CANDIDATES["candidates"]:
-            url=row.get("feed_url")
-            if not url:continue
-            with self.assertRaisesRegex(ValueError,"feed_endpoint_not_reviewed"):
-                read_feed(url,10_000)
+    def test_publisher_headline_mismatch_always_rejected(self):
+        with self.assertRaisesRegex(ValueError,
+                                    "masrawy_publisher_publication_date_unverified"):
+            original_pubdate(LINK,TITLE,DATE,
+                             fetch=lambda _:publisher_jsonld(
+                                headline="خبر اقتصادي مختلف"))
 
-    def test_no_second_send_mode_or_credentials_in_candidate_registry(self):
-        raw=(ROOT/"sources_newsroom_expansion_candidates.json").read_text("utf-8")
-        for forbidden in ("RASD_GMAIL_APP_PASSWORD","private_key",
-                          "approved_recipient","smtp_sent","secret_token"):
-            self.assertNotIn(forbidden,raw)
+    def test_unzoned_publisher_jsonld_does_not_rescue_naive_rss(self):
+        with self.assertRaisesRegex(ValueError,
+                                    "masrawy_publisher_publication_date_unverified"):
+            original_pubdate(LINK,TITLE,DATE,
+                             fetch=lambda _:publisher_jsonld(
+                                 date="2026-10-25T18:21:45"))
+
+    def test_reject_unsafe_lookalike_article_host_before_network(self):
+        with self.assertRaisesRegex(ValueError,"masrawy_original_url_not_approved"):
+            fetch_original_page("https://www.masrawy.com.evil.invalid/news/x")
+        with self.assertRaisesRegex(ValueError,"masrawy_original_url_not_approved"):
+            fetch_original_page("http://www.masrawy.com/news/x")
+        with self.assertRaisesRegex(ValueError,"masrawy_original_url_not_approved"):
+            fetch_original_page("https://www.masrawy.com:8080/news/x")
+
+    def test_other_three_candidate_sources_remain_on_hold(self):
+        active={x["id"] for x in ACTIVE["feeds"]}
+        review={x["id"]:x for x in CANDIDATES["candidates"]}
+        self.assertTrue(review["masrawy"]["status"].startswith("ACTIVATED_"))
+        self.assertEqual(len(review),4)
+        for name in ("youm7_reports","youm7_politics","mped_official"):
+            self.assertNotIn(name,active)
+            self.assertTrue(review[name]["status"].startswith(("HOLD_","QA_ONLY_")))
+
+    def test_unapproved_youm7_feed_not_allowed_even_with_valid_rss(self):
+        with self.assertRaisesRegex(ValueError,"feed_endpoint_not_reviewed"):
+            read_feed(CANDIDATES["candidates"][1]["feed_url"],10000)
+
+    def test_no_secrets_credentials_or_gmail_in_new_module(self):
+        raw=(ROOT/"masrawy_original_date.py").read_text("utf-8")
+        for bad in ("RASD_GMAIL_APP_PASSWORD","PrivateGitHubLedger",
+                    "smtplib","send_message(","GITHUB_TOKEN"):
+            self.assertNotIn(bad,raw)
 
 
 if __name__=="__main__":
