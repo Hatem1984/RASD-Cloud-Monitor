@@ -18,7 +18,7 @@ NOW=datetime(2026, 10, 25, 16, tzinfo=timezone.utc)
 ACTIVE=json.loads((ROOT/"sources_newsroom_active.json").read_text(encoding="utf-8"))
 CANDIDATES=json.loads((ROOT/"sources_newsroom_expansion_candidates.json").read_text(encoding="utf-8"))
 HAPI=ACTIVE["feeds"][0]
-MASRAWY=ACTIVE["feeds"][-1]
+MASRAWY=next(x for x in ACTIVE["feeds"] if x["id"]=="masrawy")
 LINK="https://www.masrawy.com/news/news_egypt/details/2026/10/25/123/valid"
 TITLE="وزارة التخطيط تستعرض الخطة الاستثمارية للدولة"
 DATE="10/25/2026 6:21:45 PM"
@@ -44,14 +44,14 @@ def publisher_jsonld(headline=TITLE, date=ISO):
 
 
 class MinistryExpansionRelease(unittest.TestCase):
-    def test_24_distinct_phrases_and_5_production_publisher_profiles(self):
+    def test_29_distinct_phrases_and_14_production_publisher_profiles(self):
         base=json.loads((ROOT/"sources.json").read_text("utf-8"))
-        self.assertEqual(len(ACTIVE["keywords"]),24)
-        self.assertEqual(len(set(ACTIVE["keywords"])),24)
+        self.assertEqual(len(ACTIVE["keywords"]),29)
+        self.assertEqual(len(set(ACTIVE["keywords"])),29)
         self.assertEqual(ACTIVE["keywords"][:len(base["keywords"])],
                          base["keywords"])
         self.assertEqual([x["id"] for x in ACTIVE["feeds"]],
-                         ["hapi","almasryalyoum","shorouk","alborsa","masrawy"])
+                         ["hapi","almasryalyoum","shorouk","alborsa","masrawy"]+['almessa', 'elbalad', 'vetogate', 'dailynewsegypt', 'egyptindependent', 'enterpriseam', 'egyptianstreets', 'skynewsarabia', 'inp_official'])
         for phrase in ("المعهد القومي للتخطيط",
                        "خطة التنمية الاقتصادية والاجتماعية",
                        "الخطة الاستثمارية للدولة",

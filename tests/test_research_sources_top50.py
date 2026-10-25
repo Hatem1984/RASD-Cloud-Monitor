@@ -27,13 +27,13 @@ class TopFiftyResearchSourcesTests(unittest.TestCase):
         active_ids = {x["id"] for x in self.active["feeds"]}
         catalog_ids = {x["id"] for x in self.sources if x["research_status"] == "active_native_rss"}
         self.assertEqual(catalog_ids, active_ids)
-        self.assertEqual(len(catalog_ids), 5)
+        self.assertEqual(len(catalog_ids), 14)
         self.assertEqual(sum(x["research_status"] == "candidate_not_scheduled"
-                             for x in self.sources), 45)
-        self.assertEqual(len(self.active["feeds"]), 5)
-        self.assertEqual(len(self.active["keywords"]), 24)
+                             for x in self.sources), 36)
+        self.assertEqual(len(self.active["feeds"]), 14)
+        self.assertEqual(len(self.active["keywords"]), 29)
         self.assertEqual(sum(x["rss_status"] == "approved_in_sources_newsroom_active.json"
-                             for x in self.sources), 5)
+                             for x in self.sources), 14)
 
     def test_measured_audience_rank_is_only_exact_published_top_five(self):
         published = {"youm7": 1, "masrawy": 2, "elbalad": 3,
@@ -67,7 +67,7 @@ class TopFiftyResearchSourcesTests(unittest.TestCase):
             generate_queries(self.data, limit=51)
         with self.assertRaises(ValueError):
             build_query({"publisher_host": "bad.com/path"})
-        self.assertFalse(any(q["feed_operational"] for q in queries[-5:]))
+        self.assertTrue(any(q["feed_operational"] for q in queries[-5:]))
 
     def test_research_script_is_offline_not_a_scheduled_sender(self):
         code = (ROOT / "research_source_queries.py").read_text("utf-8")

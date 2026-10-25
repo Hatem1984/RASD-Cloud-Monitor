@@ -34,9 +34,18 @@ def feed_xml(url: str, *, title=HEADLINE, published=PUBLISHED) -> bytes:
 
 
 class OriginalPublisherExpansionTests(unittest.TestCase):
-    def test_five_reviewed_native_feed_endpoints(self):
+    def test_fourteen_reviewed_native_feed_endpoints(self):
         self.assertEqual(set(APPROVED_FEED_URLS), {
             "https://hapijournal.com/feed/",
+            "https://almessa.gomhuriaonline.com/feed/",
+            "https://www.elbalad.news/rss.aspx",
+            "https://www.vetogate.com/rss.aspx",
+            "https://www.dailynewsegypt.com/feed/",
+            "https://www.egyptindependent.com/feed/",
+            "https://enterpriseam.com/egypt/feed/",
+            "https://egyptianstreets.com/feed/",
+            "https://www.skynewsarabia.com/rss.xml",
+            "https://inp.edu.eg/feed/",
             "https://www.almasryalyoum.com/rss/rssfeeds",
             "https://www.masrawy.com/rss/feed/35/%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1%20%D9%85%D8%B5%D8%B1-%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9",
             "https://www.shorouknews.com/Economy/rss",

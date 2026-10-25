@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "scope": "Egyptian Ministry of Planning - publicly published news only",
   "keywords": [
     "وزارة التخطيط",
@@ -25,7 +25,12 @@
     "المبادرة الوطنية للمشروعات الخضراء الذكية",
     "المراجعة الوطنية الطوعية لمصر",
     "تقرير مصر الوطني الطوعي",
-    "المنظومة المتكاملة للتخطيط التنموي"
+    "المنظومة المتكاملة للتخطيط التنموي",
+    "Egypt Ministry of Planning",
+    "Egyptian Ministry of Planning",
+    "Ministry of Planning and Economic Development",
+    "Egypt National Planning Institute",
+    "Egypt national economic development narrative"
   ],
   "feeds": [
     {
@@ -70,6 +75,78 @@
       "allowed_article_hosts": [
         "www.masrawy.com",
         "masrawy.com"
+      ]
+    },
+    {
+      "id": "almessa",
+      "name": "Al Massa native news RSS",
+      "url": "https://almessa.gomhuriaonline.com/feed/",
+      "allowed_article_hosts": [
+        "almessa.gomhuriaonline.com"
+      ]
+    },
+    {
+      "id": "elbalad",
+      "name": "Sada El Balad native news RSS",
+      "url": "https://www.elbalad.news/rss.aspx",
+      "allowed_article_hosts": [
+        "www.elbalad.news"
+      ]
+    },
+    {
+      "id": "vetogate",
+      "name": "Veto native news RSS",
+      "url": "https://www.vetogate.com/rss.aspx",
+      "allowed_article_hosts": [
+        "www.vetogate.com"
+      ]
+    },
+    {
+      "id": "dailynewsegypt",
+      "name": "Daily News Egypt native RSS",
+      "url": "https://www.dailynewsegypt.com/feed/",
+      "allowed_article_hosts": [
+        "www.dailynewsegypt.com"
+      ]
+    },
+    {
+      "id": "egyptindependent",
+      "name": "Egypt Independent native RSS",
+      "url": "https://www.egyptindependent.com/feed/",
+      "allowed_article_hosts": [
+        "www.egyptindependent.com"
+      ]
+    },
+    {
+      "id": "enterpriseam",
+      "name": "Enterprise Egypt native RSS",
+      "url": "https://enterpriseam.com/egypt/feed/",
+      "allowed_article_hosts": [
+        "enterpriseam.com"
+      ]
+    },
+    {
+      "id": "egyptianstreets",
+      "name": "Egyptian Streets native RSS",
+      "url": "https://egyptianstreets.com/feed/",
+      "allowed_article_hosts": [
+        "egyptianstreets.com"
+      ]
+    },
+    {
+      "id": "skynewsarabia",
+      "name": "Sky News Arabia native RSS",
+      "url": "https://www.skynewsarabia.com/rss.xml",
+      "allowed_article_hosts": [
+        "www.skynewsarabia.com"
+      ]
+    },
+    {
+      "id": "inp_official",
+      "name": "National Planning Institute native RSS",
+      "url": "https://inp.edu.eg/feed/",
+      "allowed_article_hosts": [
+        "inp.edu.eg"
       ]
     }
   ],

@@ -25,6 +25,15 @@ ARABIC_MONTHS = (
     "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
 )
 SOURCE_LABELS = {
+    "Al Massa native news RSS": "المساء",
+    "Sada El Balad native news RSS": "صدى البلد",
+    "Veto native news RSS": "فيتو",
+    "Daily News Egypt native RSS": "ديلي نيوز إيجيبت",
+    "Egypt Independent native RSS": "إيجيبت إندبندنت",
+    "Enterprise Egypt native RSS": "إنتربرايز مصر",
+    "Egyptian Streets native RSS": "إيجيبشن ستريتس",
+    "Sky News Arabia native RSS": "سكاي نيوز عربية",
+    "National Planning Institute native RSS": "معهد التخطيط القومي",
     "Hapi native news RSS": "جريدة حابي",
     "Al Masry Al Youm native news RSS": "المصري اليوم",
     "Al Shorouk native Economy RSS": "بوابة الشروق",
@@ -335,6 +344,34 @@ def render_docx(report: dict, destination: Path) -> None:
                     article["evidence_image_path"],
                     width=Inches(width_in), height=Inches(height_in))
                 doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if report.get("scope_note"):
+        paragraph = doc.add_paragraph()
+        _rtl(paragraph)
+        paragraph.add_run("نطاق التغطية: " + report["scope_note"]).bold = True
+    held_candidates = report.get("held_candidates", [])
+    if held_candidates:
+        heading = doc.add_paragraph()
+        _rtl(heading)
+        heading.add_run(
+            "مواد اكتُشفت لكنها معلّقة — لم تُعتمد ولم تُرسل كأخبار").bold = True
+        for index, item in enumerate(held_candidates[:12], 1):
+            p = doc.add_paragraph()
+            _rtl(p)
+            p.add_run(str(index) + ". " + item["headline"])
+            details = doc.add_paragraph()
+            _rtl(details)
+            details.add_run(
+                "المصدر: " + SOURCE_LABELS.get(item["source"], item["source"])
+                + " | سبب التعليق: " + item["reason"]
+                + " | تاريخ الناشر: " + item["published_display_cairo"])
+            link_para = doc.add_paragraph()
+            _rtl(link_para)
+            _word_hyperlink(link_para, item["url"])
+        if len(held_candidates) > 12:
+            p = doc.add_paragraph()
+            _rtl(p)
+            p.add_run("مواد معلقة أخرى غير معروضة في هذا الملخص: "
+                      + str(len(held_candidates) - 12))
     p = doc.add_paragraph()
     _rtl(p)
     p.add_run("حالة المصادر").bold = True
@@ -342,7 +379,7 @@ def render_docx(report: dict, destination: Path) -> None:
     # a near-empty third page without shrinking authentic screenshots.
     if report["sources"]:
         source_names = {"hapi": "جريدة حابي", "almasryalyoum": "المصري اليوم",
-                        "shorouk": "بوابة الشروق", "alborsa": "جريدة البورصة", "masrawy": "مصراوي"}
+                        "shorouk": "بوابة الشروق", "alborsa": "جريدة البورصة", "masrawy": "مصراوي", "almessa": "المساء", "elbalad": "صدى البلد", "vetogate": "فيتو", "dailynewsegypt": "ديلي نيوز إيجيبت", "egyptindependent": "إيجيبت إندبندنت", "enterpriseam": "إنتربرايز مصر", "egyptianstreets": "إيجيبشن ستريتس", "skynewsarabia": "سكاي نيوز عربية", "inp_official": "معهد التخطيط القومي"}
         source_statuses = []
         for feed in report["sources"]:
             name = source_names.get(feed["feed_id"], feed["feed_id"])

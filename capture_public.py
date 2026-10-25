@@ -12,6 +12,15 @@ from PIL import Image, ImageStat, UnidentifiedImageError
 
 # Only reviewed public news publishers used in this test-only worker.
 APPROVED_PUBLISHERS = {
+    "gomhuriaonline.com": frozenset({"almessa.gomhuriaonline.com"}),
+    "elbalad.news": frozenset({"www.elbalad.news"}),
+    "vetogate.com": frozenset({"www.vetogate.com"}),
+    "dailynewsegypt.com": frozenset({"www.dailynewsegypt.com"}),
+    "egyptindependent.com": frozenset({"www.egyptindependent.com"}),
+    "enterpriseam.com": frozenset({"enterpriseam.com"}),
+    "egyptianstreets.com": frozenset({"egyptianstreets.com"}),
+    "skynewsarabia.com": frozenset({"www.skynewsarabia.com"}),
+    "inp.edu.eg": frozenset({"inp.edu.eg"}),
     "hapijournal.com": frozenset({"hapijournal.com", "www.hapijournal.com"}),
     "elwatannews.com": frozenset({"elwatannews.com", "www.elwatannews.com"}),
     "almasryalyoum.com": frozenset({"almasryalyoum.com", "www.almasryalyoum.com"}),

@@ -227,7 +227,8 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
         raise RuntimeError("news_inventory_silent_truncation_hold")
     if source_records is not None:
         source_records.extend({
-            "feed_id": s["feed_id"], "status": s["status"]
+            "feed_id": s["feed_id"], "status": s["status"],
+            "verified_links": s.get("verified_links", 0)
         } for s in observed["sources"])
     if not allow_degraded and any(s["status"] != "ok" for s in observed["sources"]):
         raise RuntimeError("source_not_healthy")
@@ -301,6 +302,7 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
                                         start: str, end: str,
                                         source_records: list[dict],
                                         pending_approved_news: int = 0,
+                                        held_items: list[dict] | None = None,
                                         capture=proof_capture
                                         ) -> tuple[Path, list[dict], int, bool]:
     """Real original screenshots ONLY; blocked articles remain eligible for retry.
@@ -341,6 +343,14 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
             print("::warning::RASD_ORIGINAL_IMAGE_HOLD"
                   f" publisher={item['source']!r} reason={safe_reason}",
                   flush=True)
+            if held_items is not None:
+                held_items.append({
+                    "id": item["id"], "headline": item["headline"],
+                    "url": item["url"], "source": item["source"],
+                    "published_at_cairo": item["published_at_cairo"],
+                    "published_display_cairo": item["published_display_cairo"],
+                    "reason": safe_reason,
+                })
             rejected += 1
             continue
         digest = proof.get("sha256")
@@ -360,11 +370,7 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
                     any(s["status"] != "ok" for s in source_records))
     source_rows = [{
         "feed_id": row["feed_id"], "status": row["status"],
-        "verified_links": sum(
-            item["source"] == next(
-                f["name"] for f in config["feeds"]
-                if f["id"] == row["feed_id"])
-            for item in selected),
+        "verified_links": row.get("verified_links", 0),
         "error_type": None if row["status"] == "ok" else "original_feed_unavailable",
     } for row in source_records]
     limitations = (
@@ -388,8 +394,14 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
         "title": title + (" — نطاق جزئي" if degraded else ""),
         "display_window_start": start, "display_window_end": end,
         "coverage": "SOURCE_LIMITED" if degraded else "HEALTHY",
-        "verified_links": len(selected), "articles": selected,
+        "verified_links": sum(x["verified_links"] for x in source_rows),
+        "articles": selected,
         "sources": source_rows, "limitations": limitations,
+        "held_candidates": held_items or [],
+        "scope_note": (
+            f"{len(config['feeds'])} مصادر RSS مفعلة فقط من سجل بحث يضم 50"
+            " مصدرًا؛ بقية المصادر قيد التأهيل وليست مرصودة تلقائيًا."
+        ),
     }
     word = output / "RASD-News-With-Original-Screenshots.docx"
     render_docx(report, word)
@@ -528,7 +540,8 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
                                state: dict, config: dict, health: list[dict],
                                window: str, start: datetime, now: datetime,
                                output: Path, held_articles: int = 0,
-                               waiting_articles: int = 0) -> dict:
+                               waiting_articles: int = 0,
+                               held_items: list[dict] | None = None) -> dict:
     """One Word status per eligible empty 30m slot, not a fabricated news report.
 
     Distinct FROM the 22:00 news rollup: no 'interval_item' kind is written
@@ -540,6 +553,12 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
     if (type(held_articles) is not int or not 0 <= held_articles <= 200 or
             type(waiting_articles) is not int or not 0 <= waiting_articles <= 200):
         raise RuntimeError("interval_status_invalid_hold_count")
+    for held_item in (held_items or []):
+        validate_story(held_item, config)
+        if not isinstance(held_item.get("reason"), str):
+            raise RuntimeError("invalid_held_item_reason")
+    if len(held_items or []) > held_articles:
+        raise RuntimeError("held_items_outnumber_hold_count")
     expected_ids = [feed["id"] for feed in config["feeds"]]
     if (len(health) != len(expected_ids) or
             [row.get("feed_id") for row in health] != expected_ids or
@@ -582,6 +601,11 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
                      else "NO_VERIFIED_NEW_DELIVERY"),
         "verified_links": sum(row["verified_links"] for row in source_rows),
         "articles": [], "sources": source_rows,
+        "held_candidates": held_items or [],
+        "scope_note": (
+            f"{len(config['feeds'])} مصادر RSS مفعلة فقط من سجل بحث يضم 50"
+            " مصدرًا؛ بقية المصادر قيد التأهيل وليست مرصودة تلقائيًا."
+        ),
         "limitations": (
             ("هذا تقرير حالة تشغيل لا يحمل أخبارًا أو صورًا غير موثقة؛ "
              f"ظهرت {pending} مواد مطابقة غير مُسلّمة بسبب تعذّر "
@@ -737,11 +761,13 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             title = ("رصد | استدراك أخبار 23 أكتوبر بصور ناشريها الأصلية"
                      if mode == "interval_owner_once" else
                      "رصد | أخبار جديدة من الفحص الدوري | " + cairo_display_time(start))
+            held_items = []
             try:
                 doc, delivered, held_count, limited = prepare_source_limited_verified_word(
                     stories, config, output, title=title,
                     start=cairo_display_time(start),
                     end=cairo_display_time(now), source_records=health,
+                    held_items=held_items,
                     **({"pending_approved_news":waiting} if waiting else {}))
             except RuntimeError as exc:
                 # Every discovered, approved article was attempted, but NONE
@@ -767,7 +793,8 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     ledger=ledger, recipient=recipient, sender=sender,
                     password=password, state=state, config=config, health=health,
                     window=window, start=start, now=now, output=output,
-                    held_articles=len(stories), waiting_articles=waiting)
+                    held_articles=len(stories), waiting_articles=waiting,
+                    held_items=held_items)
             # Only successfully captured/embedded originals enter private CAS.
             # Blocked items remain unsent, so later scheduled scans can retry.
             reserve_stories(ledger, delivered, day)
