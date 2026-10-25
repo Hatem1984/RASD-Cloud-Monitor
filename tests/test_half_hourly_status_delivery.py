@@ -97,6 +97,62 @@ class HalfHourlyWordStatus(unittest.TestCase):
         send.assert_not_called()
         self.ledger.reserve.assert_not_called()
 
+    def test_publisher_photo_hold_sends_status_not_unauthenticated_news(self):
+        with patch.object(rasd, "send_one_word",
+                          return_value="<rasd-test@gmail.com>") as send:
+            result = rasd.send_empty_interval_status(
+                ledger=self.ledger, sender="source@gmail.com",
+                recipient="review@example.com", password="offline-not-real",
+                state={"entries": {}}, config=self.config, health=self.health,
+                window=self.window, start=self.start, now=self.now,
+                output=Path(self.dir.name),
+                held_articles=1, waiting_articles=0)
+        self.assertEqual(
+            result["status"],
+            "interval_evidence_hold_status_smtp_accepted_unconfirmed_inbox")
+        self.assertEqual(result["held_articles"], 1)
+        self.assertEqual(result["items"], 0)
+        self.assertTrue(result["smtp_accepted"])
+        text = " ".join(p.text for p in Document(send.call_args.args[0]).paragraphs)
+        self.assertIn("تعذّر", text)
+        self.assertIn("ستظل قابلة لإعادة الفحص", text)
+        self.assertEqual(len(Document(send.call_args.args[0]).inline_shapes), 0)
+
+    def test_invalid_publisher_hold_count_fails_closed(self):
+        with patch.object(rasd, "send_one_word") as send:
+            with self.assertRaisesRegex(RuntimeError, "interval_status_invalid_hold_count"):
+                rasd.send_empty_interval_status(
+                    ledger=self.ledger, sender="source@gmail.com",
+                    recipient="review@example.com", password="offline-not-real",
+                    state={"entries": {}}, config=self.config, health=self.health,
+                    window=self.window, start=self.start, now=self.now,
+                    output=Path(self.dir.name), held_articles=-1)
+        send.assert_not_called()
+        self.ledger.reserve.assert_not_called()
+
+    def test_live_interval_image_hold_routes_to_status_without_article_reservation(self):
+        story = {"id": "a"*24}
+        with (patch.object(rasd, "require_github_scheduler"),
+              patch.object(rasd, "protected_credentials",
+                           return_value=("source@gmail.com", "review@example.com",
+                                         "offline", self.ledger)),
+              patch.object(rasd, "discover_interval_news", return_value=[story]),
+              patch.object(rasd, "prepare_source_limited_verified_word",
+                           side_effect=RuntimeError("no_original_publisher_page_verified")),
+              patch.object(rasd, "send_empty_interval_status",
+                           return_value={"status": "evidence_hold_status_test"}) as notify,
+              patch.object(rasd, "reserve_stories") as reserve,
+              patch.object(rasd, "scheduled_phase", return_value="interval"),
+              patch.dict(rasd.os.environ, {
+                  "GITHUB_EVENT_NAME": "schedule",
+                  "RASD_JOB_CRON": rasd.HALF_HOUR_CRON,
+              })):
+            self.ledger.read.return_value = ({"entries": {}}, "sha")
+            result = rasd.run_scheduled("interval", self.now)
+        self.assertEqual(result["status"], "evidence_hold_status_test")
+        self.assertEqual(notify.call_args.kwargs["held_articles"], 1)
+        reserve.assert_not_called()
+
     def test_legacy_owner_once_cannot_send_new_status(self):
         from unittest.mock import patch as mock_patch
         with mock_patch.object(rasd, "require_github_scheduler"), \
