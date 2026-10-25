@@ -6,6 +6,7 @@ from pathlib import Path
 from docx import Document
 
 from capture_public import is_planning_publisher_page
+from cloud_proof_report import original_headline_in_page_title
 from daily_report import render_docx
 
 
@@ -27,6 +28,13 @@ class NextReportQualityGate(unittest.TestCase):
         ):
             with self.subTest(headline=headline):
                 self.assertFalse(is_planning_publisher_page(headline, ' ' * 200))
+
+    def test_publisher_title_ignores_quote_styles_but_not_story_identity(self):
+        title = "وزير التخطيط يشرح البرنامج الوطني للتحول الاقتصادي"
+        page = '"وزير التخطيط" يشرح البرنامج الوطني للتحول الاقتصادي - الناشر'
+        self.assertTrue(original_headline_in_page_title(title, page))
+        self.assertFalse(original_headline_in_page_title(
+            title, "وزير المالية يتحدث عن الانفاق - الناشر"))
 
     def test_word_uses_real_rss_count_and_arabic_hold_reason(self):
         report = {
