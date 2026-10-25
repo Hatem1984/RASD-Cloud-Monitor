@@ -118,14 +118,6 @@
       ]
     },
     {
-      "id": "enterpriseam",
-      "name": "Enterprise Egypt native RSS",
-      "url": "https://enterpriseam.com/egypt/feed/",
-      "allowed_article_hosts": [
-        "enterpriseam.com"
-      ]
-    },
-    {
       "id": "egyptianstreets",
       "name": "Egyptian Streets native RSS",
       "url": "https://egyptianstreets.com/feed/",

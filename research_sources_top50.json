@@ -12,7 +12,7 @@
     "https://almanassa.com/about",
     "https://english.ahram.org.eg/UI/Front/AboutUs.aspx"
   ],
-  "production_rule": "Catalog membership is neither a proof of editorial verification nor of media authenticity. Only the 14 now-validated first-party native RSS endpoints in sources_newsroom_active.json are polled. The remaining 36 research sources are NOT automatically monitored. Activation does not mean original publisher screenshot success: unmatched or failed proof remains HOLD; article originals cannot be invented. Expansion tested no-redirect HTTP 200 well-formed RSS with explicitly timezoned publisher dates on 2026-10-25. Only the National Planning Institute publisher page image passed a live original capture sample; all publisher/Word/Gmail acceptance gates are still pending per new source.",
+  "production_rule": "Catalog membership is neither a proof of editorial verification nor of media authenticity. Only the 13 now-validated first-party native RSS endpoints in sources_newsroom_active.json are polled. The remaining 37 research sources are NOT automatically monitored. Activation does not mean original publisher screenshot success: unmatched or failed proof remains HOLD; article originals cannot be invented. Expansion tested no-redirect HTTP 200 well-formed RSS with explicitly timezoned publisher dates on 2026-10-25. Only the National Planning Institute publisher page image passed a live original capture sample; all publisher/Word/Gmail acceptance gates are still pending per new source.",
   "verification_rule": "Official original publications corroborate claimed facts, budgets and policies, but must not suppress independently reported criticism. Attribution is mandatory; identical syndicated facts are not counted as independent confirming reports.",
   "sources": [
     {
@@ -455,8 +455,8 @@
       "publisher_host": "enterpriseam.com",
       "category": "business_press",
       "editorial_group": "enterpriseam",
-      "research_status": "active_native_rss",
-      "rss_status": "approved_in_sources_newsroom_active.json",
+      "research_status": "candidate_not_scheduled",
+      "rss_status": "unapproved_or_unverified",
       "similarweb_egypt_news_rank_aug_2026": null
     },
     {

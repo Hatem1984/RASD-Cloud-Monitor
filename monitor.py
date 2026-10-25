@@ -30,7 +30,6 @@ APPROVED_FEED_URLS = frozenset({
     "https://www.vetogate.com/rss.aspx",
     "https://www.dailynewsegypt.com/feed/",
     "https://www.egyptindependent.com/feed/",
-    "https://enterpriseam.com/egypt/feed/",
     "https://egyptianstreets.com/feed/",
     "https://www.skynewsarabia.com/rss.xml",
     "https://inp.edu.eg/feed/",

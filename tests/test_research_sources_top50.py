@@ -27,13 +27,13 @@ class TopFiftyResearchSourcesTests(unittest.TestCase):
         active_ids = {x["id"] for x in self.active["feeds"]}
         catalog_ids = {x["id"] for x in self.sources if x["research_status"] == "active_native_rss"}
         self.assertEqual(catalog_ids, active_ids)
-        self.assertEqual(len(catalog_ids), 14)
+        self.assertEqual(len(catalog_ids), 13)
         self.assertEqual(sum(x["research_status"] == "candidate_not_scheduled"
-                             for x in self.sources), 36)
-        self.assertEqual(len(self.active["feeds"]), 14)
+                             for x in self.sources), 37)
+        self.assertEqual(len(self.active["feeds"]), 13)
         self.assertEqual(len(self.active["keywords"]), 29)
         self.assertEqual(sum(x["rss_status"] == "approved_in_sources_newsroom_active.json"
-                             for x in self.sources), 14)
+                             for x in self.sources), 13)
 
     def test_measured_audience_rank_is_only_exact_published_top_five(self):
         published = {"youm7": 1, "masrawy": 2, "elbalad": 3,

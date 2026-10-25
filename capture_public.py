@@ -17,7 +17,6 @@ APPROVED_PUBLISHERS = {
     "vetogate.com": frozenset({"www.vetogate.com"}),
     "dailynewsegypt.com": frozenset({"www.dailynewsegypt.com"}),
     "egyptindependent.com": frozenset({"www.egyptindependent.com"}),
-    "enterpriseam.com": frozenset({"enterpriseam.com"}),
     "egyptianstreets.com": frozenset({"egyptianstreets.com"}),
     "skynewsarabia.com": frozenset({"www.skynewsarabia.com"}),
     "inp.edu.eg": frozenset({"inp.edu.eg"}),

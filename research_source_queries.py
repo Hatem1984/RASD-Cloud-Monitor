@@ -2,7 +2,7 @@
 
 This DOES NOT fetch, search the web, activate sources, send emails, or touch
 private data. It only prints publisher-restricted research queries for human
-vetting while the production collector remains limited to fourteen approved RSS
+vetting while the production collector remains limited to thirteen approved RSS
 profiles with first-party article verification.
 """
 from __future__ import annotations
@@ -33,8 +33,8 @@ def load_registry(path: Path = REGISTRY) -> dict:
         raise ValueError("research_registry_duplicate_id")
     if len({s["homepage_url"] for s in sources}) != 50:
         raise ValueError("research_registry_duplicate_homepage")
-    if sum(s["research_status"] == "active_native_rss" for s in sources) != 14:
-        raise ValueError("research_registry_active_feeds_not_fourteen")
+    if sum(s["research_status"] == "active_native_rss" for s in sources) != 13:
+        raise ValueError("research_registry_active_feeds_not_thirteen")
     return data
 
 

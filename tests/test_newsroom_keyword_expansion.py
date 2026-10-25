@@ -44,14 +44,14 @@ def publisher_jsonld(headline=TITLE, date=ISO):
 
 
 class MinistryExpansionRelease(unittest.TestCase):
-    def test_29_distinct_phrases_and_14_production_publisher_profiles(self):
+    def test_29_distinct_phrases_and_13_production_publisher_profiles(self):
         base=json.loads((ROOT/"sources.json").read_text("utf-8"))
         self.assertEqual(len(ACTIVE["keywords"]),29)
         self.assertEqual(len(set(ACTIVE["keywords"])),29)
         self.assertEqual(ACTIVE["keywords"][:len(base["keywords"])],
                          base["keywords"])
         self.assertEqual([x["id"] for x in ACTIVE["feeds"]],
-                         ["hapi","almasryalyoum","shorouk","alborsa","masrawy"]+['almessa', 'elbalad', 'vetogate', 'dailynewsegypt', 'egyptindependent', 'enterpriseam', 'egyptianstreets', 'skynewsarabia', 'inp_official'])
+                         ["hapi","almasryalyoum","shorouk","alborsa","masrawy"]+['almessa', 'elbalad', 'vetogate', 'dailynewsegypt', 'egyptindependent', 'egyptianstreets', 'skynewsarabia', 'inp_official'])
         for phrase in ("المعهد القومي للتخطيط",
                        "خطة التنمية الاقتصادية والاجتماعية",
                        "الخطة الاستثمارية للدولة",

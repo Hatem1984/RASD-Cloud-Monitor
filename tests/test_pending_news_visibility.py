@@ -16,7 +16,7 @@ class PendingNewsVisibility(unittest.TestCase):
             "display_window_end": "١٩:٣٧",
             "coverage": "ORIGINAL_IMAGE_HOLD_NO_VERIFIED_DELIVERY",
             "verified_links": 1, "articles": [], "sources": [],
-            "scope_note": "14 مصدر RSS فعال من 50 مصدر بحثي",
+            "scope_note": "13 مصدر RSS فعال من 50 مصدر بحثي",
             "limitations": "مادة معلقة لا تعد خبرًا مسلّمًا.",
             "held_candidates": [{
                 "headline": "وزارة التخطيط تعلن متابعة المشروعات",
@@ -34,7 +34,7 @@ class PendingNewsVisibility(unittest.TestCase):
             self.assertIn("مواد اكتُشفت لكنها معلّقة", text)
             self.assertIn("وزارة التخطيط تعلن متابعة المشروعات", text)
             self.assertIn("publisher_access_refused", text)
-            self.assertIn("14 مصدر RSS فعال", text)
+            self.assertIn("13 مصدر RSS فعال", text)
             self.assertNotIn("لقطة موثقة من صفحة الناشر الأصلية", text)
             self.assertEqual(len(word.inline_shapes), 0)
             self.assertTrue(any(rel.target_ref == url
