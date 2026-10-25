@@ -17,7 +17,6 @@ APPROVED_PUBLISHERS = {
     "almasryalyoum.com": frozenset({"almasryalyoum.com", "www.almasryalyoum.com"}),
     "shorouknews.com": frozenset({"www.shorouknews.com"}),
     "alborsaanews.com": frozenset({"alborsaanews.com", "www.alborsaanews.com"}),
-    "masrawy.com": frozenset({"www.masrawy.com", "masrawy.com"}),
 }
 CHALLENGE_WORDS = (
     "verify you are human", "just a moment...", "checking your browser",
