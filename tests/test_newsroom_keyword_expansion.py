@@ -44,10 +44,10 @@ def publisher_jsonld(headline=TITLE, date=ISO):
 
 
 class MinistryExpansionRelease(unittest.TestCase):
-    def test_18_distinct_phrases_and_5_production_publisher_profiles(self):
+    def test_24_distinct_phrases_and_5_production_publisher_profiles(self):
         base=json.loads((ROOT/"sources.json").read_text("utf-8"))
-        self.assertEqual(len(ACTIVE["keywords"]),18)
-        self.assertEqual(len(set(ACTIVE["keywords"])),18)
+        self.assertEqual(len(ACTIVE["keywords"]),24)
+        self.assertEqual(len(set(ACTIVE["keywords"])),24)
         self.assertEqual(ACTIVE["keywords"][:len(base["keywords"])],
                          base["keywords"])
         self.assertEqual([x["id"] for x in ACTIVE["feeds"]],
@@ -139,14 +139,46 @@ class MinistryExpansionRelease(unittest.TestCase):
         active={x["id"] for x in ACTIVE["feeds"]}
         review={x["id"]:x for x in CANDIDATES["candidates"]}
         self.assertTrue(review["masrawy"]["status"].startswith("ACTIVATED_"))
-        self.assertEqual(len(review),4)
-        for name in ("youm7_reports","youm7_politics","mped_official"):
+        self.assertEqual(len(review),9)
+        for name in ("youm7_reports","youm7_politics","mped_official","almal","elwatan","cairo24","ahram_gate","akhbarelyom"):
             self.assertNotIn(name,active)
             self.assertTrue(review[name]["status"].startswith(("HOLD_","QA_ONLY_")))
 
     def test_unapproved_youm7_feed_not_allowed_even_with_valid_rss(self):
         with self.assertRaisesRegex(ValueError,"feed_endpoint_not_reviewed"):
             read_feed(CANDIDATES["candidates"][1]["feed_url"],10000)
+
+    def test_verified_ministry_programme_keywords_expand_discovery_without_generic_economy(self):
+        # Phrases confirmed on official Egyptian Ministry of Planning pages.
+        # These are exact publisher headline/description matches, NOT open-ended
+        # economic-sector words that could silently dilute ministry coverage.
+        phrases = [
+            "البرنامج الوطني للتحول الاقتصادي",
+            "السردية الوطنية للتنمية الاقتصادية",
+            "المبادرة الوطنية للمشروعات الخضراء الذكية",
+            "المراجعة الوطنية الطوعية لمصر",
+            "تقرير مصر الوطني الطوعي",
+            "المنظومة المتكاملة للتخطيط التنموي",
+        ]
+        for phrase in phrases:
+            self.assertIn(phrase, ACTIVE["keywords"])
+            count, found = parse_rss(
+                xml("تطورات " + phrase), HAPI, ACTIVE["keywords"], NOW,
+                require_complete_items=True)
+            self.assertEqual((count,len(found)), (1,1), phrase)
+        for unrelated in ("النمو الاقتصادي يواصل الصعود",
+                          "الاستثمار الأجنبي في أسواق المال",
+                          "تقرير التنمية المستدامة في دولة أخرى"):
+            count, found = parse_rss(xml(unrelated), HAPI, ACTIVE["keywords"],
+                                     NOW, require_complete_items=True)
+            self.assertEqual((count,len(found)), (1,0), unrelated)
+
+    def test_five_new_candidate_newsrooms_are_not_activated_without_native_rss(self):
+        for ident in ("almal","elwatan","cairo24","ahram_gate","akhbarelyom"):
+            candidate = next(x for x in CANDIDATES["candidates"] if x["id"]==ident)
+            self.assertTrue(candidate["status"].startswith("HOLD_"))
+            self.assertNotIn(ident, {x["id"] for x in ACTIVE["feeds"]})
+            self.assertTrue(candidate["page_url"].startswith("https://"))
 
     def test_no_secrets_credentials_or_gmail_in_new_module(self):
         raw=(ROOT/"masrawy_original_date.py").read_text("utf-8")
