@@ -15,8 +15,12 @@ class ActiveNewsroomProfile(unittest.TestCase):
         a = json.loads((ROOT / "sources.json").read_text(encoding="utf-8"))
         s = json.loads((ROOT / "sources_shorouk.json").read_text(encoding="utf-8"))
         active = json.loads((ROOT / "sources_newsroom_active.json").read_text(encoding="utf-8"))
-        self.assertEqual(active["keywords"], a["keywords"])
-        self.assertEqual(active["keywords"], s["keywords"])
+        # Keep existing owner-approved terms untouched; expanded phrases
+        # are production terms but NEW publisher candidates remain QA-only.
+        self.assertEqual(active["keywords"][:len(a["keywords"])], a["keywords"])
+        self.assertEqual(active["keywords"][:len(s["keywords"])], s["keywords"])
+        self.assertEqual(len(active["keywords"]), 18)
+        self.assertEqual(len(set(active["keywords"])), 18)
         self.assertEqual(active["feeds"][:2], a["feeds"])
         self.assertEqual(active["feeds"][2:3], s["feeds"])
         self.assertEqual(active["feeds"][3]["id"], "alborsa")
