@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "checked_on": "2026-10-25",
+  "policy": "research_only_not_active_feed_not_in_gmail_delivery",
+  "candidates": [
+    {
+      "id": "masrawy",
+      "publisher": "مصراوي",
+      "feed_url": "https://www.masrawy.com/rss/feed/35/%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1%20%D9%85%D8%B5%D8%B1-%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9",
+      "status": "HOLD_PUBLISHER_RSS_TIMESTAMP_HAS_NO_TIMEZONE",
+      "evidence": "no-redirect HTTPS 200; ten intact same-origin links; all 10 pubDate values were naive local-format and strict dated original RSS rejected",
+      "acceptance_gate": "Only promote if publisher-provided timezone-aware original timestamps can be verified; never derive publication time from scan time or guess Egypt offset"
+    },
+    {
+      "id": "youm7_reports",
+      "publisher": "اليوم السابع - تقارير مصرية",
+      "feed_url": "https://www.youm7.com/rss/SectionRss?SectionID=97",
+      "status": "HOLD_MALFORMED_ORIGINAL_RSS_XML",
+      "evidence": "no-redirect HTTPS 200 but Expat parse failed on original XML",
+      "acceptance_gate": "publisher RSS must fully parse without repairing content and all original links/dates must verify"
+    },
+    {
+      "id": "youm7_politics",
+      "publisher": "اليوم السابع - سياسة",
+      "feed_url": "https://www.youm7.com/rss/SectionRss?SectionID=319",
+      "status": "HOLD_REDIRECT_TO_UNAPPROVED_MOBILE_HOST",
+      "evidence": "HTTP 302 to m.youm7.com; no redirects accepted by RASD source intake",
+      "acceptance_gate": "exact same-origin reviewed RSS endpoint with stable link host and timezone-aware dates"
+    },
+    {
+      "id": "mped_official",
+      "publisher": "وزارة التخطيط والتنمية الاقتصادية - البيانات الصحفية",
+      "page_url": "https://mped.gov.eg/News/index?News=&lang=ar",
+      "status": "QA_ONLY_NOT_A_NATIVE_RSS",
+      "evidence": "official publisher press listing exists; separate existing official-source QA; original unified production stage pending",
+      "acceptance_gate": "dedicated non-RSS official-origin signed evidence and live unified Word/Gmail integration"
+    }
+  ]
+}
