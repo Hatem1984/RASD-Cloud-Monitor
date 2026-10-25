@@ -12,7 +12,7 @@
     "https://almanassa.com/about",
     "https://english.ahram.org.eg/UI/Front/AboutUs.aspx"
   ],
-  "production_rule": "ONLY five exact first-party native RSS feeds in sources_newsroom_active.json are scheduled. Catalog membership is neither automatic monitoring nor verified original timestamps, screen captures, traffic, credibility, or deliverability. Candidate activation requires publisher-owned endpoint, direct HTTPS, timezone-aware timestamp, valid page and screenshot QA, dedup, and production E2E.",
+  "production_rule": "Catalog membership is neither a proof of editorial verification nor of media authenticity. Only the 13 now-validated first-party native RSS endpoints in sources_newsroom_active.json are polled. The remaining 37 research sources are NOT automatically monitored. Activation does not mean original publisher screenshot success: unmatched or failed proof remains HOLD; article originals cannot be invented. Expansion tested no-redirect HTTP 200 well-formed RSS with explicitly timezoned publisher dates on 2026-10-25. Only the National Planning Institute publisher page image passed a live original capture sample; all publisher/Word/Gmail acceptance gates are still pending per new source.",
   "verification_rule": "Official original publications corroborate claimed facts, budgets and policies, but must not suppress independently reported criticism. Attribution is mandatory; identical syndicated facts are not counted as independent confirming reports.",
   "sources": [
     {
@@ -59,8 +59,8 @@
       "publisher_host": "almessa.gomhuriaonline.com",
       "category": "national_press",
       "editorial_group": "gomhuria",
-      "research_status": "candidate_not_scheduled",
-      "rss_status": "unapproved_or_unverified",
+      "research_status": "active_native_rss",
+      "rss_status": "approved_in_sources_newsroom_active.json",
       "similarweb_egypt_news_rank_aug_2026": null
     },
     {
@@ -83,8 +83,8 @@
       "publisher_host": "elbalad.news",
       "category": "general_press",
       "editorial_group": "elbalad",
-      "research_status": "candidate_not_scheduled",
-      "rss_status": "unapproved_or_unverified",
+      "research_status": "active_native_rss",
+      "rss_status": "approved_in_sources_newsroom_active.json",
       "similarweb_egypt_news_rank_aug_2026": 3
     },
     {
@@ -203,8 +203,8 @@
       "publisher_host": "vetogate.com",
       "category": "general_press",
       "editorial_group": "veto",
-      "research_status": "candidate_not_scheduled",
-      "rss_status": "unapproved_or_unverified",
+      "research_status": "active_native_rss",
+      "rss_status": "approved_in_sources_newsroom_active.json",
       "similarweb_egypt_news_rank_aug_2026": null
     },
     {
@@ -383,8 +383,8 @@
       "publisher_host": "dailynewsegypt.com",
       "category": "english_egypt_press",
       "editorial_group": "dailynewsegypt",
-      "research_status": "candidate_not_scheduled",
-      "rss_status": "unapproved_or_unverified",
+      "research_status": "active_native_rss",
+      "rss_status": "approved_in_sources_newsroom_active.json",
       "similarweb_egypt_news_rank_aug_2026": null
     },
     {
@@ -395,8 +395,8 @@
       "publisher_host": "egyptindependent.com",
       "category": "english_egypt_press",
       "editorial_group": "almasryalyoum",
-      "research_status": "candidate_not_scheduled",
-      "rss_status": "unapproved_or_unverified",
+      "research_status": "active_native_rss",
+      "rss_status": "approved_in_sources_newsroom_active.json",
       "similarweb_egypt_news_rank_aug_2026": null
     },
     {
@@ -479,8 +479,8 @@
       "publisher_host": "egyptianstreets.com",
       "category": "english_egypt_press",
       "editorial_group": "egyptianstreets",
-      "research_status": "candidate_not_scheduled",
-      "rss_status": "unapproved_or_unverified",
+      "research_status": "active_native_rss",
+      "rss_status": "approved_in_sources_newsroom_active.json",
       "similarweb_egypt_news_rank_aug_2026": null
     },
     {
@@ -527,8 +527,8 @@
       "publisher_host": "skynewsarabia.com",
       "category": "regional_press",
       "editorial_group": "skynewsarabia",
-      "research_status": "candidate_not_scheduled",
-      "rss_status": "unapproved_or_unverified",
+      "research_status": "active_native_rss",
+      "rss_status": "approved_in_sources_newsroom_active.json",
       "similarweb_egypt_news_rank_aug_2026": null
     },
     {
@@ -575,8 +575,8 @@
       "publisher_host": "inp.edu.eg",
       "category": "official_primary",
       "editorial_group": "inp",
-      "research_status": "candidate_not_scheduled",
-      "rss_status": "unapproved_or_unverified",
+      "research_status": "active_native_rss",
+      "rss_status": "approved_in_sources_newsroom_active.json",
       "similarweb_egypt_news_rank_aug_2026": null
     },
     {

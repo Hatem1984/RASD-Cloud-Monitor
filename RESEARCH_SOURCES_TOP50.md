@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This catalog supports Ministry of Planning newsroom research. It is intentionally **not** a 50-feed production activation. The existing **five** exact approved original RSS publishers and **24** saved phrases remain unchanged. All other 45 research origins need source-specific engineering validation; no search snippet or secondary image is accepted as original evidence. Do not send email or trigger any scheduled workflow merely to validate the list.
+This catalog supports Ministry of Planning newsroom research. It is intentionally **not** a 50-feed production activation. The **thirteen** verified feed endpoints now included, replacing the prior thirteen exact approved original RSS publishers and **24** saved phrases remain unchanged. All remaining 37 research origins need source-specific engineering validation; no search snippet or secondary image is accepted as original evidence. Do not send email or trigger any scheduled workflow merely to validate the list.
 
 ## Interpreting the ranking
 
@@ -25,7 +25,7 @@ python research_source_queries.py --official-only
 python -m unittest tests.test_research_sources_top50 -v
 ```
 
-The generator prints 50 **site-scoped query suggestions**. It makes **zero web/SMTP/GitHub/private-ledger requests** and therefore does not assert that any of the 45 candidate origins has actually been searched, fetched or monitored. Search engine operator behavior varies; query results MUST be independently opened at the original publisher, screened for relevant title/description, publication time and exact article page with correct image. Never substitute search result metadata for publisher evidence.
+The generator prints 50 **site-scoped query suggestions**. It makes **zero web/SMTP/GitHub/private-ledger requests** and therefore does not assert that any of the 37 candidate origins has actually been searched, fetched or monitored. Search engine operator behavior varies; query results MUST be independently opened at the original publisher, screened for relevant title/description, publication time and exact article page with correct image. Never substitute search result metadata for publisher evidence.
 
 ## Source admission gate
 
@@ -38,3 +38,9 @@ Before enabling any of the 45 candidates as a scheduled production feed:
 5. Only then add the source to `sources_newsroom_active.json` and its immutable endpoint/domain allowlists; never label an unproven source ACTIVE to reach an arbitrary count.
 
 This source inventory itself must not modify active RSS, `monitor.py`, private RASD-Pilot state, schedule or Gmail.
+
+## 25 October 2026 production feed qualification
+
+On authorized Windows (read-only feed checks, no redirects) eight further first-party RSS profiles returned HTTP 200, fully parsed as XML/RSS, exposed original-publisher article links and explicit timezone-aware publication dates. Their exact endpoints are in sources_newsroom_active.json; each article must still pass the original browser screenshot and identity QA or it remains unsent HOLD. Only the National Planning Institute sample passed a genuine original-page visual capture in this qualification session. Remaining screenshots, production cron and recipient Word visual acceptance for the eight newly onboarded feeds remain open; 36 catalog origins are not active feeds. No added Gmail or storage permissions.
+
+Operational smoke scan on 25 October 2026 with strict complete original RSS item checks: 13/14 candidate feeds passed, 217 first-party RSS links counted and six keyword matches. Enterprise Egypt native feed failed the strict check with ValueError, so it is NOT activated (candidate-only) pending diagnosis. No email or ledger writes during this QA.
