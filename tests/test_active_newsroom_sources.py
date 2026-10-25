@@ -19,8 +19,8 @@ class ActiveNewsroomProfile(unittest.TestCase):
         # are production terms but NEW publisher candidates remain QA-only.
         self.assertEqual(active["keywords"][:len(a["keywords"])], a["keywords"])
         self.assertEqual(active["keywords"][:len(s["keywords"])], s["keywords"])
-        self.assertEqual(len(active["keywords"]), 18)
-        self.assertEqual(len(set(active["keywords"])), 18)
+        self.assertEqual(len(active["keywords"]), 24)
+        self.assertEqual(len(set(active["keywords"])), 24)
         self.assertEqual(active["feeds"][:2], a["feeds"])
         self.assertEqual(active["feeds"][2:3], s["feeds"])
         self.assertEqual(active["feeds"][3]["id"], "alborsa")
