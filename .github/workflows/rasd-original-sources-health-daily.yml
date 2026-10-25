@@ -1,0 +1,55 @@
+name: RASD — daily first-party source health observation (NO SEND)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Read-only daily observation; UTC and Cairo DST are not conflated.
+    # GitHub cron is best-effort, NOT proof of any exact-hour SLA.
+    - cron: '28 8 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-public-source-health-observation
+  cancel-in-progress: false
+
+jobs:
+  original-sources-health-readonly:
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install reviewed strict XML and first-party API dependencies
+        run: python -m pip install -r requirements-test.txt 'playwright>=1.50,<2'
+      - name: Observe EXACT three original sources (only safe counts/status; no email)
+        id: source_health
+        shell: bash
+        run: |
+          set +e
+          python gate69_source_health_readonly.py > source-health-redacted.json
+          result=$?
+          echo "source_health_exit=$result" >> "$GITHUB_OUTPUT"
+          cat source-health-redacted.json
+          exit 0
+      - name: Upload bounded source-health diagnostic only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasd-original-sources-redacted-health
+          path: source-health-redacted.json
+          retention-days: 14
+          if-no-files-found: error
+      - name: Fail closed on upstream source degradation
+        if: steps.source_health.outputs.source_health_exit != '0'
+        run: |
+          echo 'RASD_SOURCE_HEALTH_HOLD_NO_REPORT_NO_EMAIL'
+          exit 1
