@@ -27,6 +27,7 @@ from xml.etree import ElementTree as ET
 APPROVED_FEED_URLS = frozenset({
     "https://hapijournal.com/feed/",
     "https://www.almasryalyoum.com/rss/rssfeeds",
+    "https://www.masrawy.com/rss/feed/35/%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1%20%D9%85%D8%B5%D8%B1-%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9",
     "https://www.shorouknews.com/Economy/rss",
     "https://www.alborsaanews.com/category/%D8%A7%D9%84%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%89/feed",
 })
@@ -129,6 +130,27 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
     root = ET.fromstring(data)
     if root.tag.rsplit("}", 1)[-1] != "rss":
         raise ValueError("not_rss")
+    verified_dates = {}
+    def publisher_timestamp(node):
+        # Existing RSS sources still MUST have timezone-aware publisher
+        # timestamps. Masrawy alone omits zone in RSS; corroborate EVERY
+        # article with publisher ORIGINAL NewsArticle JSON-LD, including the
+        # exact title and same local clock, never assume Cairo/UTC.
+        if node in verified_dates:
+            return verified_dates[node]
+        dated = _publisher_timestamp(node)
+        if dated is None and feed.get("id") == "masrawy":
+            from masrawy_original_date import original_pubdate
+            try:
+                dated = original_pubdate(
+                    (node.findtext("link") or "").strip(),
+                    (node.findtext("title") or "").strip(),
+                    (node.findtext("pubDate") or "").strip())
+            except (ValueError, RuntimeError):
+                dated = None
+        verified_dates[node] = dated
+        return dated
+
     # The Stage2 ORIGINAL Word must not silently lose publisher entries
     # merely because a syntactically valid RSS feed contains an incomplete
     # item. The older public headline preview retains its filter semantics.
@@ -141,7 +163,7 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
             link = (item.findtext("link") or "").strip()
             if not title or not is_publisher_link(link, feed["allowed_article_hosts"]):
                 raise ValueError("rss_original_item_identity_unverifiable")
-            dated = _publisher_timestamp(item)
+            dated = publisher_timestamp(item)
             if dated is None:
                 raise ValueError("rss_original_item_date_unverifiable")
             # Conflicting duplicate URLs cannot be silently resolved by
@@ -169,7 +191,7 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
         description_match = _ministry_term_present(description, keywords)
         if not title_match and not description_match:
             continue
-        dated = _publisher_timestamp(node)
+        dated = publisher_timestamp(node)
         if dated is None:
             continue
         timestamp, published = dated
