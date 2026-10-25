@@ -227,8 +227,7 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
         raise RuntimeError("news_inventory_silent_truncation_hold")
     if source_records is not None:
         source_records.extend({
-            "feed_id": s["feed_id"], "status": s["status"],
-            "verified_links": s.get("verified_links", 0)
+            "feed_id": s["feed_id"], "status": s["status"]
         } for s in observed["sources"])
     if not allow_degraded and any(s["status"] != "ok" for s in observed["sources"]):
         raise RuntimeError("source_not_healthy")
@@ -581,6 +580,8 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             "هذا تقرير حالة تشغيل وليس تقريرًا صحفيًا مصورًا؛ لم توجد أخبار "
             "جديدة مستوفية لشروط الإرسال وغير موجودة في سجل التسليم خلال الفحص."
             " لا يثبت ذلك عدم نشر أخبار في السوق أو اكتمال تغطية كل الناشرين."
+            " العدد صفر في خانة الروابط هنا لا يُمثّل إجمالي روابط RSS؛"
+            " لأنه لم يتم تجميع عدّادها في هذه النشرة التشغيلية."
             + (f" تعذّر فحص {degraded} مصادر أصلية؛ التغطية جزئية وليست"
                " شهادة خلو المصادر من الأخبار." if degraded else "")
         ),
