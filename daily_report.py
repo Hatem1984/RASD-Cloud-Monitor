@@ -29,6 +29,7 @@ SOURCE_LABELS = {
     "Al Masry Al Youm native news RSS": "المصري اليوم",
     "Al Shorouk native Economy RSS": "بوابة الشروق",
     "Alborsa native Egyptian Economy RSS": "جريدة البورصة",
+    "Masrawy native Egypt news RSS": "مصراوي",
 }
 ARABIC_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
 
@@ -341,7 +342,7 @@ def render_docx(report: dict, destination: Path) -> None:
     # a near-empty third page without shrinking authentic screenshots.
     if report["sources"]:
         source_names = {"hapi": "جريدة حابي", "almasryalyoum": "المصري اليوم",
-                        "shorouk": "بوابة الشروق", "alborsa": "جريدة البورصة"}
+                        "shorouk": "بوابة الشروق", "alborsa": "جريدة البورصة", "masrawy": "مصراوي"}
         source_statuses = []
         for feed in report["sources"]:
             name = source_names.get(feed["feed_id"], feed["feed_id"])
