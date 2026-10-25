@@ -227,7 +227,8 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
         raise RuntimeError("news_inventory_silent_truncation_hold")
     if source_records is not None:
         source_records.extend({
-            "feed_id": s["feed_id"], "status": s["status"]
+            "feed_id": s["feed_id"], "status": s["status"],
+            "verified_links": s.get("verified_links", 0)
         } for s in observed["sources"])
     if not allow_degraded and any(s["status"] != "ok" for s in observed["sources"]):
         raise RuntimeError("source_not_healthy")
@@ -523,6 +524,96 @@ def news_for_rollup(state: dict, day: str, config: dict) -> list[dict]:
     # for cross-publisher duplicates BEFORE sending and private reservation.
     return sorted(news, key=lambda x: (x["published_at_cairo"], x["id"]))
 
+def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
+                               recipient: str, sender: str, password: str,
+                               state: dict, config: dict, health: list[dict],
+                               window: str, start: datetime, now: datetime,
+                               output: Path) -> dict:
+    """One Word status per eligible empty 30m slot, not a fabricated news report.
+
+    Distinct FROM the 22:00 news rollup: no 'interval_item' kind is written
+    for a zero-news receipt, so the daily Word contains only accepted
+    photographed real news. Same private CAS guards all redundant clocks.
+    An authentic already-reserved/accepted article email in this same UTC
+    window suppresses the zero-news notice.
+    """
+    expected_ids = [feed["id"] for feed in config["feeds"]]
+    if (len(health) != len(expected_ids) or
+            [row.get("feed_id") for row in health] != expected_ids or
+            any(row.get("status") not in ("ok", "failed") for row in health)):
+        raise RuntimeError("source_health_metadata_missing_or_untrusted")
+    cutoff = start + timedelta(minutes=30)
+    for entry in state["entries"].values():
+        if not isinstance(entry, dict) or entry.get("kind") != "interval_item":
+            continue
+        for field in ("accepted_at", "reserved_at"):
+            stamp = entry.get(field)
+            if not isinstance(stamp, str):
+                continue
+            try:
+                when = datetime.fromisoformat(stamp)
+                if when.tzinfo is not None and start <= when.astimezone(timezone.utc) < cutoff:
+                    return {"status": "interval_news_already_recorded_no_empty_status",
+                            "smtp_accepted": False}
+            except ValueError:
+                raise RuntimeError("private_accepted_timestamp_invalid") from None
+    degraded = sum(row["status"] != "ok" for row in health)
+    source_rows = []
+    for row in health:
+        count = row.get("verified_links", 0)
+        if type(count) is not int or count < 0 or count > 10000:
+            raise RuntimeError("source_health_metadata_missing_or_untrusted")
+        source_rows.append({
+            "feed_id": row["feed_id"], "status": row["status"],
+            "verified_links": count if row["status"] == "ok" else 0,
+            "error_type": None if row["status"] == "ok" else "original_feed_unavailable",
+        })
+    title = ("رصد | تقرير حالة المتابعة النصف ساعية | "
+             + cairo_display_time(start))
+    report = {
+        "title": title, "display_window_start": cairo_display_time(start),
+        "display_window_end": cairo_display_time(now),
+        "coverage": "SOURCE_LIMITED_NO_VERIFIED_NEW_DELIVERY" if degraded
+                    else "NO_VERIFIED_NEW_DELIVERY",
+        "verified_links": sum(row["verified_links"] for row in source_rows),
+        "articles": [], "sources": source_rows,
+        "limitations": (
+            "هذا تقرير حالة تشغيل وليس تقريرًا صحفيًا مصورًا؛ لم توجد أخبار "
+            "جديدة مستوفية لشروط الإرسال وغير موجودة في سجل التسليم خلال الفحص."
+            " لا يثبت ذلك عدم نشر أخبار في السوق أو اكتمال تغطية كل الناشرين."
+            + (f" تعذّر فحص {degraded} مصادر أصلية؛ التغطية جزئية وليست"
+               " شهادة خلو المصادر من الأخبار." if degraded else "")
+        ),
+    }
+    doc = output / "RASD-Half-Hour-No-New-Verified-News-Status.docx"
+    render_docx(report, doc)
+    from docx import Document
+    if (not doc.is_file() or
+            not 3000 <= doc.stat().st_size <= MAX_WORD_BYTES or
+            Document(doc).inline_shapes):
+        doc.unlink(missing_ok=True)
+        raise RuntimeError("interval_status_word_integrity_hold")
+    key = digest_key("interval-status:" + window)
+    if key in state["entries"]:
+        return {"status": "interval_status_already_reserved_or_sent",
+                "smtp_accepted": False}
+    reservation = ledger.reserve(key, recipient)
+    if reservation != "reserved":
+        return {"status": "interval_status_not_reserved",
+                "smtp_accepted": False}
+    receipt = send_one_word(
+        doc, sender=sender, recipient=recipient, password=password,
+        subject=title, key=key,
+        body_text=("نشرة الحالة النصف ساعية مرفقة في Word."
+                   " لا توجد أخبار جديدة موثقة مُسلّمة في هذه الدورة."
+                   " حالة أي مصدر متعذر مذكورة صراحة في المرفق."),
+    )
+    ledger.mark_smtp_accepted(key, receipt)
+    return {"status": "interval_status_smtp_accepted_unconfirmed_inbox",
+            "items": 0, "source_limited": bool(degraded),
+            "smtp_accepted": True}
+
+
 def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     require_github_scheduler()
     now = datetime.now(timezone.utc) if clock is None else clock
@@ -609,7 +700,12 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 print("RASD_SAME_EVENT_HELD_COUNT=" + str(len(repeated_events)),
                       flush=True)
             if not stories:
-                return {"status": "no_new_verified_news", "smtp_accepted": False}
+                if mode == "interval_owner_once":
+                    return {"status": "no_new_verified_news", "smtp_accepted": False}
+                return send_empty_interval_status(
+                    ledger=ledger, recipient=recipient, sender=sender,
+                    password=password, state=state, config=config, health=health,
+                    window=window, start=start, now=now, output=output)
             # Do not fail all delivery when an irregular GitHub cron lets
             # more than one Word's worth of newly published stories accumulate.
             # Oldest accepted publication goes first so backlog cannot age out
@@ -814,6 +910,7 @@ PUBLIC_SCHEDULED_HOLD_CODES = frozenset({
     "news_inventory_silent_truncation_hold",
     "rollup_exceeds_60_verified_items_manual_review",
     "daily_status_word_integrity_hold",
+    "interval_status_word_integrity_hold",
     "original_capture_digest_mismatch",
 })
 
