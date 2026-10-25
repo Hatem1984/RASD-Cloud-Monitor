@@ -66,6 +66,37 @@ class BrowserSafetyTests(unittest.TestCase):
             photo.save(dest)
             self.assertTrue(image_quality(dest)["accepted"])
 
+    def test_publisher_hero_uniform_grey_is_held_even_with_heading_and_ads(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "original-publisher-with-unloaded-hero.jpg"
+            photo = Image.new("RGB", (1200, 900), "white")
+            paint = ImageDraw.Draw(photo)
+            paint.rectangle((0, 0, 1200, 140), fill=(18, 40, 68))
+            paint.rectangle((70, 195, 710, 240), fill=(25, 28, 34))
+            paint.rectangle((810, 160, 1150, 550), fill=(12, 95, 140))
+            # Only this protected synthetic defect is grey; publisher ads and
+            # heading ensure global screenshot variance would otherwise pass.
+            paint.rectangle((45, 355, 780, 745), fill=(247, 247, 247))
+            photo.save(path, quality=90)
+            result = image_quality(path)
+            self.assertFalse(result["accepted"])
+            self.assertEqual(result["reason"], "suspicious_flat_original_lead_media")
+
+    def test_genuine_colorful_lead_not_rejected_by_grey_placeholder_guard(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "article-real-photo.jpg"
+            photo = Image.new("RGB", (1200, 900), "white")
+            paint = ImageDraw.Draw(photo)
+            paint.rectangle((0, 0, 1200, 140), fill=(18, 40, 68))
+            paint.rectangle((70, 195, 710, 240), fill=(25, 28, 34))
+            for x in range(50, 770, 60):
+                paint.rectangle((x, 350, x + 55, 745), fill=(
+                    (50 + x) % 220, (20 + x // 2) % 220, (130 + x) % 220))
+            photo.save(path, quality=90)
+            result = image_quality(path)
+            self.assertTrue(result["accepted"])
+            self.assertEqual(result["reason"], "ok")
+
     def test_corrupt_and_too_small_images_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             dest = Path(td) / "broken.jpg"
