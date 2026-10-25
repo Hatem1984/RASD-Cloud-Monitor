@@ -527,7 +527,8 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
                                recipient: str, sender: str, password: str,
                                state: dict, config: dict, health: list[dict],
                                window: str, start: datetime, now: datetime,
-                               output: Path) -> dict:
+                               output: Path, held_articles: int = 0,
+                               waiting_articles: int = 0) -> dict:
     """One Word status per eligible empty 30m slot, not a fabricated news report.
 
     Distinct FROM the 22:00 news rollup: no 'interval_item' kind is written
@@ -536,6 +537,9 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
     An authentic already-reserved/accepted article email in this same UTC
     window suppresses the zero-news notice.
     """
+    if (type(held_articles) is not int or not 0 <= held_articles <= 200 or
+            type(waiting_articles) is not int or not 0 <= waiting_articles <= 200):
+        raise RuntimeError("interval_status_invalid_hold_count")
     expected_ids = [feed["id"] for feed in config["feeds"]]
     if (len(health) != len(expected_ids) or
             [row.get("feed_id") for row in health] != expected_ids or
@@ -569,16 +573,22 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
         })
     title = ("رصد | تقرير حالة المتابعة النصف ساعية | "
              + cairo_display_time(start))
+    pending = held_articles + waiting_articles
     report = {
         "title": title, "display_window_start": cairo_display_time(start),
         "display_window_end": cairo_display_time(now),
-        "coverage": "SOURCE_LIMITED_NO_VERIFIED_NEW_DELIVERY" if degraded
-                    else "NO_VERIFIED_NEW_DELIVERY",
+        "coverage": ("ORIGINAL_IMAGE_HOLD_NO_VERIFIED_DELIVERY" if pending
+                     else "SOURCE_LIMITED_NO_VERIFIED_NEW_DELIVERY" if degraded
+                     else "NO_VERIFIED_NEW_DELIVERY"),
         "verified_links": sum(row["verified_links"] for row in source_rows),
         "articles": [], "sources": source_rows,
         "limitations": (
-            "هذا تقرير حالة تشغيل وليس تقريرًا صحفيًا مصورًا؛ لم توجد أخبار "
-            "جديدة مستوفية لشروط الإرسال وغير موجودة في سجل التسليم خلال الفحص."
+            ("هذا تقرير حالة تشغيل لا يحمل أخبارًا أو صورًا غير موثقة؛ "
+             f"ظهرت {pending} مواد مطابقة غير مُسلّمة بسبب تعذّر "
+             "توثيق صور صفحات الناشرين الأصلية؛ ستظل قابلة لإعادة الفحص. "
+             if pending else
+             "هذا تقرير حالة تشغيل وليس تقريرًا صحفيًا مصورًا؛ لم توجد أخبار "
+             "جديدة مستوفية لشروط الإرسال وغير موجودة في سجل التسليم خلال الفحص.")
             " لا يثبت ذلك عدم نشر أخبار في السوق أو اكتمال تغطية كل الناشرين."
             " العدد صفر في خانة الروابط هنا لا يُمثّل إجمالي روابط RSS؛"
             " لأنه لم يتم تجميع عدّادها في هذه النشرة التشغيلية."
@@ -606,12 +616,18 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
         doc, sender=sender, recipient=recipient, password=password,
         subject=title, key=key,
         body_text=("نشرة الحالة النصف ساعية مرفقة في Word."
-                   " لا توجد أخبار جديدة موثقة مُسلّمة في هذه الدورة."
-                   " حالة أي مصدر متعذر مذكورة صراحة في المرفق."),
+                   + (" بعض المواد المطابقة معلّقة لعدم توافر صور ناشرين أصلية؛"
+                      " لا تُعد أخبارًا مُسلّمة." if pending else
+                      " لا توجد أخبار جديدة موثقة مُسلّمة في هذه الدورة.")
+                   + " حالة أي مصدر متعذر مذكورة صراحة في المرفق."),
     )
     ledger.mark_smtp_accepted(key, receipt)
-    return {"status": "interval_status_smtp_accepted_unconfirmed_inbox",
-            "items": 0, "source_limited": bool(degraded),
+    return {"status": (
+                "interval_evidence_hold_status_smtp_accepted_unconfirmed_inbox"
+                if pending else "interval_status_smtp_accepted_unconfirmed_inbox"),
+            "items": 0, "held_articles": held_articles,
+            "waiting_articles": waiting_articles,
+            "source_limited": bool(degraded or pending),
             "smtp_accepted": True}
 
 
@@ -737,15 +753,21 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 # remains a hard failure and must not be hidden.
                 if str(exc) != "no_original_publisher_page_verified":
                     raise
-                return {
-                    "status": "hold_all_original_publisher_captures_unavailable",
-                    "items": 0,
-                    "eligible_articles": len(stories) + waiting,
-                    "held_articles": len(stories),
-                    "waiting_articles": waiting,
-                    "smtp_accepted": False,
-                    "coverage_status": "SOURCE_ACCESS_HOLD_NO_DELIVERY",
-                }
+                if mode == "interval_owner_once":
+                    return {
+                        "status": "hold_all_original_publisher_captures_unavailable",
+                        "items": 0,
+                        "eligible_articles": len(stories) + waiting,
+                        "held_articles": len(stories),
+                        "waiting_articles": waiting,
+                        "smtp_accepted": False,
+                        "coverage_status": "SOURCE_ACCESS_HOLD_NO_DELIVERY",
+                    }
+                return send_empty_interval_status(
+                    ledger=ledger, recipient=recipient, sender=sender,
+                    password=password, state=state, config=config, health=health,
+                    window=window, start=start, now=now, output=output,
+                    held_articles=len(stories), waiting_articles=waiting)
             # Only successfully captured/embedded originals enter private CAS.
             # Blocked items remain unsent, so later scheduled scans can retry.
             reserve_stories(ledger, delivered, day)
