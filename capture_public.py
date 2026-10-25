@@ -30,7 +30,9 @@ APPROVED_PUBLISHERS = {
 # An official Ministry programme may be named without the word "planning".
 # These exact topics preserve the narrow ministry brief and exclude generic economy news.
 PLANNING_TOPIC_NAMES = (
-    "التخطيط", "planning",
+    "وزارة التخطيط", "وزير التخطيط", "وزيرة التخطيط",
+    "التخطيط والتنمية الاقتصادية", "معهد التخطيط القومي",
+    "Ministry of Planning", "Planning Ministry",
     "البرنامج الوطني للتحول الاقتصادي",
     "السردية الوطنية للتنمية الاقتصادية",
     "المبادرة الوطنية للمشروعات الخضراء الذكية",
