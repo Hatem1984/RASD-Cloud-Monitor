@@ -23,6 +23,17 @@ class CairoDailyLabels(unittest.TestCase):
         self.assertNotEqual(cairo_rollup_label(day)[0], day)
         self.assertEqual(immutable, digest_key("daily:" + day))
 
+    def test_daily_status_and_image_hold_use_cairo_arabic_not_iso(self):
+        from pathlib import Path
+        source = (Path(__file__).resolve().parents[1] /
+                  "scheduled_rasd.py").read_text(encoding="utf-8")
+        self.assertIn('day_label, end_label = cairo_rollup_label(day)', source)
+        self.assertIn('لا أخبار مصوّرة مُسلّمة | " + day_label', source)
+        self.assertIn('" لإعادة الالتقاط | " + day_label', source)
+        self.assertIn('end=end_label, config=config)', source)
+        self.assertIn('"display_window_end": end_label,', source)
+        self.assertNotIn('"display_window_end": day + " 22:00 القاهرة"', source)
+
     def test_invalid_day_fails_closed(self):
         with self.assertRaises(ValueError):
             cairo_rollup_label("2026-13-24")
