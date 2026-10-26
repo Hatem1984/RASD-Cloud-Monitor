@@ -85,11 +85,11 @@ def build_digest_message(report: dict, date: str, key: str,
     msg = EmailMessage()
     msg["From"] = sender
     msg["To"] = sender
-    msg["Subject"] = "رصد | التقرير الإخباري اليومي | " + date
+    msg["Subject"] = "مآل | التقرير الإخباري اليومي | " + date
     msg["Message-ID"] = f"<rasd-{key}@gmail.com>"
     msg["X-RASD-Digest-ID"] = key
     msg.set_content(
-        "تقرير رصد الإخباري الصادر من مصادر RSS الأصلية المعتمدة.\n\n"
+        "تقرير مآل الإخباري الصادر من مصادر RSS الأصلية المعتمدة.\n\n"
         f"اليوم بتوقيت القاهرة: {date}\n"
         f"حالة تغطية المصادر: {report['coverage']}\n"
         f"العناوين المطابقة: {report['articles']}\n\n"

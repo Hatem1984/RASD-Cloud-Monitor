@@ -154,7 +154,7 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
     # The Shorouk-only qualification profile is not the production-wide
     # daily scope: print the boundary in the Word itself, not just Actions.
     if ([x["id"] for x in config["feeds"]] == ["shorouk"]):
-        report["title"] = "رصد | تقرير مراجعة مصدر الشروق — صور ناشر موثقة"
+        report["title"] = "مآل | تقرير مراجعة مصدر الشروق — صور ناشر موثقة"
         report["limitations"] += (
             " هذا اختبار نطاق مصدر الشروق الاختياري وحده؛"
             " لا يشهد على اكتمال الرصد اليومي لجميع المصادر."
