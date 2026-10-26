@@ -187,7 +187,7 @@ def gather(config: dict, *, fetch=read_feed, now: datetime | None = None,
     } for item in observed["sources"]]
     coverage = "DEGRADED" if any(s["status"] != "ok" for s in sources) else "HEALTHY"
     return {
-        "title": "رصد | التقرير الإخباري اليومي",
+        "title": "مآل | التقرير الإخباري اليومي",
         "window_start_cairo": since.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
         "window_end_cairo": checked.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
         "display_window_start": cairo_display_time(since),
@@ -514,7 +514,7 @@ def generate(config_path: Path, output_dir: Path, *, fetch=read_feed,
                     start_cairo=start_cairo, max_articles=max_articles)
     # Preview never claims to contain publisher-page screenshot evidence.
     # Only the strict cloud proof report may be treated as a final RASD report.
-    report["title"] = "رصد | مسودة الفترة الصباحية — دون صور موثقة"
+    report["title"] = "مآل | مسودة الفترة الصباحية — دون صور موثقة"
     report["preview_only"] = True
     stamp = report["window_end_cairo"][:10]
     docx = output_dir / ("RASD-Preview-" + stamp + ".docx")
