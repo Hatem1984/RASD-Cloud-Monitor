@@ -15,19 +15,25 @@ from daily_sent_consolidator import original_sent_word
 
 SENDER = "reports.sender@gmail.com"
 OWNER = "approved-owner@example.com"
-COPY = "tarek.soliman1983@gmail.com"
+COPY = "second-approved@example.org"
 KEY = "a" * 24
 MID = "<rasd-" + KEY + "@gmail.com>"
 
 
 class DualRecipientDeliveryTests(unittest.TestCase):
+    def setUp(self):
+        fixture_digest = hashlib.sha256(COPY.encode("utf-8")).hexdigest()
+        override = patch.object(worker, "APPROVED_REPORT_COPY_SHA256", fixture_digest)
+        override.start()
+        self.addCleanup(override.stop)
+
     def test_pinned_copy_address_and_fail_closed_for_others(self):
         with patch.dict(os.environ, {"RASD_REPORT_CC": COPY.upper()}, clear=True):
             self.assertEqual(worker.approved_report_copy(SENDER, OWNER), COPY)
         with patch.dict(os.environ, {}, clear=True):
             self.assertIsNone(worker.approved_report_copy(SENDER, OWNER))
         for unauthorized in ("random@gmail.com", OWNER, SENDER,
-                             "tarek.soliman1983@gmail.com,other@example.org",
+                             "second-approved@example.org,other@example.org",
                              "invalid value"):
             with self.subTest(value=unauthorized), patch.dict(
                     os.environ, {"RASD_REPORT_CC": unauthorized}, clear=True):
@@ -43,7 +49,7 @@ class DualRecipientDeliveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             word = Path(folder) / "RASD-word.docx"
             word.write_bytes(b"single-original-word-payload")
-            with patch.dict(os.environ, {"RASD_REPORT_CC": COPY}, clear=True), \\
+            with patch.dict(os.environ, {"RASD_REPORT_CC": COPY}, clear=True), \
                  patch.object(worker.smtplib, "SMTP_SSL", smtp):
                 received = worker.send_one_word(word, sender=SENDER,
                     recipient=OWNER, password="fake-not-sent",
@@ -68,7 +74,7 @@ class DualRecipientDeliveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             word = Path(folder) / "RASD-word.docx"
             word.write_bytes(b"single-legacy-word-payload")
-            with patch.dict(os.environ, {}, clear=True), \\
+            with patch.dict(os.environ, {}, clear=True), \
                  patch.object(worker.smtplib, "SMTP_SSL", smtp):
                 worker.send_one_word(word, sender=SENDER, recipient=OWNER,
                                      password="offline", subject="RASD", key=KEY)
@@ -79,7 +85,7 @@ class DualRecipientDeliveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             word = Path(folder) / "RASD-word.docx"
             word.write_bytes(b"one-word")
-            with patch.dict(os.environ, {"RASD_REPORT_CC": COPY}, clear=True), \\
+            with patch.dict(os.environ, {"RASD_REPORT_CC": COPY}, clear=True), \
                  patch.object(worker.smtplib, "SMTP_SSL", smtp):
                 with self.assertRaisesRegex(
                         RuntimeError, "smtp_uncertain_reconcile_sent_manually"):
