@@ -9,7 +9,6 @@ from pathlib import Path
 
 from docx import Document
 from daily_report import render_docx
-from scheduled_rasd import interval_key, send_one_word
 
 
 class MaalBrandTransition(unittest.TestCase):
