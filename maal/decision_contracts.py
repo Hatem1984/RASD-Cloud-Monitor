@@ -7,7 +7,7 @@ tested RASD original-page verifier, not from an AI assertion.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from urllib.parse import urlsplit
 
@@ -20,7 +20,7 @@ class Evidence:
     publisher: str
     original_url: str
     claim: str
-    published_at: datetime
+    published_at: date | datetime
     observed_at: datetime
     original_page_sha256: str
     status: str
@@ -31,9 +31,14 @@ class Evidence:
             raise ValueError("original_evidence_https_required")
         if not all((self.evidence_id.strip(), self.publisher.strip(), self.claim.strip())):
             raise ValueError("evidence_identity_or_claim_missing")
-        if (self.published_at.tzinfo is None or
-                self.published_at.utcoffset() is None or
-                self.observed_at.tzinfo is None or
+        # Official publisher dates may be day-only. Never invent an hour.
+        if isinstance(self.published_at, datetime):
+            if (self.published_at.tzinfo is None or
+                    self.published_at.utcoffset() is None):
+                raise ValueError("ambiguous_evidence_timestamp")
+        elif type(self.published_at) is not date:
+            raise ValueError("invalid_evidence_publication_date")
+        if (self.observed_at.tzinfo is None or
                 self.observed_at.utcoffset() is None):
             raise ValueError("ambiguous_evidence_timestamp")
         if self.status != "VERIFIED_ORIGINAL_PAGE":
@@ -103,6 +108,7 @@ def draft_decision_brief(context: BusinessContext, evidence: tuple[Evidence, ...
             {"evidence_id": e.evidence_id, "claim": e.claim,
              "publisher": e.publisher, "original_url": e.original_url,
              "published_at": e.published_at.isoformat(),
+             "publication_precision": ("date" if type(e.published_at) is date else "datetime"),
              "observed_at": e.observed_at.isoformat(),
              "original_page_sha256": e.original_page_sha256}
             for e in evidence
