@@ -42,7 +42,8 @@ def sent_mailbox(client) -> None:
 
 
 def original_sent_word(client, message_id: str, sender: str,
-                       recipient: str, *, max_bytes: int = 8_000_000) -> bytes:
+                       recipient: str, *, approved_copy: str | None = None,
+                       max_bytes: int = 8_000_000) -> bytes:
     if not re.fullmatch(r"<rasd-[0-9a-f]{24}@gmail\.com>", message_id):
         raise RuntimeError("daily_sent_message_identity_hold")
     status, ids = client.uid("SEARCH", None, "HEADER", "Message-ID",
@@ -65,6 +66,11 @@ def original_sent_word(client, message_id: str, sender: str,
             or parseaddr(str(msg.get("From", "")))[1].lower() != sender.lower()
             or [x.lower() for _, x in getaddresses(
                 msg.get_all("To", []))] != [recipient.lower()]
+            # Existing Gmail archives have no CC; dual-recipient messages
+            # must have precisely the authorized second address, never extras.
+            or [x.lower() for _, x in getaddresses(
+                msg.get_all("Cc", []))] not in (
+                    [], [approved_copy.lower()] if approved_copy else [])
             or msg.get("X-RASD-Delivery-ID") != message_id[6:30]):
         raise RuntimeError("daily_sent_message_headers_hold")
     if not msg.is_multipart():
@@ -138,7 +144,7 @@ def consolidate_sent_words(
     stories: list[dict], private_state: dict, output: Path, *,
     sender: str, recipient: str, app_password: str, title: str,
     start: str, end: str, config: dict,
-    client_factory=None,
+    client_factory=None, approved_copy: str | None = None,
 ) -> tuple[Path, list[dict]]:
     """One Word from ONLY the original JPEGs of previously SMTP-accepted Word mails.
 
@@ -175,7 +181,8 @@ def consolidate_sent_words(
                 raise RuntimeError("daily_imap_login_hold")
             sent_mailbox(client)
             for msgid, group in accepted.items():
-                data = original_sent_word(client, msgid, sender, recipient)
+                data = original_sent_word(
+                    client, msgid, sender, recipient, approved_copy=approved_copy)
                 images.extend(extract_sent_originals(data, group, output))
         finally:
             try:

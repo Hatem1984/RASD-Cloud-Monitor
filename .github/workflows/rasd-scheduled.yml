@@ -108,6 +108,7 @@ jobs:
       RASD_OWNER_PUSH_CONFIRM: ${{ github.event.head_commit.message }}
       RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
       RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
+      RASD_REPORT_CC: ${{ vars.RASD_REPORT_CC }} # second destination, pinned by SHA256 in sender
       RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
       RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
     steps:

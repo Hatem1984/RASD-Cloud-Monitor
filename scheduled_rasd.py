@@ -169,6 +169,26 @@ def require_github_scheduler() -> None:
         raise RuntimeError("owner_oneoff_delivery_outside_cairo_date_window")
 
 
+# Fixed digest of the additional address explicitly approved by the owner.
+# Keep the address itself in the protected repository Actions variable, not source.
+APPROVED_REPORT_COPY_SHA256 = "3a7d7bbeab13d39598527216af04d1ab59f098c57c1dfc2eb93f604f487a0051"
+
+
+def approved_report_copy(sender: str, primary: str) -> str | None:
+    """One explicitly authorized extra Gmail recipient; absent means legacy mode."""
+    raw = os.environ.get("RASD_REPORT_CC", "")
+    if not raw:
+        return None
+    candidate = raw.strip().casefold()
+    if (not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", candidate)
+            or candidate in (sender.casefold(), primary.casefold())
+            or not hmac.compare_digest(
+                hashlib.sha256(candidate.encode("utf-8")).hexdigest(),
+                APPROVED_REPORT_COPY_SHA256)):
+        raise RuntimeError("report_copy_recipient_not_approved")
+    return candidate
+
+
 def protected_credentials() -> tuple[str, str, str, PrivateGitHubLedger]:
     env = os.environ
     sender = env.get("RASD_GMAIL_SENDER", "").strip().lower()
@@ -190,6 +210,8 @@ def protected_credentials() -> tuple[str, str, str, PrivateGitHubLedger]:
     actual = hashlib.sha256(recipient.encode()).hexdigest()
     if not hmac.compare_digest(actual, state["approved_recipient_sha256"]):
         raise RuntimeError("private_ledger_recipient_not_approved")
+    # Validate the additional recipient before *any* private CAS reservation.
+    approved_report_copy(sender, recipient)
     return sender, recipient, password, ledger
 
 
@@ -471,8 +493,12 @@ def send_one_word(word: Path, *, sender: str, recipient: str, password: str,
                   subject: str, key: str, body_text: str | None = None) -> str:
     if sender == recipient or not re.fullmatch(r"[0-9a-f]{24}", key):
         raise ValueError("invalid_transport_identity")
+    copy = approved_report_copy(sender, recipient)
+    destinations = [recipient] + ([copy] if copy else [])
     msg = EmailMessage()
     msg["From"], msg["To"] = sender, recipient
+    if copy:
+        msg["Cc"] = copy
     msg["Subject"] = subject
     msg["Message-ID"] = f"<rasd-{key}@gmail.com>"
     msg["X-RASD-Delivery-ID"] = key
@@ -490,7 +516,9 @@ def send_one_word(word: Path, *, sender: str, recipient: str, password: str,
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=25,
                               context=ssl.create_default_context()) as smtp:
             smtp.login(sender, password)
-            refused = smtp.send_message(msg, from_addr=sender, to_addrs=[recipient])
+            # One SMTP message and one private reservation for both destinations.
+            # A partial refusal is an uncertain delivery: HOLD, never automatic retry.
+            refused = smtp.send_message(msg, from_addr=sender, to_addrs=destinations)
             if refused:
                 raise RuntimeError("recipient_refused")
     except Exception:
@@ -863,6 +891,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         doc, _ = consolidate_sent_words(
                             stories, state, output, sender=sender,
                             recipient=recipient, app_password=password,
+                            approved_copy=approved_report_copy(sender, recipient),
                             title=title,
                             start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
                             end=end_label, config=config)
