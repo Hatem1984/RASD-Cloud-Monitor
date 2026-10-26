@@ -50,7 +50,8 @@ class DualRecipientDeliveryTests(unittest.TestCase):
             word = Path(folder) / "RASD-word.docx"
             word.write_bytes(b"single-original-word-payload")
             with patch.dict(os.environ, {"RASD_REPORT_CC": COPY}, clear=True), \
-                 patch.object(worker.smtplib, "SMTP_SSL", smtp):
+                 patch.object(worker.smtplib, "SMTP_SSL", smtp), \
+                 patch.object(worker.ssl, "create_default_context", return_value=MagicMock()):
                 received = worker.send_one_word(word, sender=SENDER,
                     recipient=OWNER, password="fake-not-sent",
                     subject="RASD professional Word report", key=KEY)
@@ -75,7 +76,8 @@ class DualRecipientDeliveryTests(unittest.TestCase):
             word = Path(folder) / "RASD-word.docx"
             word.write_bytes(b"single-legacy-word-payload")
             with patch.dict(os.environ, {}, clear=True), \
-                 patch.object(worker.smtplib, "SMTP_SSL", smtp):
+                 patch.object(worker.smtplib, "SMTP_SSL", smtp), \
+                 patch.object(worker.ssl, "create_default_context", return_value=MagicMock()):
                 worker.send_one_word(word, sender=SENDER, recipient=OWNER,
                                      password="offline", subject="RASD", key=KEY)
         self.assertIsNone(client.send_message.call_args.args[0]["Cc"])
@@ -86,7 +88,8 @@ class DualRecipientDeliveryTests(unittest.TestCase):
             word = Path(folder) / "RASD-word.docx"
             word.write_bytes(b"one-word")
             with patch.dict(os.environ, {"RASD_REPORT_CC": COPY}, clear=True), \
-                 patch.object(worker.smtplib, "SMTP_SSL", smtp):
+                 patch.object(worker.smtplib, "SMTP_SSL", smtp), \
+                 patch.object(worker.ssl, "create_default_context", return_value=MagicMock()):
                 with self.assertRaisesRegex(
                         RuntimeError, "smtp_uncertain_reconcile_sent_manually"):
                     worker.send_one_word(word, sender=SENDER,
