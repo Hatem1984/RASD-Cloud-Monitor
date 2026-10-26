@@ -12,6 +12,7 @@ import json
 import re
 import smtplib
 import ssl
+import time
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
@@ -136,9 +137,17 @@ class PrivateGitHubLedger:
                 or not isinstance(response["commit"].get("sha"), str)
                 or not response["commit"]["sha"]):
             raise RuntimeError("private_ledger_commit_receipt_invalid")
-        actual, actual_sha = self.read()
-        if actual != state or not actual_sha or actual_sha == sha:
-            raise RuntimeError("private_ledger_commit_not_visible")
+        # The Contents endpoint can briefly return a stale branch view after
+        # a successful PUT. Recheck READ-ONLY a bounded number of times.
+        # Never retry the CAS write or SMTP. A genuinely missing reservation
+        # remains HOLD and must be reconciled by the owner.
+        for attempt in range(3):
+            actual, actual_sha = self.read()
+            if actual == state and actual_sha and actual_sha != sha:
+                return
+            if attempt < 2:
+                time.sleep((0.2, 0.5)[attempt])
+        raise RuntimeError("private_ledger_commit_not_visible")
 
     def reserve(self, article_key: str, sender: str) -> str:
         state, sha = self.read()
