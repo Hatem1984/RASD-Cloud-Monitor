@@ -4,7 +4,8 @@ import json
 import subprocess
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
@@ -56,7 +57,9 @@ class FreeCiphertextBackupTests(unittest.TestCase):
             good = root / "valid.json"
             good.write_bytes(synthetic_owner_envelope())
             with self.assertRaises(ValueError):
-                plan_local_encrypted_backup(good, date(2026, 10, 25))
+                # A completed date becomes valid tomorrow; use Cairo today
+                # to exercise the deliberately rejected not-yet-completed day.
+                plan_local_encrypted_backup(good, datetime.now(ZoneInfo("Africa/Cairo")).date())
 
     def test_real_git_offline_bare_remote_write_readback_and_idempotency(self):
         with tempfile.TemporaryDirectory() as tmp:
