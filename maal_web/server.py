@@ -16,11 +16,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 from datetime import date, datetime
+from http.cookies import SimpleCookie
+from secrets import compare_digest
 
 HERE = Path(__file__).resolve().parent
 # Import the existing Gate D contract from this same integration branch.
 sys.path.insert(0, str(HERE.parent))
 from maal.decision_contracts import Evidence
+from maal.operator_gateway import OperatorGateway
 PROJECT = next((folder for folder in HERE.parents if folder.name.upper() == "MAAL"), None)
 if PROJECT is None:
     raise RuntimeError("MAAL_ROOT_NOT_FOUND")
@@ -30,10 +33,20 @@ CASE_DIR = PROJECT / "03_REPORTS_AND_REVIEW" / "MAAL_GATE_E_ACCEPTANCE_20261026"
 CASE_JSON = CASE_DIR / "MAAL-historical-signal-demo.json"
 CASE_IMAGE = CASE_DIR / "official-original.jpg"
 CASE_REPORT = CASE_DIR / "MAAL-historical-signal-demo.docx"
+MODEL_RUN=PROJECT/"04_HISTORICAL_QA"/"MAAL_GATE_G3_REAL_MODEL_20261027"/"g3_fresh_bounded_operator_run_20261027.json"
+# Isolated demo state, NOT a Gmail/private-ledger database.
+OP_DB=PROJECT/"04_HISTORICAL_QA"/"MAAL_GATE_F_HUMAN_ACCEPTANCE_20261027"/"operator.sqlite"
+_GATEWAY=None
+def gateway():
+    global _GATEWAY
+    if _GATEWAY is None: _GATEWAY=OperatorGateway(OP_DB)
+    return _GATEWAY
+
 STATIC = {
     "/": (HERE / "index.html", "text/html; charset=utf-8"),
     "/style.css": (HERE / "style.css", "text/css; charset=utf-8"),
     "/app.js": (HERE / "app.js", "text/javascript; charset=utf-8"),
+    "/operator.js": (HERE / "operator.js", "text/javascript; charset=utf-8"),
     "/brand-symbol.png": (BRAND / "logo_mono_ivory_transparent.png", "image/png"),
     "/brand-logo.png": (BRAND / "logo_primary_reference.png", "image/png"),
 }
@@ -138,6 +151,51 @@ def get_case() -> dict:
         "financial_impact": None,
     }
 
+def get_local_ai_run() -> dict:
+    """Owner-local actual llama.cpp result; explicitly not an approved decision."""
+    case=get_case()
+    raw=json.loads(MODEL_RUN.read_text("utf8"))
+    analysis=raw.get("analysis")
+    from maal.ai_decision_engine import ALLOWED_DECISION_OPTIONS, ALLOWED_IMPACT_HYPOTHESES, ALLOWED_UNKNOWNS
+    if (raw.get("accepted_by_contract") is not True or
+        raw.get("real_local_inference") is not True or
+        not isinstance(raw.get("run_id"),str) or not raw["run_id"].startswith("maal-g3-") or
+        raw.get("model") != "Qwen3-1.7B-Q4_K_M" or
+        raw.get("evidence_id")!=case["evidence_id"] or
+        raw.get("original_digest")!=case["evidence_digest"] or
+        not isinstance(analysis,dict) or
+        analysis.get("status")!="AI_DRAFT_UNREVIEWED" or
+        analysis.get("verified_evidence_ids")!=[case["evidence_id"]] or
+        analysis.get("action_executed") is not False or
+        analysis.get("human_approval_required") is not True or
+        analysis.get("recommendation_draft") not in ALLOWED_DECISION_OPTIONS or
+        analysis.get("inference") not in ALLOWED_IMPACT_HYPOTHESES or
+        not isinstance(analysis.get("unknowns"),list) or
+        not analysis["unknowns"] or not set(analysis["unknowns"]).issubset(ALLOWED_UNKNOWNS) or
+        analysis.get("facts_exact_from_evidence") != [case["finding"]] or
+        not isinstance(analysis.get("alternatives"),list) or
+        not set(analysis["alternatives"]).issubset(ALLOWED_DECISION_OPTIONS)):
+        raise ValueError("local_model_result_not_authorized_to_display")
+    return {
+        "model":raw["model"],"backend":"local_cpu_llama_cpp",
+        "run_id":raw["run_id"],"recorded_at":raw["timestamp_utc"],
+        "inference_seconds":raw["inference_seconds"],
+        "cloud_api_cost_usd":0.0,"published_as_real_time":False,
+        "source_id":case["evidence_id"],
+        "source_url":case["original_url"],
+        "source_sha256":case["evidence_digest"],
+        "record_type":"ACTUAL_MODEL_OUTPUT_AWAITING_HUMAN_REVIEW",
+        "quality_approval":"HOLD_HUMAN_REVIEW",
+        "status":analysis["status"],
+        "facts":analysis["facts_exact_from_evidence"],
+        "inference":analysis["inference"],
+        "unknowns":analysis["unknowns"],
+        "alternatives":analysis["alternatives"],
+        "recommendation":analysis["recommendation_draft"],
+        "actions_executed":False,
+    }
+
+
 def get_verified_report_bytes() -> bytes:
     """Serve an existing approved Word specimen only if the original image is present."""
     case = get_case()
@@ -157,12 +215,40 @@ def get_verified_report_bytes() -> bytes:
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _cookie(self):
+        header=self.headers.get("Cookie","")
+        if len(header)>2100:return ""
+        try:
+            cookies=SimpleCookie();cookies.load(header)
+            return cookies["maal_demo"].value if "maal_demo" in cookies else ""
+        except Exception:return ""
+
+    def _json_response(self,code:int,data:dict,extra=None):
+        return self.reply(code,"application/json; charset=utf-8",
+                          json.dumps(data,ensure_ascii=False).encode("utf-8"),extra_headers=extra)
+
+    def _evidence_for_draft(self):
+        item=get_case()
+        return Evidence(
+            evidence_id=item["evidence_id"],publisher=item["publisher"],
+            original_url=item["original_url"],claim=item["finding"],
+            published_at=date.fromisoformat(item["published_day"]),
+            observed_at=datetime.fromisoformat(item["observed_at"]),
+            original_page_sha256=item["evidence_digest"],
+            status=item["verification_status"]
+        )
+
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
         try:
+            if path == "/api/operator/state":
+                try:return self._json_response(200,gateway().dashboard(self._cookie()))
+                except PermissionError:return self._json_response(401,{"error":"login_required"})
             if path == "/api/snapshot":
                 return self.reply(200, "application/json; charset=utf-8",
                                   json.dumps(get_snapshot(), ensure_ascii=False).encode("utf-8"))
+            if path == "/api/ai-analysis":
+                return self._json_response(200,get_local_ai_run())
             if path == "/api/evidence":
                 item = get_case()
                 data = {
@@ -209,10 +295,58 @@ class Handler(BaseHTTPRequestHandler):
                               b'{"error":"verified_data_unavailable"}')
 
     def do_POST(self) -> None:
-        self.reply(405, "application/json; charset=utf-8", b'{"error":"read_only_preview"}')
+        path=urlsplit(self.path).path
+        actions={
+            "/api/operator/login","/api/operator/logout",
+            "/api/operator/draft","/api/operator/approve","/api/operator/execute"
+        }
+        if path not in actions:
+            return self._json_response(405,{"error":"read_only_preview"})
+        # Dedicated localhost test-only route. Explicit same-origin checks and CSRF.
+        port=self.server.server_address[1]
+        expected=f"http://127.0.0.1:{port}"
+        if self.headers.get("Origin")!=expected or (
+            self.headers.get("Content-Type","").split(";")[0]!="application/json"
+        ):
+            return self._json_response(403,{"error":"invalid_origin_or_content_type"})
+        try:
+            length=int(self.headers.get("Content-Length","0"))
+            if not 1<=length<=4096: return self._json_response(413,{"error":"invalid_body_size"})
+            body=json.loads(self.rfile.read(length))
+            if not isinstance(body,dict):raise ValueError("invalid_payload")
+            gate=gateway()
+            if path=="/api/operator/login":
+                token,csrf=gate.login(body.get("login",""),body.get("password",""))
+                return self._json_response(200,{"authenticated":True,"csrf":csrf},
+                    extra={"Set-Cookie":f"maal_demo={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=7200"})
+            token=self._cookie()
+            csrf=self.headers.get("X-CSRF-Token","")
+            actor=gate.require(token,csrf)
+            if path=="/api/operator/logout":
+                gate.logout(token)
+                return self._json_response(200,{"logged_out":True},
+                    extra={"Set-Cookie":"maal_demo=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"})
+            if path=="/api/operator/draft":
+                result=gate.create(token,csrf,self._evidence_for_draft(),
+                                   body.get("description",""),body.get("idempotency_key",""))
+                return self._json_response(200,{"draft_id":result,"state":"DRAFT"})
+            if path=="/api/operator/approve":
+                result=gate.approve(token,csrf,body.get("draft_id",""),
+                                    body.get("stepup_password",""))
+                return self._json_response(200,result)
+            if path=="/api/operator/execute":
+                result=gate.execute(token,csrf,body.get("draft_id",""))
+                return self._json_response(200,result)
+        except PermissionError:
+            return self._json_response(403,{"error":"authentication_or_authorization_required"})
+        except (ValueError,TypeError,KeyError):
+            return self._json_response(400,{"error":"invalid_or_unverified_request"})
+        except (OSError,RuntimeError):
+            return self._json_response(503,{"error":"local_test_action_unavailable"})
+        return self._json_response(404,{"error":"not_found"})
 
     def reply(self, status: int, mime: str, body: bytes,
-              filename: str | None = None) -> None:
+              filename: str | None = None, extra_headers:dict|None=None) -> None:
         self.send_response(status)
         headers = {
             "Content-Type": mime, "Content-Length": str(len(body)),
@@ -227,6 +361,8 @@ class Handler(BaseHTTPRequestHandler):
         }
         if filename:
             headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        if extra_headers:
+            headers.update(extra_headers)
         for k, v in headers.items():
             self.send_header(k, v)
         self.end_headers()

@@ -8,6 +8,7 @@
   <title>مَآل | مركز استخبارات الأعمال</title>
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
+  <script src="/operator.js" defer></script>
 </head>
 <body>
 <svg class="icons-def" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -125,6 +126,22 @@
  <div class="content-card impact-intro"><div class="card-heading"><div><p class="eyebrow">BUSINESS IMPACT INTELLIGENCE</p><h3>من الخبر إلى سؤال يهم الشركة</h3></div><span class="badge badge-gold">ملف شركة افتراضي</span></div><p id="case-context">شركة مصرية افتراضية في البنية التحتية والطاقة المتجددة.</p>
  <div class="impact-triptych"><div><span class="mini-label">FACT / مثبت</span><h4>ماذا أعلن المصدر؟</h4><p id="case-fact">مناقشة رسمية لآلية ضمان تمويل مشروعات البنية التحتية.</p></div><div><span class="mini-label gold-text">INFERENCE / محتمل</span><h4>لماذا قد يهم النشاط؟</h4><p id="case-hypothesis">فرصة متابعة مشروطة بقرارات لاحقة وشروط أهلية واضحة.</p></div><div><span class="mini-label muted-text">UNKNOWN / غير مثبت</span><h4>ما الذي لا نعرفه؟</h4><ul id="case-unknowns" class="unknown-list"></ul></div></div>
  </div>
+ <section class="content-card ai-result-lab" aria-label="تحليل نموذج AI محلي فعلي">
+   <div class="card-heading"><div><p class="eyebrow">GATE G3 / VERIFIED LOCAL MODEL RUN</p><h3>تحليل AI فعلي — للمراجعة البشرية</h3></div>
+     <span class="badge badge-gold" id="ai-run-badge">لم يتم اعتماد النتيجة</span></div>
+   <p class="ai-run-note" id="ai-run-status">جارٍ قراءة أحدث نتيجة محلية؛ لن نعرض تحليلًا غير متحقق من أصله.</p>
+   <div class="ai-provenance" id="ai-run-metadata"></div>
+   <div class="ai-grid">
+      <div><strong>الاستنتاج المشروط</strong><p id="ai-inference">—</p></div>
+      <div><strong>ما يزال مجهولًا</strong><ul id="ai-unknowns"></ul></div>
+      <div><strong>بدائل القرار المقيدة بالأدلة</strong><ul id="ai-alternatives"></ul></div>
+   </div>
+   <div class="ai-recommendation"><span>التوصية المقترحة من النموذج — غير معتمدة</span>
+     <p id="ai-recommendation">—</p>
+     <button id="ai-use-draft" type="button" class="btn btn-secondary" disabled>نقل التوصية لمسودة داخلية للمراجعة <svg class="icon"><use href="#i-arrow"/></svg></button>
+   </div>
+   <div class="locked-action"><svg class="icon"><use href="#i-lock"/></svg><span>اختبار نموذج حقيقي لا يعني نجاح تقييم الجودة أو تفويض التنفيذ. صلاحيات الموافقة والمهام منفصلة ومحصورة في بيئة الاختبار.</span></div>
+ </section>
  <div class="insight-warning"><svg class="icon"><use href="#i-shield"/></svg><p><strong>فصل الحقيقة عن التقدير.</strong> لا درجة ثقة حسابية، ولا أثر مالي، ولا شروط تمويل مضمونة دون بيانات موثوقة ومراجعة بشرية.</p></div>
  <div class="next-step"><span>انتقل من تحليل الأثر إلى مسودات القرار</span><button type="button" class="btn btn-secondary" data-go="decisions">الخطوة التالية: مراجعة التوصيات <svg class="icon"><use href="#i-arrow"/></svg></button></div>
 </section>
@@ -135,7 +152,30 @@
  <div class="review-workspace"><div><p class="eyebrow">EXECUTIVE REVIEW / LOCAL ONLY</p><h4>مذكرة مراجعة القرار</h4><p>اكتب ملاحظتك، ثم انسخ المذكرة متضمنة رابط الدليل وحدود الاستنتاج. <strong>المحتوى لا يُحفظ، ولا يمثل اعتمادًا أو تكليفًا.</strong></p></div>
  <label for="review-note" class="review-label">ملاحظاتك قبل اتخاذ القرار</label><textarea id="review-note" rows="3" maxlength="1600" placeholder="مثال: نحتاج متابعة إعلان شروط التمويل رسميًا قبل دراسة الأهلية…"></textarea>
  <div class="review-actions"><span id="review-local-note">خاص بهذه الجلسة فقط — لا يُرسل للخادم</span><button type="button" id="copy-review" class="btn btn-primary"><svg class="icon"><use href="#i-copy"/></svg> نسخ مذكرة المراجعة</button></div></div>
- <div class="locked-action"><svg class="icon"><use href="#i-lock"/></svg><span>زر الموافقة والتنفيذ غير متاح في هذا الإصدار. لا يتم تسجيل موافقات وهمية أو إرسال تعليمات خارجية.</span></div>
+ <section id="operator-lab" class="operator-lab" aria-label="مختبر الموافقة البشرية الفعلية">
+ <div class="operator-lab-heading"><div><p class="eyebrow">GATE F · AUTHENTICATED TEST WORKSPACE</p>
+ <h3>مختبر الاعتماد البشري والمهمة الداخلية</h3>
+ <p>معزول على هذا الكمبيوتر وعلى قرص E. لا تُرسل أي مهام خارجية أو بريد، ولا تُسجل موافقات إنتاج.</p></div>
+ <span class="badge badge-gold">بيئة اختبار فقط</span></div>
+ <form id="operator-login" class="operator-form">
+ <label>مستخدم الاختبار<input id="operator-username" autocomplete="username" required placeholder="حساب اختبار مالك"></label>
+ <label>كلمة مرور الاختبار<input id="operator-password" type="password" autocomplete="current-password" required></label>
+ <button type="submit" class="btn btn-secondary">تسجيل الدخول الآمن</button></form>
+ <div id="operator-authenticated" hidden>
+ <div class="operator-authbar"><span id="operator-whoami"></span><button type="button" id="operator-logout" class="btn btn-secondary">تسجيل الخروج</button></div>
+ <label class="operator-action-label">وصف المهمة الداخلية
+ <textarea id="operator-description" rows="2" maxlength="500" placeholder="مثال: متابعة البيان الرسمي المقبل وتحديث مذكرة القرار..."></textarea></label>
+ <button id="operator-create" type="button" class="btn btn-secondary">إنشاء مسودة مهمة مرتبطة بالدليل</button>
+ <div id="operator-drafts" class="operator-drafts" aria-live="polite"></div>
+ <div class="operator-approval"><label for="operator-stepup">أعد كتابة كلمة المرور لتأكيد اعتماد المسودة المختارة</label>
+ <input id="operator-stepup" type="password" autocomplete="off" placeholder="مطلوبة لكل موافقة فعلية">
+ <div class="operator-actions"><button id="operator-approve" type="button" class="btn btn-secondary" disabled>اعتماد المسودة المختارة</button>
+ <button id="operator-execute" type="button" class="btn btn-primary" disabled>تنفيذ المهمة الداخلية المعتمدة</button></div>
+ </div>
+ <h4>سجل الأحداث الدائم</h4><div id="operator-audit" class="operator-audit"></div></div>
+ <div id="operator-feedback" class="operator-feedback" role="status" aria-live="polite">سجّل دخولك بحساب اختبار مستقل لعرض سجل المهام.</div>
+ </section>
+ <div class="locked-action"><svg class="icon"><use href="#i-lock"/></svg><span>الإجراء الخارجي والإرسال والموافقات الإنتاجية تظل معطّلة. المتاح هنا مهمة داخلية داخل قاعدة اختبار معزولة فقط.</span></div>
  </div>
 </section>
 

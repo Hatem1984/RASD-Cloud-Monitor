@@ -102,12 +102,15 @@ class TaskStore:
           VALUES(?,?,?,?,?,?,?)""",
           (record["timestamp"],draft_id,event,actor,canonical(metadata),prev,digest))
 
-    def create_draft(self,evidence:Evidence,description:str,idempotency_key:str)->str:
+    def create_draft(self,evidence:Evidence,description:str,idempotency_key:str,model_run_id:str|None=None)->str:
         evidence.validate()
         if not description.strip() or len(description)>500 or len(idempotency_key)<12:
             raise ValueError("invalid_task_draft_or_idempotency_key")
+        if model_run_id is not None and (not isinstance(model_run_id,str) or
+                not model_run_id.startswith("maal-g3-") or len(model_run_id)>100):
+            raise ValueError("invalid_model_run_reference")
         payload={"evidence_id":evidence.evidence_id,"evidence_hash":evidence.original_page_sha256,
-                 "description":description}
+                 "description":description,"model_run_id":model_run_id}
         signature=sha(canonical(payload))
         with self.db() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -123,7 +126,8 @@ class TaskStore:
                 (draft_id,idempotency_key,evidence.evidence_id,evidence.original_page_sha256,
                  description,signature,utc()))
             self._audit(conn,draft_id,"DRAFT_CREATED","AI_PLANNER_TEST",{
-                "evidence_id":evidence.evidence_id,"evidence_sha256":evidence.original_page_sha256})
+                "evidence_id":evidence.evidence_id,"evidence_sha256":evidence.original_page_sha256,
+                "source_model_run_id":model_run_id})
             return draft_id
 
     def issue_owner_challenge(self,draft_id:str)->str:
@@ -142,7 +146,7 @@ class TaskStore:
                         {"secret_disclosed_in_audit":False})
         return secret
 
-    def approve(self,draft_id:str,reviewer:str,secret:str)->None:
+    def approve(self,draft_id:str,reviewer:str,secret:str,principal:str|None=None)->None:
         if reviewer not in AUTHORIZED_ROLES:
             raise PermissionError("reviewer_role_not_allowed")
         with self.db() as conn:
@@ -156,9 +160,12 @@ class TaskStore:
                             {"reason":"invalid_or_missing_challenge"})
                 raise_token=True
             else:
+                actor=principal or reviewer
+                if not isinstance(actor,str) or not actor.strip() or len(actor)>100:
+                    raise ValueError("invalid_approver_identity")
                 conn.execute("UPDATE drafts SET state='APPROVED',approved_by=?,approval_secret_hash=NULL WHERE draft_id=?",
-                             (reviewer,draft_id))
-                self._audit(conn,draft_id,"HUMAN_APPROVED",reviewer,{"confirmed":True})
+                             (actor,draft_id))
+                self._audit(conn,draft_id,"HUMAN_APPROVED",actor,{"confirmed":True,"role":reviewer})
                 raise_token=False
         if raise_token:
             raise PermissionError("approval_challenge_invalid")

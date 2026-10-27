@@ -1,0 +1,51 @@
+name: MA'AL — Agent Contract Safety (No Private Evidence)
+on:
+  pull_request:
+    branches:
+      - 'feat/maal-unified-integration-g1-20261027'
+    paths:
+      - 'maal/**'
+      - 'maal_web/**'
+      - 'tests/test_maal_public_agent_contract.py'
+      - 'tests/test_maal_g3_security_boundary.py'
+      - '.github/workflows/maal-agent-contract-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maal-agent-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-contract-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source without private owner assets
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install standard Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify synthetic-only model safety contracts
+        run: python -m unittest tests.test_maal_public_agent_contract tests.test_maal_g3_security_boundary -v
+      - name: Syntax check Python components
+        run: python -m compileall -q maal/ai_decision_engine.py maal/operator_gateway.py maal/internal_actions.py maal_web/server.py
+      - name: Validate frontend JS syntax without npm install
+        run: |
+          node --check maal_web/app.js
+          node --check maal_web/operator.js
+      - name: Ensure no private runtime artifacts are committed
+        shell: python
+        run: |
+          import pathlib,subprocess
+          paths=subprocess.check_output(["git","ls-files"],text=True).splitlines()
+          forbidden=("02_PRIVATE_OWNER/","04_HISTORICAL_QA/","MAAL_SAFETY_COPY_")
+          assert not any(any(t in x for t in forbidden) for x in paths), "Private artifacts must not be in Git"
+          print("Public CI contract checks complete. No owner proof or live AI calls were made.")
