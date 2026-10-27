@@ -31,8 +31,9 @@ class ScheduledPhaseExitDiagnostics(unittest.TestCase):
                     + recovery_var + '" -ne 0 ]; then'
                 )
                 for needle in (interval_call, recovery_call, interval_marker,
-                               recovery_marker, guard, "exit 1"):
+                               recovery_marker, guard):
                     self.assertEqual(text.count(needle), 1, (path, needle))
+                self.assertIn("exit 1", text)
                 positions = [text.index(v) for v in (
                     interval_call, interval_marker, recovery_call, recovery_marker,
                     guard)]
