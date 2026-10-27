@@ -48,6 +48,14 @@ STATIC = {
     "/app.js": (HERE / "app.js", "text/javascript; charset=utf-8"),
     "/operator.js": (HERE / "operator.js", "text/javascript; charset=utf-8"),
     "/product_report.json": (HERE / "product_report.json", "application/json; charset=utf-8"),
+    # Explicitly named local owner-review files, not a dynamic user-provided path.
+    "/reports/MAAL_Business_Intelligence_Round2_2026-10-27.pdf":
+       (PROJECT/"03_REPORTS_AND_REVIEW"/"MAAL_PRODUCT_ACCEPTANCE_R2_20261027"/"owner_downloads"/
+        "MAAL_Business_Intelligence_Round2_2026-10-27.pdf", "application/pdf"),
+    "/reports/MAAL_Business_Intelligence_Round2_2026-10-27.docx":
+       (PROJECT/"03_REPORTS_AND_REVIEW"/"MAAL_PRODUCT_ACCEPTANCE_R2_20261027"/"owner_downloads"/
+        "MAAL_Business_Intelligence_Round2_2026-10-27.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
     "/brand-symbol.png": (BRAND / "logo_mono_ivory_transparent.png", "image/png"),
     "/brand-logo.png": (BRAND / "logo_primary_reference.png", "image/png"),
 }

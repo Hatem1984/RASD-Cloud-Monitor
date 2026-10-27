@@ -38,10 +38,10 @@
   </div>
   <div class="nav-caption">مساحة استخبارات الأعمال</div>
   <nav class="main-nav" aria-label="رحلة العميل">
-    <button type="button" data-view="overview" class="nav-link active" aria-current="page"><svg class="icon"><use href="#i-grid"/></svg><span>الرئيسية</span></button>
+    <button type="button" data-view="overview" class="nav-link active" aria-current="page"><svg class="icon"><use href="#i-grid"/></svg><span>ملخص اليوم</span></button>
     <button type="button" data-view="monitor" class="nav-link"><svg class="icon"><use href="#i-radar"/></svg><span>الإشارات المهمة</span></button>
-    <button type="button" data-view="report" class="nav-link"><svg class="icon"><use href="#i-file"/></svg><span>التقرير والتحليل</span></button>
-    <button type="button" data-view="decisions" class="nav-link"><svg class="icon"><use href="#i-clipboard"/></svg><span>قراراتي</span></button>
+    <button type="button" data-view="report" class="nav-link"><svg class="icon"><use href="#i-file"/></svg><span>التقرير الكامل</span></button>
+    <button type="button" data-view="decisions" class="nav-link"><svg class="icon"><use href="#i-clipboard"/></svg><span>القرارات والمتابعة</span></button>
   </nav>
   <details class="advanced-menu"><summary>التشغيل المتقدم والاختبارات</summary>
     <nav class="main-nav" aria-label="أدوات المشغلين">
@@ -123,7 +123,19 @@
  <div class="content-card customer-signal-section">
   <h3>أهم الإشارات المتاحة للمراجعة</h3>
   <p class="customer-scope">مصادر تاريخية محددة؛ لا تدّعي التغطية اليومية الكاملة.</p>
-  <div id="customer-signal-list"></div>
+  <div class="report-filters" role="group" aria-label="تصفية الإشارات">
+  <label>الأهمية <select id="filter-priority" aria-label="فلتر الأهمية">
+   <option value="ALL">الكل</option><option value="HIGH">مرتفعة</option><option value="LOW">منخفضة</option>
+  </select></label>
+  <label>القطاع <select id="filter-sector" aria-label="فلتر القطاع">
+   <option value="ALL">الكل</option><option value="STARTUPS">الشركات الناشئة</option><option value="INFRASTRUCTURE">البنية الأساسية</option>
+  </select></label>
+  <label>حالة التحقق <select id="filter-verification" aria-label="فلتر التحقق">
+   <option value="ALL">الكل</option><option value="NEEDS_ORIGINAL_IMAGE">الصورة الأصلية ناقصة</option><option value="PARTIALLY_VERIFIED_ORIGINAL">بعض الصور مثبتة</option>
+  </select></label>
+ </div>
+ <p id="filter-results" class="customer-scope" role="status"></p>
+ <div id="customer-signal-list"></div>
  </div>
  <div class="content-card"><div class="card-heading"><div><p class="eyebrow">SOURCE INTELLIGENCE</p><h3>خريطة المصادر المكوّنة</h3></div><span class="badge badge-neutral">جرد إعدادات · ليس فحص صحة مباشرًا</span></div>
   <div class="source-tools"><label class="searchbox"><svg class="icon"><use href="#i-search"/></svg><input id="source-search" placeholder="ابحث باسم الناشر أو النطاق" autocomplete="off" aria-label="بحث في المصادر المفعّلة"></label><span id="search-count" class="source-count">—</span></div>
@@ -139,7 +151,13 @@
    <p id="customer-report-period">الفترة وجرد التغطية…</p>
    <p id="customer-report-company" class="customer-scope"></p>
    <div class="customer-info-note" id="customer-report-coverage"></div>
-   <div id="customer-report-stories"></div>
+   <div class="customer-downloads">
+   <a href="/reports/MAAL_Business_Intelligence_Round2_2026-10-27.pdf" class="btn btn-primary" download hidden>تنزيل التقرير PDF</a>
+   <a href="/reports/MAAL_Business_Intelligence_Round2_2026-10-27.docx" class="btn btn-secondary" download hidden>تنزيل Word</a>
+  </div>
+  <p id="customer-download-status" class="customer-scope">جارٍ التحقق من ملفات المراجعة المحلية…</p>
+  <p class="customer-scope">ملفات مراجعة محلية ناتجة عن نفس البيانات، وليست رسائل بريد أو تقارير إنتاجية منشورة.</p>
+  <div id="customer-report-stories"></div>
    <h3>ما لم يثبت بعد</h3>
    <ul id="customer-report-limitations"></ul>
    <p class="customer-scope">للمراجعة فقط. هذا العرض لا ينشئ مهمة، ولا يوافق على قرار، ولا يرسل بريدًا.</p>
@@ -189,7 +207,7 @@
  <section class="content-card customer-decisions">
   <h2>قراراتي المقترحة</h2>
   <p class="customer-scope">توصيات للمراجعة فقط — لا مهام مُنفّذة، ولا موافقة إنتاجية.</p>
-  <div id="customer-decision-list"></div>
+  <div id="customer-decision-list"></div><p class="customer-scope">المسؤولون والمواعيد مقترحون للمتابعة فقط، ولا يعني ظهورها إنشاء مهام.</p>
  </section>
  <div class="content-card"><div class="card-heading"><div><p class="eyebrow">HUMAN-IN-THE-LOOP DECISIONS</p><h3>توصيات قابلة للفحص، لا أوامر تلقائية</h3></div><span class="badge badge-gold">بانتظار مراجعة بشرية</span></div>
  <div id="proposals-list" class="proposals-list"><div class="empty-state">جارٍ تحميل التوصيات من تجربة التحقق…</div></div>
