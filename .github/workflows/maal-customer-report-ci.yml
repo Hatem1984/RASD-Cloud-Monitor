@@ -3,6 +3,7 @@ on:
   pull_request:
     branches:
       - feat/maal-gate-h-fresh-agentic-e2e-20261027
+      - feat/maal-product-report-v03-20261027
     paths:
       - 'maal_web/index.html'
       - 'maal_web/app.js'
@@ -10,6 +11,9 @@ on:
       - 'maal_web/server.py'
       - 'maal_web/product_report.json'
       - 'tests/test_maal_customer_report.py'
+      - 'tests/test_maal_customer_round2.py'
+      - 'maal_r2_component_report.py'
+      - 'maal_r2_owner_downloads.py'
       - '.github/workflows/maal-customer-report-ci.yml'
   workflow_dispatch:
 permissions:
@@ -26,12 +30,12 @@ jobs:
         with:
           python-version: '3.12'
       - name: Public-source report and navigation contracts
-        run: python -m unittest tests.test_maal_customer_report -v
+        run: python -m unittest tests.test_maal_customer_report tests.test_maal_customer_round2 -v
       - name: JS Python syntax
         run: |
           node --check maal_web/app.js
           node --check maal_web/operator.js
-          python -m py_compile maal_web/server.py
+          python -m py_compile maal_web/server.py maal_r2_component_report.py maal_r2_owner_downloads.py
       - name: No production email secrets model weights or original screenshots in public report changes
         shell: python
         run: |

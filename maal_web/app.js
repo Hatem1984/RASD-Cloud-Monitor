@@ -1,12 +1,12 @@
 "use strict";
 /* MA'AL V0.3 — brand book decision workspace, read-only local preview. */
 const VIEWS = Object.freeze({
-  overview: ["الرئيسية", "ماذا حدث؟ وما القرار التالي؟", "ملخص ملموس لنشاط رقمي افتراضي، بأدلة وحدود واضحة."],
+  overview: ["ملخص اليوم", "ماذا حدث؟ وما القرار التالي؟", "ملخص ملموس لنشاط رقمي افتراضي، بأدلة وحدود واضحة."],
   monitor: ["الإشارات المهمة", "الأخبار التي تهم نشاطك.", "نتائج محدودة بالمصادر المتاحة وتواريخها، وليست رصدًا حيًا شاملًا."],
-  report: ["التقرير والتحليل", "حقائق قبل القرارات.", "تقرير استخبارات أعمال عربي وتوصيات مشروطة قابلة للمراجعة."],
+  report: ["التقرير الكامل", "حقائق قبل القرارات.", "تقرير استخبارات أعمال عربي وتوصيات مشروطة قابلة للمراجعة."],
   evidence: ["غرفة الأدلة", "كل استنتاج يبدأ بدليل.", "مصدر أصلي وصورة موثقة وبصمة قابلة للمراجعة."],
   impact: ["تحليل الأثر", "لماذا يهم هذا التغيير؟", "نُميّز بين حقيقة منشورة وفرصة محتملة ومعلومات لم تثبت."],
-  decisions: ["قراراتي", "اختر ما يستحق المتابعة.", "هذه توصيات وليست مهام منفذة أو موافقات إنتاجية."],
+  decisions: ["القرارات والمتابعة", "اختر ما يستحق المتابعة.", "هذه توصيات وليست مهام منفذة أو موافقات إنتاجية."],
   operations: ["التشغيل والأمان", "الشفافية جزء من المنتج.", "قدرات مثبتة وحدود تشغيل صريحة، بلا ادعاءات إنتاجية."]
 });
 const state = { snapshot: null, caseData: null, currentView: "overview", expandedSources: false };
@@ -155,32 +155,118 @@ function sourceLink(url){
  a.href=url;a.target="_blank";a.rel="noopener noreferrer";
  return a;
 }
+const customerSignals={rows:[],stories:[]};
+function renderCustomerSignals(){
+ const list=$("customer-signal-list"),report=$("customer-report-stories");
+ const p=$("filter-priority").value,s=$("filter-sector").value,
+       v=$("filter-verification").value;
+ const rows=customerSignals.rows.filter(row=>
+  (p==="ALL"||row.priority===p)&&(s==="ALL"||row.sector===s)&&
+  (v==="ALL"||row.verification===v));
+ list.replaceChildren();report.replaceChildren();
+ $("filter-results").textContent="المعروض "+rows.length+" من "+customerSignals.rows.length+
+  " إشارتين مُجمعتين من 3 بيانات رسمية؛ ليست تغطية حية.";
+ for(const item of rows){
+  const small=customerNode("article","customer-signal-item");
+  const flag=customerNode("span","customer-priority"+(item.priority==="HIGH"?" high":" low"),item.priority_label);
+  const title=customerNode("h3","",item.title);
+  const provenance=customerNode("p","customer-scope",item.published+" · "+item.sector_label+" · "+item.verification_label);
+  const details=customerNode("details","customer-expand");
+  const summary=customerNode("summary","","لماذا يهمني؟ التفاصيل والأدلة");
+  details.append(summary,customerNode("p","",item.why),
+    customerNode("p","",item.hypothesis),
+    customerNode("p","",item.missing));
+  small.append(flag,title,provenance,details);
+  const open=customerNode("button","btn btn-secondary","افتح التحليل");
+  open.type="button";open.addEventListener("click",()=>navigate("report"));
+  small.append(open);list.append(small);
+
+  const full=customerNode("article","customer-story");
+  full.id=item.id;
+  full.append(customerNode("p","customer-scope",item.published+" · "+item.sector_label),
+    customerNode("span","customer-priority"+(item.priority==="HIGH"?" high":" low"),item.priority_label),
+    customerNode("h3","",item.title));
+  const fields=[
+    ["الحقائق المعلنة",item.facts.join(" | ")],
+    ["أهميته بالنسبة للشركة",item.why],
+    ["الفرصة المحتملة (ليست حقيقة)",item.hypothesis],
+    ["المخاطر",item.risk],
+    ["الإجراء المقترح",item.recommendation],
+    ["معلومات ناقصة",item.missing],
+    ["المسؤول المقترح",item.suggested_owner],
+    ["موعد المتابعة",item.follow_up],
+    ["حالة الإثبات",item.verification_label]
+  ];
+  const cardDetails=customerNode("details","customer-expand");
+  cardDetails.append(customerNode("summary","","الحقائق والتحليل والشروط — افتح التفاصيل"));
+  for(const [label,value] of fields){
+   const para=customerNode("p","customer-story-row");
+   para.append(customerNode("strong","",label+" · "),document.createTextNode(value));
+   cardDetails.append(para);
+  }
+  cardDetails.append(customerNode("h4","", "المصادر المرتبطة بهذه الإشارة"));
+  for(const sourceId of item.source_ids){
+   const source=customerSignals.stories.find(x=>x.id===sourceId);
+   if(!source) throw Error("missing_deduplicated_source");
+   const container=customerNode("p","customer-source-proof",
+     source.published_day+" · "+source.evidence_status+" — ");
+   container.append(sourceLink(source.source_url));
+   cardDetails.append(container);
+  }
+  full.append(cardDetails);report.append(full);
+ }
+ if(!rows.length){
+  list.append(customerNode("p","customer-scope","لا توجد إشارات تطابق هذه الفلاتر. غير الفلاتر لعرض النتائج."));
+  report.append(customerNode("p","customer-scope","لا توجد نتائج مطابقة."));
+ }
+}
+async function checkOwnerReportDownloads(){
+ const links=[...document.querySelectorAll(".customer-downloads a")];
+ const checks=await Promise.all(links.map(async a=>{
+  a.hidden=true;
+  try {
+   const response=await fetch(a.getAttribute("href"),{cache:"no-store"});
+   if(!response.ok) return false;
+   const mime=response.headers.get("content-type")||"";
+   const ok=(a.pathname.endsWith(".pdf")&&mime.includes("pdf"))||
+            (a.pathname.endsWith(".docx")&&mime.includes("wordprocessingml"));
+   if(ok)a.hidden=false;
+   return ok;
+  }catch{return false;}
+ }));
+ const ready=checks.filter(Boolean).length;
+ $("customer-download-status").textContent=ready
+  ?("ملفات المراجعة الجاهزة للتنزيل: "+ready+" من "+links.length+"؛ نسخ محلية وليست إرسالًا بالبريد.")
+  :"تنزيل التقرير غير متاح في هذه البيئة. اقرأ المحتوى أدناه، ولا تفترض وجود ملف لم يُنشأ.";
+}
 function renderCustomerReport(data){
  const cov=data.coverage;
  if(data.schema!=="MAAL_PRODUCT_REVIEW_V1" || data.mode!=="HISTORICAL_LIMITED_REPORT" ||
     data.live_monitoring!==false || data.auto_execution!==false || data.email_sent!==false ||
     cov.active_feeds_configured!==13 || cov.research_catalog!==50 ||
+    data.signal_count!==2 || !Array.isArray(data.signals) || data.signals.length!==2 ||
     !Array.isArray(data.stories) || data.stories.length!==3 ||
-    !Array.isArray(data.decisions) || !Array.isArray(data.limitations)){
-    throw Error("customer_report_contract_refused");
+    !Array.isArray(data.decisions) || data.decisions.length!==3 ||
+    !Array.isArray(data.limitations)) throw Error("customer_report_contract_refused");
+ for(const story of data.stories)sourceLink(story.source_url);
+ for(const signal of data.signals){
+   if(!signal.id||!signal.facts.length||signal.eligible_for_execution!==false||
+     !signal.source_ids.every(id=>data.stories.some(a=>a.id===id)))
+     throw Error("unapproved_customer_signal");
  }
- const stories=data.stories;
- for(const story of stories){
-   if(!story.id || !story.headline || !story.source_url || story.ready_for_action!==false)
-     throw Error("customer_story_not_verified_for_preview");
-   sourceLink(story.source_url);
- }
- $("customer-summary").textContent=data.summary;
- $("customer-report-period").textContent="الفترة: "+data.period+" · تاريخ إعداد المراجعة: "+data.as_of+" · ليست نشرة سوق شاملة";
- $("customer-report-company").textContent="الشركة محل التحليل: "+data.company+" — "+data.company_warning;
- $("customer-report-coverage").textContent=cov.note;
+ customerSignals.rows=data.signals;customerSignals.stories=data.stories;
+ $("customer-summary").textContent=data.headline_summary+" "+data.summary;
+ $("customer-report-period").textContent="الفترة: "+data.period+" · آخر مراجعة: "+data.as_of+" · تاريخية محدودة المصدر";
+ $("customer-report-company").textContent="شركة التحليل: "+data.company+" — "+data.company_warning;
+ $("customer-report-coverage").textContent=cov.note+" "+cov.not_observed;
+ const lead=data.signals[0];
  const answers=[
-  ["ماذا حدث؟",stories[0].what_happened],
-  ["ما مدى أهميته؟",stories[0].priority+" · لشركة تقنية افتراضية"],
-  ["لماذا يهمني؟",stories[0].why_it_matters],
-  ["ما الدليل؟",stories[0].evidence_status],
-  ["ما الإجراء المقترح؟",stories[0].recommendation],
-  ["ما البيانات الناقصة؟",stories[0].missing]
+  ["ماذا حدث؟",lead.facts[0]],
+  ["ما مدى أهميته؟",lead.priority_label+"؛ الأثر النقدي المباشر غير مثبت."],
+  ["لماذا يهمني؟",lead.why],
+  ["ما الدليل؟",lead.verification_label],
+  ["ما الإجراء المقترح؟",lead.recommendation],
+  ["ما البيانات الناقصة؟",lead.missing]
  ];
  const grid=$("customer-answers");grid.replaceChildren();
  for(const [question,answer] of answers){
@@ -188,48 +274,21 @@ function renderCustomerReport(data){
   card.append(customerNode("h3","",question),customerNode("p","",answer));
   grid.append(card);
  }
- const signalList=$("customer-signal-list");signalList.replaceChildren();
- const full=$("customer-report-stories");full.replaceChildren();
- for(const story of stories){
-  const small=customerNode("article","customer-signal-item");
-  small.append(customerNode("strong","",story.headline),
-    customerNode("p","customer-scope",story.published_day+" · "+story.priority),
-    customerNode("p","",story.evidence_status));
-  const visit=customerNode("button","btn btn-secondary","افتح التحليل الكامل");
-  visit.type="button";visit.addEventListener("click",()=>navigate("report"));
-  small.append(visit);signalList.append(small);
-  const fullCard=customerNode("article","customer-story");
-  fullCard.id=story.id;
-  fullCard.append(
-    customerNode("p","customer-scope",story.published_day+" · "+story.publisher+" · "+story.priority),
-    customerNode("h3","",story.headline)
-  );
-  const fields=[
-   ["ماذا حدث؟",story.what_happened],["لماذا يهم الشركة؟",story.why_it_matters],
-   ["الفرصة المحتملة",story.opportunity],["المخاطر",story.risk],
-   ["التوصية المشروطة",story.recommendation],["ما الذي لم يثبت؟",story.missing],
-   ["درجة توثيق المصدر",story.evidence_status]
-  ];
-  for(const [label,value] of fields){
-   const p=customerNode("p","customer-story-row");
-   p.append(customerNode("strong","",label+" · "),document.createTextNode(value));
-   fullCard.append(p);
-  }
-  fullCard.append(sourceLink(story.source_url));
-  full.append(fullCard);
- }
+ renderCustomerSignals();
  const limitations=$("customer-report-limitations");limitations.replaceChildren();
  for(const line of data.limitations)limitations.append(customerNode("li","",line));
  const decisions=$("customer-decision-list");decisions.replaceChildren();
  for(const d of data.decisions){
   const card=customerNode("article","customer-decision");
   card.append(customerNode("strong","",d.priority+" — "+d.title),
-              customerNode("p","", "شرط المراجعة: "+d.condition),
+              customerNode("p","", "المسؤول: "+d.owner),
+              customerNode("p","", "المتابعة: "+d.follow_up),
+              customerNode("p","", "شرط اتخاذ القرار: "+d.condition),
               customerNode("p","customer-scope",d.approval));
   decisions.append(card);
  }
+ checkOwnerReportDownloads();
 }
-
 async function getJSON(url) {
   const response=await fetch(url,{cache:"no-store"});
   if(!response.ok) throw new Error(url + ":" + response.status);
@@ -404,6 +463,8 @@ function init() {
   selectors.forEach(button=>button.addEventListener("click",()=>navigate(button.dataset.view)));
   document.querySelectorAll("[data-go]").forEach(button=>button.addEventListener("click",()=>navigate(button.dataset.go)));
   $("source-search").addEventListener("input",renderSources);
+  for(const id of ["filter-priority","filter-sector","filter-verification"])
+    $(id).addEventListener("change",renderCustomerSignals);
   $("toggle-source-list").addEventListener("click",()=>{state.expandedSources=!state.expandedSources;renderSources();});
   $("source-close").addEventListener("click",()=>{$("source-dialog").close();});
   $("source-done").addEventListener("click",()=>{$("source-dialog").close();});

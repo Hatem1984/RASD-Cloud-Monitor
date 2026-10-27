@@ -39,7 +39,7 @@ class CustomerReportContract(unittest.TestCase):
   self.assertIn("SHA-256",levels[2])
  def test_all_customer_decisions_are_awaiting_review(self):
   self.assertEqual(len(self.d["decisions"]),3)
-  self.assertTrue(all("توصية" in d["approval"] for d in self.d["decisions"]))
+  self.assertTrue(all("غير مُنفذ" in d["approval"] and d["owner"] and d["follow_up"] for d in self.d["decisions"]))
  def test_existing_v03_navigation_preserved_with_advanced(self):
   html=(H/"index.html").read_text("utf8")
   for section in ['data-view="overview"','data-view="monitor"',

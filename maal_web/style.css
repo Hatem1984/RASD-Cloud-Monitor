@@ -232,3 +232,19 @@ body { font-size: var(--type-body); }
 .advanced-technical[open]>summary{margin-bottom:14px}
 #customer-decision-list .customer-decision{margin:11px 0}
 @media(max-width:700px){.customer-answer-grid{grid-template-columns:1fr}.customer-brief{padding:18px}.customer-story{padding:14px}}
+
+/* Round 2: one-screen summary + accessible expandable industry signals. */
+.report-filters{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0 18px}
+.report-filters label{font-size:12px;color:#a8d1d0;display:grid;gap:5px;min-width:145px;flex:1}
+.report-filters select{background:#143a4b;color:#ecf7f5;border:1px solid #376575;border-radius:9px;padding:10px;font:inherit;min-width:0}
+.customer-priority{display:inline-flex;font-size:11px;padding:5px 12px;border-radius:20px;margin-bottom:8px;border:1px solid #405f62}
+.customer-priority.high{background:#34503d;color:#e5dfa0}
+.customer-priority.low{background:#244153;color:#c0dce7}
+.customer-signal-item h3{font-size:17px;line-height:1.65}
+.customer-expand{margin:8px 0 14px;border-radius:10px;border:1px solid #28546a;padding:8px 12px;background:#092333}
+.customer-expand summary{cursor:pointer;color:#74dbce;font-weight:650;padding:6px}
+.customer-expand p{font-size:13px;line-height:1.88}
+.customer-source-proof{padding:10px;border-top:1px solid #2e5365}
+.customer-downloads{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+.customer-downloads .btn{text-decoration:none}
+@media(max-width:700px){.report-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}.report-filters label{min-width:0}.customer-downloads .btn{flex:1}}
