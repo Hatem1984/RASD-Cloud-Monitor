@@ -160,6 +160,11 @@ async function loadData() {
     try{renderCase(caseResult.value);}
     catch(err){showCaseUnavailable();}
   }else showCaseUnavailable();
+  getJSON("/api/ai-analysis").then(renderLocalAI).catch(()=>{
+    $("ai-run-status").textContent="لا توجد نتيجة نموذج فعلية مطابقة للدليل لعرضها الآن.";
+    $("ai-run-badge").textContent="HOLD";
+    $("ai-use-draft").disabled=true;
+  });
 }
 function showCaseUnavailable() {
   state.caseData=null;
@@ -243,6 +248,34 @@ function makeReviewMemo(){
    "ملاحظة المراجع: "+note,
    "هذه المذكرة ليست موافقة ولا تتضمن أي إجراء إنتاجي أو تقدير مالي معتمد."
  ].join("\n\n");
+}
+
+function renderLocalAI(result){
+  const record=state.caseData;
+  if(!record || result.record_type!=="ACTUAL_MODEL_OUTPUT_AWAITING_HUMAN_REVIEW" ||
+     result.source_id!==record.evidence_id ||
+     result.source_sha256!==record.evidence_digest ||
+     result.actions_executed!==false || result.status!=="AI_DRAFT_UNREVIEWED" ||
+     result.quality_approval!=="HOLD_HUMAN_REVIEW" ||
+     !Array.isArray(result.unknowns) || !Array.isArray(result.alternatives)){
+    throw Error("Untrusted model result");
+  }
+  $("ai-run-status").textContent="نتيجة استدلال CPU حقيقية، لكنها مسودة لم تُراجع من خبير؛ لا تمثل قرارًا معتمدًا.";
+  $("ai-run-badge").textContent="استدلال فعلي · مراجعة مطلوبة";
+  $("ai-run-metadata").textContent="النموذج: "+result.model+" · زمن الاستدلال: "+result.inference_seconds+
+    " ثانية · تكلفة API: $0 · دليل: "+result.source_id;
+  $("ai-inference").textContent=result.inference;
+  $("ai-recommendation").textContent=result.recommendation;
+  for(const [nodeId,values] of [["ai-unknowns",result.unknowns],["ai-alternatives",result.alternatives]]){
+    const node=$(nodeId);node.replaceChildren();
+    for(const value of values){const li=document.createElement("li");li.textContent=value;node.append(li);}
+  }
+  $("ai-use-draft").disabled=false;
+  $("ai-use-draft").addEventListener("click",()=>{
+    $("operator-description").value=result.recommendation;
+    navigate("decisions");
+    $("operator-lab").scrollIntoView({behavior:"smooth",block:"start"});
+  },{once:true});
 }
 
 function init() {

@@ -7,7 +7,7 @@ _OWNER_PROOF = _os.name == "nt" and _Path(
 ).is_file()
 from dataclasses import replace
 from datetime import date, datetime
-from maal.ai_decision_engine import analyze,CompanyProfile
+from maal.ai_decision_engine import analyze,CompanyProfile,ALLOWED_DECISION_OPTIONS,ALLOWED_IMPACT_HYPOTHESES,ALLOWED_UNKNOWNS
 from maal.decision_contracts import BusinessContext,Evidence
 
 
@@ -38,10 +38,10 @@ class G3Tests(unittest.TestCase):
         self.answer={
             "evidence_ids":[self.evidence.evidence_id],"relevant_to_company":True,
             "facts":[self.evidence.claim],
-            "hypothesis":"ربما تستدعي هذه المناقشات متابعة القرارات الرسمية قبل التخطيط",
-            "unknowns":["لا توجد شروط أهلية منشورة مثبتة من الدليل الحالي"],
-            "alternatives":["المتابعة","عدم اتخاذ إجراء حتى صدور شروط رسمية"],
-            "recommendation":"أعد ملف مراجعة داخلي دون إرسال أو تنفيذ",
+            "hypothesis":ALLOWED_IMPACT_HYPOTHESES[0],
+            "unknowns":[ALLOWED_UNKNOWNS[0]],
+            "alternatives":[ALLOWED_DECISION_OPTIONS[0],ALLOWED_DECISION_OPTIONS[1]],
+            "recommendation":ALLOWED_DECISION_OPTIONS[1],
             "verify_with":"official_publisher_original",
             "financial_estimate":None,"executed":False,"approved":False
         }
