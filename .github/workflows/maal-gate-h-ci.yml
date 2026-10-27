@@ -1,0 +1,44 @@
+name: MAAL Gate H - Synthetic Contract CI (No Owner Assets)
+on:
+  pull_request:
+    branches:
+      - feat/maal-g3-real-inference-operator-20261027
+    paths:
+      - 'maal/**'
+      - 'maal_web/**'
+      - 'tests/test_maal_gate_h_runtime.py'
+      - '.github/workflows/maal-gate-h-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gate-h-public-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test synthetic Gate H runtime and security boundaries
+        run: python -m unittest tests.test_maal_gate_h_runtime tests.test_maal_public_agent_contract tests.test_maal_g3_security_boundary -v
+      - name: Validate Python and browser syntax
+        run: |
+          python -m compileall -q maal/demo_runtime.py maal/ai_decision_engine.py maal_web/server.py
+          node --check maal_web/app.js
+          node --check maal_web/operator.js
+      - name: Ensure no proprietary evidence, model weights or credentials tracked
+        shell: python
+        run: |
+          import subprocess,pathlib
+          tracked=subprocess.check_output(["git","ls-files"],text=True).splitlines()
+          forbidden_ext={".gguf",".sqlite",".db",".jpg",".jpeg",".png",".docx",".zip",".env",".pem",".key"}
+          for item in tracked:
+              path=pathlib.PurePosixPath(item)
+              if item.startswith(("E:/","C:/")) or any(part in {"02_PRIVATE_OWNER","04_HISTORICAL_QA","07_LOCAL_TOOL_CACHE"} for part in path.parts):
+                  raise SystemExit("private_path_tracked")
+              if item.startswith(("maal/","maal_web/")) and path.suffix.lower() in forbidden_ext:
+                  raise SystemExit("private_artifact_tracked")
+          print("public_only_repository_files_verified")

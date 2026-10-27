@@ -262,8 +262,9 @@ function renderLocalAI(result){
   }
   $("ai-run-status").textContent="نتيجة استدلال CPU حقيقية، لكنها مسودة لم تُراجع من خبير؛ لا تمثل قرارًا معتمدًا.";
   $("ai-run-badge").textContent="استدلال فعلي · مراجعة مطلوبة";
-  $("ai-run-metadata").textContent="النموذج: "+result.model+" · زمن الاستدلال: "+result.inference_seconds+
-    " ثانية · تكلفة API: $0 · دليل: "+result.source_id;
+  $("ai-run-metadata").textContent="النموذج: "+result.model+" · مدة تشغيله: "+result.inference_seconds+
+    " ثانية · معرّف التشغيل: "+result.run_id+" · توقيت حفظ النتيجة: "+result.recorded_at+
+    " · تكلفة API: $0 · دليل: "+result.source_id;
   $("ai-inference").textContent=result.inference;
   $("ai-recommendation").textContent=result.recommendation;
   for(const [nodeId,values] of [["ai-unknowns",result.unknowns],["ai-alternatives",result.alternatives]]){
@@ -271,14 +272,39 @@ function renderLocalAI(result){
     for(const value of values){const li=document.createElement("li");li.textContent=value;node.append(li);}
   }
   $("ai-use-draft").disabled=false;
-  $("ai-use-draft").addEventListener("click",()=>{
-    $("operator-description").value=result.recommendation;
+  $("ai-use-draft").onclick=()=>{
+    const target=$("operator-description");
+    target.value=result.recommendation;
+    target.dataset.modelRunId=result.run_id;
     navigate("decisions");
     $("operator-lab").scrollIntoView({behavior:"smooth",block:"start"});
-  },{once:true});
+  };
 }
 
 function init() {
+  $("ai-fresh-run").addEventListener("click",async()=>{
+    const button=$("ai-fresh-run");
+    button.disabled=true;
+    $("ai-run-badge").textContent="جارٍ الاستدلال الحقيقي";
+    $("ai-run-status").textContent="Qwen3 يعمل الآن على CPU المحلي. لا توجد موافقة أو إجراء خلال التحليل.";
+    try {
+      const operator=await getJSON("/api/operator/state");
+      if(!operator.csrf || operator.role!=="OWNER")throw new Error("مطلوب تسجيل دخول مالك حساب المختبر من مركز القرارات.");
+      const response=await fetch("/api/ai/run",{
+        method:"POST",credentials:"same-origin",cache:"no-store",
+        headers:{"Content-Type":"application/json","X-CSRF-Token":operator.csrf},
+        body:JSON.stringify({intent:"fresh_historical_demo_only"})
+      });
+      if(!response.ok)throw new Error("تعذر تشغيل النموذج أو فشل فحص المصدر؛ HTTP "+response.status);
+      const payload=await response.json();
+      renderLocalAI(payload.analysis);
+      notify("اكتمل استدلال فعلي جديد. النتيجة تتطلب مراجعة بشرية.");
+    }catch(err){
+      $("ai-run-badge").textContent="HOLD";
+      $("ai-run-status").textContent=err.message;
+      $("ai-use-draft").disabled=true;
+    }finally{button.disabled=false;}
+  });
   selectors.forEach(button=>button.addEventListener("click",()=>navigate(button.dataset.view)));
   document.querySelectorAll("[data-go]").forEach(button=>button.addEventListener("click",()=>navigate(button.dataset.go)));
   $("source-search").addEventListener("input",renderSources);
