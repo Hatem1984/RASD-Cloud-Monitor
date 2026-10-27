@@ -57,5 +57,29 @@ class ScheduledPhaseExitDiagnostics(unittest.TestCase):
                 self.assertNotIn("${{", "\n".join(new_lines))
 
 
+    def test_reviewed_daily_archive_hold_codes_are_safe_to_log(self):
+        # Fixed low-information status names, never raw exception messages.
+        from scheduled_rasd import safe_scheduled_hold_reason
+        for code in (
+            "daily_imap_login_hold",
+            "daily_imap_archive_unavailable_hold",
+            "daily_sent_message_not_found",
+            "daily_sent_attachment_identity_hold",
+            "daily_consolidation_incomplete_private_ledger",
+            "daily_consolidated_original_digest_hold",
+        ):
+            with self.subTest(code=code):
+                self.assertEqual(safe_scheduled_hold_reason(RuntimeError(code)), code)
+
+    def test_arbitrary_private_exception_text_remains_redacted(self):
+        from scheduled_rasd import safe_scheduled_hold_reason
+        for error in (
+            RuntimeError("daily_imap_login_hold: private-account@example.invalid"),
+            RuntimeError("https://publisher.example.invalid/secret"),
+            ValueError("token=never-print-this"),
+        ):
+            self.assertEqual(safe_scheduled_hold_reason(error), "other_held_failure")
+
+
 if __name__ == "__main__":
     unittest.main()
