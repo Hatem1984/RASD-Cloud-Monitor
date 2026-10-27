@@ -147,8 +147,11 @@ jobs:
           if [ "$mode" = interval ]; then
             interval_exit=0
             python scheduled_rasd.py --mode interval || interval_exit=$?
+            # Read-only phase exit telemetry: no secrets, retries or delivery changes.
+            echo "RASD_INTERVAL_PHASE_EXIT=$interval_exit"
             recovery_exit=0
             python scheduled_rasd.py --mode rollup_recovery || recovery_exit=$?
+            echo "RASD_ROLLUP_RECOVERY_PHASE_EXIT=$recovery_exit"
             if [ "$interval_exit" -ne 0 ] || [ "$recovery_exit" -ne 0 ]; then
               echo 'RASD_SCHEDULED_INTERVAL_OR_DAILY_RECOVERY_HOLD'
               exit 1
