@@ -82,13 +82,16 @@ document.addEventListener("DOMContentLoaded", () => {
   try{await post("/api/operator/logout",{});loggedOut();feedback("تم تسجيل الخروج.",true);}
   catch(e){feedback(e.message);}
  });
+ by("operator-description").addEventListener("input",()=>{ delete by("operator-description").dataset.modelRunId; });
  by("operator-create").addEventListener("click",async()=>{
   const description=by("operator-description").value.trim();
   if(description.length<8){feedback("اكتب وصفًا للمهمة التجريبية أولًا.");return;}
   try{
+   const linkedRun=by("operator-description").dataset.modelRunId||null;
    const data=await post("/api/operator/draft",{
-      description,idempotency_key:crypto.randomUUID()+"|"+Date.now()});
+      description,idempotency_key:crypto.randomUUID()+"|"+Date.now(),model_run_id:linkedRun});
    app.selected=data.draft_id;by("operator-description").value="";
+   delete by("operator-description").dataset.modelRunId;
    feedback("تم إنشاء مسودة مرتبطة بالدليل الموثّق فقط.",true);
    await getState();
   }catch(e){feedback(e.message);}

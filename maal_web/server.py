@@ -33,9 +33,9 @@ CASE_DIR = PROJECT / "03_REPORTS_AND_REVIEW" / "MAAL_GATE_E_ACCEPTANCE_20261026"
 CASE_JSON = CASE_DIR / "MAAL-historical-signal-demo.json"
 CASE_IMAGE = CASE_DIR / "official-original.jpg"
 CASE_REPORT = CASE_DIR / "MAAL-historical-signal-demo.docx"
-MODEL_RUN=PROJECT/"04_HISTORICAL_QA"/"MAAL_GATE_G3_REAL_MODEL_20261027"/"g3_fresh_bounded_operator_run_20261027.json"
+MODEL_RUN=PROJECT/"04_HISTORICAL_QA"/"MAAL_GATE_H_E2E_20261027"/"fresh_model_run.json"
 # Isolated demo state, NOT a Gmail/private-ledger database.
-OP_DB=PROJECT/"04_HISTORICAL_QA"/"MAAL_GATE_F_HUMAN_ACCEPTANCE_20261027"/"operator.sqlite"
+OP_DB=PROJECT/"04_HISTORICAL_QA"/"MAAL_GATE_H_E2E_20261027"/"operator.sqlite"
 _GATEWAY=None
 def gateway():
     global _GATEWAY
@@ -298,7 +298,8 @@ class Handler(BaseHTTPRequestHandler):
         path=urlsplit(self.path).path
         actions={
             "/api/operator/login","/api/operator/logout",
-            "/api/operator/draft","/api/operator/approve","/api/operator/execute"
+            "/api/operator/draft","/api/operator/approve","/api/operator/execute",
+            "/api/ai/run"
         }
         if path not in actions:
             return self._json_response(405,{"error":"read_only_preview"})
@@ -326,10 +327,25 @@ class Handler(BaseHTTPRequestHandler):
                 gate.logout(token)
                 return self._json_response(200,{"logged_out":True},
                     extra={"Set-Cookie":"maal_demo=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"})
+            if path=="/api/ai/run":
+                if actor["role"]!="OWNER":
+                    raise PermissionError("owner_only_real_ai")
+                if body.get("intent")!="fresh_historical_demo_only":
+                    raise ValueError("invalid_ai_run_intent")
+                from maal.demo_runtime import infer_to_local_receipt
+                result=infer_to_local_receipt(get_case(),MODEL_RUN)
+                return self._json_response(200,{"run":result,"analysis":get_local_ai_run()})
             if path=="/api/operator/draft":
+                linked_run=body.get("model_run_id")
+                if linked_run is not None:
+                    live_result=get_local_ai_run()
+                    if (linked_run!=live_result["run_id"] or
+                        body.get("description")!=live_result["recommendation"]):
+                        raise ValueError("model_run_and_recommendation_mismatch")
                 result=gate.create(token,csrf,self._evidence_for_draft(),
-                                   body.get("description",""),body.get("idempotency_key",""))
-                return self._json_response(200,{"draft_id":result,"state":"DRAFT"})
+                                   body.get("description",""),body.get("idempotency_key",""),
+                                   model_run_id=linked_run)
+                return self._json_response(200,{"draft_id":result,"state":"DRAFT","source_model_run_id":linked_run})
             if path=="/api/operator/approve":
                 result=gate.approve(token,csrf,body.get("draft_id",""),
                                     body.get("stepup_password",""))
