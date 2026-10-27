@@ -1,0 +1,41 @@
+name: MAAL G2 - Historical Readonly Evidence Contract CI
+on:
+  pull_request:
+    branches:
+      - feat/maal-gate-h-fresh-agentic-e2e-20261027
+    paths:
+      - 'maal/rasd_readonly_adapter.py'
+      - 'tests/test_maal_rasd_readonly_adapter.py'
+      - '.github/workflows/maal-g2-readonly-contract-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  g2-historical-fixture-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Historical-only synthetic contract tests
+        run: python -m unittest tests.test_maal_rasd_readonly_adapter -v
+      - name: Python syntax and data isolation
+        run: python -m py_compile maal/rasd_readonly_adapter.py tests/test_maal_rasd_readonly_adapter.py
+      - name: Refuse personal assets or real credentials in G2 change
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+          tracked = subprocess.check_output(["git","ls-files"],text=True).splitlines()
+          forbidden = {".gguf",".sqlite",".db",".pem",".key",".env",".jpg",".jpeg",".png"}
+          for name in tracked:
+              path=Path(name)
+              if name.startswith(("02_PRIVATE_OWNER/","04_HISTORICAL_QA/")) or (
+                 (name.startswith("maal/") or name.startswith("tests/test_maal_rasd_readonly_adapter")) and
+                  path.suffix.lower() in forbidden):
+                  raise SystemExit("owner_sensitive_material_must_remain_local")
+          print("G2 source-only CI guard PASS — not live RASD provenance proof")

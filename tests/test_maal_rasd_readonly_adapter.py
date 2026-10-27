@@ -76,4 +76,18 @@ class ReadOnlyG2(unittest.TestCase):
  def test_unsupported_unknown_reference_denied(self):
   with self.assertRaisesRegex(RASDExportHold,"unrecognized_independently"):
    adapt(dict(EXAMPLE,item_id="UNTRUSTED_REFERENCE"))
+ def test_second_official_article_without_independent_receipt_must_hold(self):
+  # Official URL may exist; a claim in a search result is NOT binary source verification.
+  candidate=dict(EXAMPLE,item_id="MINISTRY_2026_10_24_NEW_CANDIDATE",
+    source_url="https://www.mped.gov.eg/singlenews?id=7275&lang=ar",
+    published_at="2026-10-24",
+    finding="خطة لدعم 5000 شركة ناشئة وجذب رأس مال مخاطر مستهدف")
+  with self.assertRaisesRegex(RASDExportHold,"unrecognized_independently_verified_receipt"):
+   adapt(candidate)
+ def test_two_different_articles_deny_untrusted_second_source_entire_batch(self):
+  candidate=dict(EXAMPLE,item_id="SECOND_NEWS_UNPROVEN",source_url=
+   "https://www.mped.gov.eg/singlenews?id=7275&lang=ar")
+  with self.assertRaisesRegex(RASDExportHold,"unrecognized_independently_verified_receipt"):
+   adapt_historical_batch([dict(EXAMPLE),candidate],
+    trusted=TRUST,original_jpegs={ID:IMAGE},now=NOW)
 if __name__=="__main__":unittest.main()
