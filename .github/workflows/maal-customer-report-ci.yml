@@ -4,6 +4,7 @@ on:
     branches:
       - feat/maal-gate-h-fresh-agentic-e2e-20261027
       - feat/maal-product-report-v03-20261027
+      - feat/maal-product-acceptance-r2-20261027
     paths:
       - 'maal_web/index.html'
       - 'maal_web/app.js'
@@ -12,6 +13,8 @@ on:
       - 'maal_web/product_report.json'
       - 'tests/test_maal_customer_report.py'
       - 'tests/test_maal_customer_round2.py'
+      - 'tests/test_maal_unified_staging_snapshot.py'
+      - 'maal_staging_snapshot_refresh.py'
       - 'maal_r2_component_report.py'
       - 'maal_r2_owner_downloads.py'
       - '.github/workflows/maal-customer-report-ci.yml'
@@ -30,7 +33,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Public-source report and navigation contracts
-        run: python -m unittest tests.test_maal_customer_report tests.test_maal_customer_round2 -v
+        run: python -m unittest tests.test_maal_customer_report tests.test_maal_customer_round2 tests.test_maal_unified_staging_snapshot -v
       - name: JS Python syntax
         run: |
           node --check maal_web/app.js
