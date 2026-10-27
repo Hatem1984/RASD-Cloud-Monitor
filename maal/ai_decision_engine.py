@@ -94,6 +94,25 @@ def analyze(profile:CompanyProfile, evidences:tuple[Evidence,...], provider:Prov
     if len(evidences) != 1:
         raise ValueError("multi_source_requires_independent_reconciliation")
     for e in evidences:e.validate()
+    # Real-model demo accepts only the owner's binary-verified Gate E specimen.
+    # Evidence.validate() checks shape, not independent screenshot provenance.
+    # This fail-closed gate prevents a caller from forging VERIFIED metadata or
+    # laundering adversarial article text through the exact-facts output.
+    if isinstance(provider,(LocalLlamaCppProvider,LocalOllamaProvider)):
+        from maal_web.server import get_case
+        case=get_case()  # rechecks original JPEG SHA-256 and publisher receipt
+        evidence=evidences[0]
+        if not (
+            evidence.evidence_id==case["evidence_id"] and
+            evidence.publisher==case["publisher"] and
+            evidence.original_url==case["original_url"] and
+            evidence.claim==case["finding"] and
+            evidence.published_at==date.fromisoformat(case["published_day"]) and
+            evidence.observed_at==datetime.fromisoformat(case["observed_at"]) and
+            evidence.original_page_sha256==case["evidence_digest"] and
+            evidence.status==case["verification_status"]
+        ):
+            raise ValueError("real_model_requires_owner_binary_verified_evidence")
     ids={e.evidence_id for e in evidences}
     if len(ids)!=len(evidences) or not all(ALLOWED_EVIDENCE_IDS.fullmatch(i) for i in ids):
         raise ValueError("invalid_or_duplicate_evidence_ids")
