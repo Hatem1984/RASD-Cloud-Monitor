@@ -1,0 +1,47 @@
+name: MAAL Product Report V0.3 - Review Only
+on:
+  pull_request:
+    branches:
+      - feat/maal-gate-h-fresh-agentic-e2e-20261027
+    paths:
+      - 'maal_web/index.html'
+      - 'maal_web/app.js'
+      - 'maal_web/style.css'
+      - 'maal_web/server.py'
+      - 'maal_web/product_report.json'
+      - 'tests/test_maal_customer_report.py'
+      - '.github/workflows/maal-customer-report-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  customer-report-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Public-source report and navigation contracts
+        run: python -m unittest tests.test_maal_customer_report -v
+      - name: JS Python syntax
+        run: |
+          node --check maal_web/app.js
+          node --check maal_web/operator.js
+          python -m py_compile maal_web/server.py
+      - name: No production email secrets model weights or original screenshots in public report changes
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+          files=subprocess.check_output(["git","ls-files"],text=True).splitlines()
+          for name in files:
+              p=Path(name)
+              if (name.startswith(("02_PRIVATE_OWNER/","04_HISTORICAL_QA/")) or
+                  (name.startswith("maal_web/") and p.suffix.lower() in
+                    {".gguf",".sqlite",".db",".env",".pem",".key",".jpg",".jpeg",".docx",".pdf"})):
+                  raise SystemExit("Owner private artifact unexpectedly tracked")
+          print("public-source-only review checks passed")
