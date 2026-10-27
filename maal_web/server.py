@@ -25,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 from maal.decision_contracts import Evidence
 from maal.operator_gateway import OperatorGateway
+from maal.report_bundle_guard import inspect_bundle
 PROJECT = next((folder for folder in HERE.parents if folder.name.upper() == "MAAL"), None)
 if PROJECT is None:
     raise RuntimeError("MAAL_ROOT_NOT_FOUND")
@@ -62,6 +63,22 @@ STATIC = {
 }
 
 STAGED_REVIEW = PROJECT / "04_HISTORICAL_QA" / "MAAL_UNIFIED_SNAPSHOT_REVIEW_20261027" / "current.json"
+BUNDLE_MANIFEST = PROJECT / "04_HISTORICAL_QA" / "MAAL_BUNDLE_PARITY_20261027" / "approved_bundle_manifest.json"
+PRODUCT_REPORT_URLS = {
+    "pdf": "/reports/MAAL_Business_Intelligence_Round2_2026-10-27.pdf",
+    "docx": "/reports/MAAL_Business_Intelligence_Round2_2026-10-27.docx",
+}
+def verified_product_bundle() -> tuple[dict, dict[str,bytes]]:
+    """Hash-bound historical snapshot and owner-reviewed artifact bytes only.
+
+    The bundled files are static, prior owner-reviewed reports: they do NOT
+    auto-regenerate on new UI metadata. A changed revision/fact/file fails.
+    """
+    snapshot = get_safe_staging_report()
+    manifest = json.loads(BUNDLE_MANIFEST.read_text("utf8"))
+    binaries = {ext: STATIC[url][0].read_bytes() for ext,url in PRODUCT_REPORT_URLS.items()}
+    return inspect_bundle(snapshot=snapshot,manifest=manifest,files=binaries), binaries
+
 
 def get_safe_staging_report() -> dict:
     """QA-only file reads; never trust caller paths or call RASD production."""
@@ -276,6 +293,19 @@ class Handler(BaseHTTPRequestHandler):
                 except PermissionError:return self._json_response(401,{"error":"login_required"})
             if path == "/product_report.json" and os.environ.get("MAAL_HISTORICAL_SNAPSHOT_REVIEW") == "true":
                 return self._json_response(200,get_safe_staging_report())
+            if path == "/api/report-bundle":
+                if os.environ.get("MAAL_HISTORICAL_SNAPSHOT_REVIEW") != "true":
+                    return self._json_response(403,{"error":"historical_review_disabled"})
+                result, _ = verified_product_bundle()
+                return self._json_response(200,result)
+            if path in PRODUCT_REPORT_URLS.values():
+                if os.environ.get("MAAL_HISTORICAL_SNAPSHOT_REVIEW") != "true":
+                    return self._json_response(403,{"error":"historical_review_disabled"})
+                _, verified_files = verified_product_bundle()
+                ext = next(ext for ext, url in PRODUCT_REPORT_URLS.items() if url==path)
+                asset, mime = STATIC[path]
+                return self.reply(200,mime,verified_files[ext],
+                    filename=asset.name)
             if path == "/api/snapshot":
                 return self.reply(200, "application/json; charset=utf-8",
                                   json.dumps(get_snapshot(), ensure_ascii=False).encode("utf-8"))
