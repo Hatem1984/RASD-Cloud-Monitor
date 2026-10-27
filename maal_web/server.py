@@ -47,6 +47,7 @@ STATIC = {
     "/style.css": (HERE / "style.css", "text/css; charset=utf-8"),
     "/app.js": (HERE / "app.js", "text/javascript; charset=utf-8"),
     "/operator.js": (HERE / "operator.js", "text/javascript; charset=utf-8"),
+    "/product_report.json": (HERE / "product_report.json", "application/json; charset=utf-8"),
     "/brand-symbol.png": (BRAND / "logo_mono_ivory_transparent.png", "image/png"),
     "/brand-logo.png": (BRAND / "logo_primary_reference.png", "image/png"),
 }

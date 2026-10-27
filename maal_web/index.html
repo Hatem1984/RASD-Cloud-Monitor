@@ -37,14 +37,19 @@
     <div class="brand-meta"><span class="status-dot"></span> WORKSPACE / LOCAL PREVIEW</div>
   </div>
   <div class="nav-caption">مساحة استخبارات الأعمال</div>
-  <nav class="main-nav" aria-label="أقسام مَآل">
-    <button type="button" data-view="overview" class="nav-link active" aria-current="page"><svg class="icon"><use href="#i-grid"/></svg><span>القيادة</span></button>
-    <button type="button" data-view="monitor" class="nav-link"><svg class="icon"><use href="#i-radar"/></svg><span>الرصد والمصادر</span></button>
-    <button type="button" data-view="evidence" class="nav-link"><svg class="icon"><use href="#i-shield"/></svg><span>غرفة الأدلة</span></button>
-    <button type="button" data-view="impact" class="nav-link"><svg class="icon"><use href="#i-chart"/></svg><span>تحليل الأثر</span></button>
-    <button type="button" data-view="decisions" class="nav-link"><svg class="icon"><use href="#i-clipboard"/></svg><span>مركز القرارات</span></button>
-    <button type="button" data-view="operations" class="nav-link"><svg class="icon"><use href="#i-lock"/></svg><span>التشغيل والأمان</span></button>
+  <nav class="main-nav" aria-label="رحلة العميل">
+    <button type="button" data-view="overview" class="nav-link active" aria-current="page"><svg class="icon"><use href="#i-grid"/></svg><span>الرئيسية</span></button>
+    <button type="button" data-view="monitor" class="nav-link"><svg class="icon"><use href="#i-radar"/></svg><span>الإشارات المهمة</span></button>
+    <button type="button" data-view="report" class="nav-link"><svg class="icon"><use href="#i-file"/></svg><span>التقرير والتحليل</span></button>
+    <button type="button" data-view="decisions" class="nav-link"><svg class="icon"><use href="#i-clipboard"/></svg><span>قراراتي</span></button>
   </nav>
+  <details class="advanced-menu"><summary>التشغيل المتقدم والاختبارات</summary>
+    <nav class="main-nav" aria-label="أدوات المشغلين">
+     <button type="button" data-view="evidence" class="nav-link"><svg class="icon"><use href="#i-shield"/></svg><span>الدليل التقني</span></button>
+     <button type="button" data-view="impact" class="nav-link"><svg class="icon"><use href="#i-chart"/></svg><span>نموذج Qwen3 التجريبي</span></button>
+     <button type="button" data-view="operations" class="nav-link"><svg class="icon"><use href="#i-lock"/></svg><span>التشغيل والأمان</span></button>
+    </nav>
+  </details>
   <div class="sidebar-bottom">
     <div class="boundary-card"><svg class="icon"><use href="#i-shield"/></svg><div><strong>وضع الاستعراض الآمن</strong><p>لا إجراءات تنفيذية · لا بريد · لا اتصال مباشر بالإنتاج</p></div></div>
     <small class="side-version">MA'AL EXPERIENCE <span>V0.3</span></small>
@@ -59,6 +64,17 @@
   <div class="page-heading"><div><p class="eyebrow">INTELLIGENCE COMMAND CENTER</p><h1 id="current-heading">وضوح أكبر. <span class="gold">قرار أذكى.</span></h1><p id="current-subheading" class="heading-desc">استكشف كيف تتحول إشارة موثّقة إلى رؤية قابلة للمراجعة.</p></div><div class="heading-status"><span class="outline-tag">نسخة تجريبية غير إنتاجية</span><small id="snapshot-date">آخر جرد معتمد: جارٍ التحقق</small></div></div>
 
 <section id="view-overview" class="view" aria-label="نظرة عامة">
+ <section class="customer-brief content-card" aria-label="ملخص استخبارات الأعمال">
+   <p class="eyebrow">MA'AL / OWNER BRIEFING · REVIEW ONLY</p>
+   <h2>ماذا حدث؟ وما القرار الذي يستحق المراجعة؟</h2>
+   <p id="customer-summary">تحميل موجز الأخبار والمصادر المحفوظة…</p>
+   <div id="customer-answers" class="customer-answer-grid"></div>
+   <div class="customer-actions">
+    <button type="button" class="btn btn-primary" data-go="report">اقرأ التقرير والوقائع</button>
+    <button type="button" class="btn btn-secondary" data-go="decisions">راجع قراراتك المقترحة</button>
+   </div>
+   <p class="customer-scope">هذه مراجعة مصادر محدودة وتاريخية. لا أخبار حية متصلة، ولا إرسال بريد أو تنفيذ تلقائي.</p>
+ </section>
  <div class="hero">
   <div class="hero-orbit hero-orbit-one"></div><div class="hero-orbit hero-orbit-two"></div>
   <div class="hero-body"><div class="hero-kicker"><span class="kicker-line"></span> AGENTIC BUSINESS & DECISION INTELLIGENCE</div>
@@ -73,6 +89,7 @@
    <div class="exec-head"><span class="exec-label"><svg class="icon"><use href="#i-spark"/></svg> ملخص القرار التنفيذي</span><span class="badge badge-gold">حالة تاريخية · شركة افتراضية</span></div>
    <div class="exec-body"><div><h3 id="executive-headline">جارٍ التحقق من ملف القضية…</h3><p id="executive-hypothesis">لن نعرض استنتاجًا دون مستند رسمي متطابق.</p></div><button type="button" class="btn btn-secondary" data-go="impact">راجع الفرضية وحدودها <svg class="icon"><use href="#i-arrow"/></svg></button></div>
  </div>
+ <details class="advanced-technical"><summary>جرد الأدوات ونموذج القرار التاريخي — تفاصيل متقدمة</summary>
  <div class="section-row"><h3>لقطة النظام المعتمدة</h3><span class="subdued">أرقام من ملفات الإعدادات، وليست مراقبة لحظية</span></div>
  <div class="metrics">
   <article class="metric"><div class="metric-top"><span>خلاصات الرصد النشطة</span><svg class="icon"><use href="#i-radar"/></svg></div><div class="metric-number" id="count-feeds">—</div><div class="metric-foot"><span class="teal-dot"></span> مفعّلة بالإعدادات</div></article>
@@ -99,14 +116,34 @@
     <button type="button" class="btn btn-secondary btn-wide" data-go="decisions">راجع التوصيات <svg class="icon"><use href="#i-arrow"/></svg></button>
   </article>
  </div>
+ </details>
 </section>
 
 <section id="view-monitor" class="view hidden" aria-label="الرصد والمصادر">
+ <div class="content-card customer-signal-section">
+  <h3>أهم الإشارات المتاحة للمراجعة</h3>
+  <p class="customer-scope">مصادر تاريخية محددة؛ لا تدّعي التغطية اليومية الكاملة.</p>
+  <div id="customer-signal-list"></div>
+ </div>
  <div class="content-card"><div class="card-heading"><div><p class="eyebrow">SOURCE INTELLIGENCE</p><h3>خريطة المصادر المكوّنة</h3></div><span class="badge badge-neutral">جرد إعدادات · ليس فحص صحة مباشرًا</span></div>
   <div class="source-tools"><label class="searchbox"><svg class="icon"><use href="#i-search"/></svg><input id="source-search" placeholder="ابحث باسم الناشر أو النطاق" autocomplete="off" aria-label="بحث في المصادر المفعّلة"></label><span id="search-count" class="source-count">—</span></div>
   <div id="source-list" class="source-list"><div class="empty-state">جارٍ تحميل الجرد من الملف المحلي المعتمد…</div></div><div class="source-controls"><button type="button" class="btn btn-secondary" id="toggle-source-list" aria-expanded="false" hidden>عرض كل المصادر</button></div>
   <p class="context-hint">اضغط على أي مصدر لعرض رابط RSS وقائمة النطاقات المصرّح بها. وجوده في الإعدادات لا يثبت عمله الآن.</p>
  </div>
+</section>
+
+<section id="view-report" class="view hidden" aria-label="التقرير والتحليل">
+ <section class="content-card customer-report">
+   <p class="eyebrow">MA'AL — BUSINESS INTELLIGENCE REPORT</p>
+   <h2>تقرير استخبارات أعمال للمراجعة</h2>
+   <p id="customer-report-period">الفترة وجرد التغطية…</p>
+   <p id="customer-report-company" class="customer-scope"></p>
+   <div class="customer-info-note" id="customer-report-coverage"></div>
+   <div id="customer-report-stories"></div>
+   <h3>ما لم يثبت بعد</h3>
+   <ul id="customer-report-limitations"></ul>
+   <p class="customer-scope">للمراجعة فقط. هذا العرض لا ينشئ مهمة، ولا يوافق على قرار، ولا يرسل بريدًا.</p>
+ </section>
 </section>
 
 <section id="view-evidence" class="view hidden" aria-label="غرفة الأدلة">
@@ -149,11 +186,18 @@
 </section>
 
 <section id="view-decisions" class="view hidden" aria-label="مركز القرارات">
+ <section class="content-card customer-decisions">
+  <h2>قراراتي المقترحة</h2>
+  <p class="customer-scope">توصيات للمراجعة فقط — لا مهام مُنفّذة، ولا موافقة إنتاجية.</p>
+  <div id="customer-decision-list"></div>
+ </section>
  <div class="content-card"><div class="card-heading"><div><p class="eyebrow">HUMAN-IN-THE-LOOP DECISIONS</p><h3>توصيات قابلة للفحص، لا أوامر تلقائية</h3></div><span class="badge badge-gold">بانتظار مراجعة بشرية</span></div>
  <div id="proposals-list" class="proposals-list"><div class="empty-state">جارٍ تحميل التوصيات من تجربة التحقق…</div></div>
  <div class="review-workspace"><div><p class="eyebrow">EXECUTIVE REVIEW / LOCAL ONLY</p><h4>مذكرة مراجعة القرار</h4><p>اكتب ملاحظتك، ثم انسخ المذكرة متضمنة رابط الدليل وحدود الاستنتاج. <strong>المحتوى لا يُحفظ، ولا يمثل اعتمادًا أو تكليفًا.</strong></p></div>
  <label for="review-note" class="review-label">ملاحظاتك قبل اتخاذ القرار</label><textarea id="review-note" rows="3" maxlength="1600" placeholder="مثال: نحتاج متابعة إعلان شروط التمويل رسميًا قبل دراسة الأهلية…"></textarea>
  <div class="review-actions"><span id="review-local-note">خاص بهذه الجلسة فقط — لا يُرسل للخادم</span><button type="button" id="copy-review" class="btn btn-primary"><svg class="icon"><use href="#i-copy"/></svg> نسخ مذكرة المراجعة</button></div></div>
+ <details class="advanced-technical" id="advanced-operator-review">
+ <summary>للمشغّل فقط: مختبر المصادقة والاعتماد الداخلي التجريبي</summary>
  <section id="operator-lab" class="operator-lab" aria-label="مختبر الموافقة البشرية الفعلية">
  <div class="operator-lab-heading"><div><p class="eyebrow">GATE H · AUTHENTICATED OWNER REVIEW (TEST ONLY)</p>
  <h3>مختبر الاعتماد البشري والمهمة الداخلية</h3>
@@ -184,6 +228,7 @@
  <h4>سجل الأحداث الدائم</h4><div id="operator-audit" class="operator-audit"></div></div>
  <div id="operator-feedback" class="operator-feedback" role="status" aria-live="polite">سجّل دخولك بحساب اختبار مستقل لعرض سجل المهام.</div>
  </section>
+ </details>
  <div class="locked-action"><svg class="icon"><use href="#i-lock"/></svg><span>الإجراء الخارجي والإرسال والموافقات الإنتاجية تظل معطّلة. المتاح هنا مهمة داخلية داخل قاعدة اختبار معزولة فقط.</span></div>
  </div>
 </section>

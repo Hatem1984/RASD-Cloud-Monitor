@@ -206,3 +206,29 @@ body { font-size: var(--type-body); }
 .ai-recommendation p{font-size:16px;font-weight:700;color:#EFF6F2;line-height:1.9}
 .ai-recommendation button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:900px){.ai-grid{grid-template-columns:1fr}}
+
+/* MA'AL V0.3 customer-first review; original dark brand system preserved. */
+.customer-brief{margin-bottom:20px;border-color:#347173}
+.customer-brief h2,.customer-report h2{font-size:clamp(21px,2.1vw,28px);line-height:1.5;margin:0 0 10px}
+.customer-brief>p:not(.eyebrow){font-size:14px;color:#d1e5e8}
+.customer-answer-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:19px 0}
+.customer-answer{background:#123346;border:1px solid #2c5665;padding:16px;border-radius:13px}
+.customer-answer h3{font-size:13px;margin:0 0 5px;color:#78ddd0}
+.customer-answer p{font-size:12px;line-height:1.8;color:#d6e2e7;margin:0}
+.customer-actions{display:flex;flex-wrap:wrap;gap:10px}
+.customer-scope{font-size:12px;color:#a8bbc5;line-height:1.85}
+.customer-info-note{background:#163548;border-right:3px solid var(--gold);padding:14px 16px;border-radius:9px;font-size:12px;margin:14px 0 20px}
+.customer-signal-item,.customer-story,.customer-decision{padding:18px;border:1px solid #335767;background:#0d293a;border-radius:13px;margin:14px 0}
+.customer-signal-item strong,.customer-decision strong{display:block;font-size:16px;color:#f7f5ef;line-height:1.6}
+.customer-signal-item p{font-size:12px}
+.customer-story h3{font-size:18px;margin:6px 0 15px;line-height:1.65}
+.customer-story-row{font-size:13px;line-height:1.9;margin:9px 0}
+.customer-story-row strong{color:#7ee1d8}
+.customer-story a{display:inline-block;font-size:12px;margin-top:6px;color:#8de4d9}
+.customer-report ul{padding-inline-start:22px;color:#d5e1e7;font-size:13px}
+.advanced-menu{margin-top:13px;background:#0c2535;border:1px solid #25475a;border-radius:12px;padding:10px}
+.advanced-menu>summary,.advanced-technical>summary{cursor:pointer;color:#adc3d0;font-size:12px;padding:8px}
+.advanced-technical{border:1px solid #2b4d5f;border-radius:14px;margin:20px 0;padding:10px 14px}
+.advanced-technical[open]>summary{margin-bottom:14px}
+#customer-decision-list .customer-decision{margin:11px 0}
+@media(max-width:700px){.customer-answer-grid{grid-template-columns:1fr}.customer-brief{padding:18px}.customer-story{padding:14px}}
