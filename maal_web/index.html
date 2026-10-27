@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071B2B">
+  <meta name="description" content="مَآل — واجهة معاينة استخبارات الأعمال، من الإشارة إلى القرار.">
+  <title>مَآل | مركز استخبارات الأعمال</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<svg class="icons-def" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+<symbol id="i-radar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="m12 12 6-6M12 3v2M3 12h2"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 2 8 4v6c0 5-3 8-8 10-5-2-8-5-8-10V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+<symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="17" rx="2"/><rect x="8" y="2" width="8" height="6" rx="1"/><path d="M8 12h8M8 16h5"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M19 12H5m7-7-7 7 7 7"/></symbol>
+<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m7 17 10-10m-9 0h9v9"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.7" cy="10.7" r="7"/><path d="m16 16 5 5"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18M12 3c-5 5-5 13 0 18"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M6 2h8l5 5v15H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h5M8 13h8M8 17h6"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="11" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M7 16l4-5 4 3 5-8"/></symbol>
+</svg>
+<div class="shell">
+<aside class="sidebar" aria-label="القائمة الرئيسية">
+  <div class="brand-area">
+    <div class="brand-line"><img src="/brand-symbol.png" alt="رمز مَآل المعتمد" class="brand-icon">
+      <div class="brand-type"><strong>مَآل <span>MA'AL</span></strong><small>من الإشارة إلى القرار</small></div>
+    </div>
+    <div class="brand-meta"><span class="status-dot"></span> WORKSPACE / LOCAL PREVIEW</div>
+  </div>
+  <div class="nav-caption">مساحة استخبارات الأعمال</div>
+  <nav class="main-nav" aria-label="أقسام مَآل">
+    <button type="button" data-view="overview" class="nav-link active" aria-current="page"><svg class="icon"><use href="#i-grid"/></svg><span>القيادة</span></button>
+    <button type="button" data-view="monitor" class="nav-link"><svg class="icon"><use href="#i-radar"/></svg><span>الرصد والمصادر</span></button>
+    <button type="button" data-view="evidence" class="nav-link"><svg class="icon"><use href="#i-shield"/></svg><span>غرفة الأدلة</span></button>
+    <button type="button" data-view="impact" class="nav-link"><svg class="icon"><use href="#i-chart"/></svg><span>تحليل الأثر</span></button>
+    <button type="button" data-view="decisions" class="nav-link"><svg class="icon"><use href="#i-clipboard"/></svg><span>مركز القرارات</span></button>
+    <button type="button" data-view="operations" class="nav-link"><svg class="icon"><use href="#i-lock"/></svg><span>التشغيل والأمان</span></button>
+  </nav>
+  <div class="sidebar-bottom">
+    <div class="boundary-card"><svg class="icon"><use href="#i-shield"/></svg><div><strong>وضع الاستعراض الآمن</strong><p>لا إجراءات تنفيذية · لا بريد · لا اتصال مباشر بالإنتاج</p></div></div>
+    <small class="side-version">MA'AL EXPERIENCE <span>V0.3</span></small>
+  </div>
+</aside>
+<div class="workspace">
+<header class="topbar">
+  <div class="crumbs"><span>مَآل / استخبارات الأعمال</span><svg class="icon"><use href="#i-arrow"/></svg><strong id="current-view-label">القيادة</strong></div>
+  <div class="topbar-side"><button type="button" class="quick-open" id="quick-open" title="بحث سريع وتنقل — Ctrl+K" aria-haspopup="dialog"><svg class="icon"><use href="#i-search"/></svg><span>بحث سريع</span><kbd>Ctrl K</kbd></button><span class="top-tag"><span class="status-dot"></span> LOCAL · PRIVATE</span><div class="avatar" aria-label="وضع تجربة المالك">M</div></div>
+</header>
+<main id="content" tabindex="-1">
+  <div class="page-heading"><div><p class="eyebrow">INTELLIGENCE COMMAND CENTER</p><h1 id="current-heading">وضوح أكبر. <span class="gold">قرار أذكى.</span></h1><p id="current-subheading" class="heading-desc">استكشف كيف تتحول إشارة موثّقة إلى رؤية قابلة للمراجعة.</p></div><div class="heading-status"><span class="outline-tag">نسخة تجريبية غير إنتاجية</span><small id="snapshot-date">آخر جرد معتمد: جارٍ التحقق</small></div></div>
+
+<section id="view-overview" class="view" aria-label="نظرة عامة">
+ <div class="hero">
+  <div class="hero-orbit hero-orbit-one"></div><div class="hero-orbit hero-orbit-two"></div>
+  <div class="hero-body"><div class="hero-kicker"><span class="kicker-line"></span> AGENTIC BUSINESS & DECISION INTELLIGENCE</div>
+   <h2>من ضجيج الإشارات <br>إلى <em>وضوح القرار.</em></h2>
+   <p>ارصد ما يهم، تحقق من الدليل، افهم التأثير، ثم اختر الإجراء المناسب. في هذه المعاينة نعرض <strong>حالة تاريخية موثّقة واحدة</strong> دون ادعاء تحليل حي أو تنفيذ مستقل.</p>
+   <button type="button" class="btn btn-primary" data-go="evidence">استكشف الدليل الحقيقي <svg class="icon"><use href="#i-arrow"/></svg></button>
+  </div>
+  <div class="hero-graphic" aria-hidden="true"><div class="signal-ring sr1"></div><div class="signal-ring sr2"></div><div class="signal-ring sr3"></div><div class="pulse-core"><svg class="icon"><use href="#i-spark"/></svg></div><div class="micro-label">SIGNAL → DECISION</div></div>
+  <div class="hero-footer"><span class="pulse-label"><i></i> Verified historical case study</span><span>سلسلة القرار قيد التطوير</span></div>
+ </div>
+ <div class="executive-strip" role="note">
+   <div class="exec-head"><span class="exec-label"><svg class="icon"><use href="#i-spark"/></svg> ملخص القرار التنفيذي</span><span class="badge badge-gold">حالة تاريخية · شركة افتراضية</span></div>
+   <div class="exec-body"><div><h3 id="executive-headline">جارٍ التحقق من ملف القضية…</h3><p id="executive-hypothesis">لن نعرض استنتاجًا دون مستند رسمي متطابق.</p></div><button type="button" class="btn btn-secondary" data-go="impact">راجع الفرضية وحدودها <svg class="icon"><use href="#i-arrow"/></svg></button></div>
+ </div>
+ <div class="section-row"><h3>لقطة النظام المعتمدة</h3><span class="subdued">أرقام من ملفات الإعدادات، وليست مراقبة لحظية</span></div>
+ <div class="metrics">
+  <article class="metric"><div class="metric-top"><span>خلاصات الرصد النشطة</span><svg class="icon"><use href="#i-radar"/></svg></div><div class="metric-number" id="count-feeds">—</div><div class="metric-foot"><span class="teal-dot"></span> مفعّلة بالإعدادات</div></article>
+  <article class="metric"><div class="metric-top"><span>العبارات المفتاحية</span><svg class="icon"><use href="#i-search"/></svg></div><div class="metric-number" id="count-keywords">—</div><div class="metric-foot">عبارات الرصد المعتمدة</div></article>
+  <article class="metric"><div class="metric-top"><span>المصادر قيد الدراسة</span><svg class="icon"><use href="#i-globe"/></svg></div><div class="metric-number" id="count-research">—</div><div class="metric-foot">قائمة بحثية، ليست كلها نشطة</div></article>
+  <article class="metric accent-metric"><div class="metric-top"><span>مسار دليل → قرار</span><svg class="icon"><use href="#i-shield"/></svg></div><div class="metric-number"><span id="count-demo">—</span><sup>تجربة</sup></div><div class="metric-foot">خبر تاريخي موثّق محليًا</div></article>
+ </div>
+ <div class="section-row journey-title"><h3>كيف يفكر مَآل؟</h3><span class="subdued">الدليل أولًا، ثم الاستنتاج، ثم المراجعة البشرية</span></div>
+ <div class="pipeline"><div class="stage"><span class="stage-num">01</span><svg class="icon"><use href="#i-radar"/></svg><strong>Monitor</strong><span>رصد الإشارة</span></div><span class="connector"></span><div class="stage"><span class="stage-num">02</span><svg class="icon"><use href="#i-shield"/></svg><strong>Verify</strong><span>فحص المصدر</span></div><span class="connector"></span><div class="stage"><span class="stage-num">03</span><svg class="icon"><use href="#i-chart"/></svg><strong>Assess</strong><span>تقدير الأثر</span></div><span class="connector"></span><div class="stage"><span class="stage-num">04</span><svg class="icon"><use href="#i-clipboard"/></svg><strong>Recommend</strong><span>توصية للمراجعة</span></div></div>
+
+ <div class="feature-grid">
+  <article class="feature-primary glass"><div class="card-heading"><div><p class="eyebrow">FEATURED VERIFIED SIGNAL</p><h3>إشارة تحت المجهر</h3></div><span class="badge badge-gold">حالة تاريخية موثّقة</span></div>
+    <div class="feature-content"><img src="/api/case-image" class="feature-image" alt="لقطة حقيقية من صفحة الناشر الأصلي بتاريخ 17 أكتوبر 2026"><div class="feature-text">
+     <p class="feature-source"><svg class="icon"><use href="#i-shield"/></svg><span class="case-publisher">وزارة التخطيط والتنمية الاقتصادية</span> <span class="sep">·</span> 17 أكتوبر 2026</p>
+     <h4 class="case-headline">جارٍ التحقق من عنوان البيان الرسمي…</h4>
+     <p class="case-finding">جارٍ التحقق من محتوى البيان…</p>
+     <button type="button" class="link-action" data-go="evidence">افتح ملف الإشارة والأدلة <svg class="icon"><use href="#i-arrow"/></svg></button>
+    </div></div>
+  </article>
+  <article class="feature-side glass"><div class="card-heading"><div><p class="eyebrow">DECISION READINESS</p><h3>ما الذي نستطيع قوله؟</h3></div></div>
+    <div class="side-fact"><span class="bullet bullet-green"></span><div><strong>حقيقة</strong><p>صفحة رسمية ذات تاريخ وصورة وبصمة دليل متطابقة</p></div></div>
+    <div class="side-fact"><span class="bullet bullet-gold"></span><div><strong>استنتاج مشروط</strong><p>فرصة تستحق المتابعة لشركة افتراضية ذات نشاط مرتبط</p></div></div>
+    <div class="side-fact"><span class="bullet bullet-muted"></span><div><strong>ليس قرارًا منفّذًا</strong><p>الأهلية والأثر المالي غير مثبتين، والتنفيذ غير مفعّل</p></div></div>
+    <button type="button" class="btn btn-secondary btn-wide" data-go="decisions">راجع التوصيات <svg class="icon"><use href="#i-arrow"/></svg></button>
+  </article>
+ </div>
+</section>
+
+<section id="view-monitor" class="view hidden" aria-label="الرصد والمصادر">
+ <div class="content-card"><div class="card-heading"><div><p class="eyebrow">SOURCE INTELLIGENCE</p><h3>خريطة المصادر المكوّنة</h3></div><span class="badge badge-neutral">جرد إعدادات · ليس فحص صحة مباشرًا</span></div>
+  <div class="source-tools"><label class="searchbox"><svg class="icon"><use href="#i-search"/></svg><input id="source-search" placeholder="ابحث باسم الناشر أو النطاق" autocomplete="off" aria-label="بحث في المصادر المفعّلة"></label><span id="search-count" class="source-count">—</span></div>
+  <div id="source-list" class="source-list"><div class="empty-state">جارٍ تحميل الجرد من الملف المحلي المعتمد…</div></div><div class="source-controls"><button type="button" class="btn btn-secondary" id="toggle-source-list" aria-expanded="false" hidden>عرض كل المصادر</button></div>
+  <p class="context-hint">اضغط على أي مصدر لعرض رابط RSS وقائمة النطاقات المصرّح بها. وجوده في الإعدادات لا يثبت عمله الآن.</p>
+ </div>
+</section>
+
+<section id="view-evidence" class="view hidden" aria-label="غرفة الأدلة">
+ <div class="detail-grid">
+ <article class="content-card evidence-main"><div class="card-heading"><div><p class="eyebrow">EVIDENCE VAULT · VERIFIED ORIGINAL</p><h3>الدليل قبل الاستنتاج</h3></div><span class="badge badge-teal"><svg class="icon"><use href="#i-check"/></svg> بصمة متطابقة</span></div>
+   <p class="case-headline evidence-title">جارٍ تحميل الدليل الرسمي…</p>
+   <div class="metadata-row"><span><svg class="icon"><use href="#i-clock"/></svg> 17 أكتوبر 2026 — دون ساعة منشورة</span><span><svg class="icon"><use href="#i-shield"/></svg> الناشر الرسمي</span></div>
+   <div class="evidence-image-wrap"><img id="evidence-image" src="/api/case-image" alt="صورة الناشر الرسمي التي تم التحقق من بصمتها"><span class="image-watermark">ORIGINAL PUBLISHER CAPTURE · 2026-10-17</span></div>
+   <p class="context-hint">هذه صورة مأخوذة من صفحة الناشر الأصلي، وليست صورة منشأة بالذكاء الاصطناعي. عرضها في نسخة المالك المحلية فقط.</p>
+ </article>
+ <aside class="content-card evidence-aside"><p class="eyebrow">CHAIN OF EVIDENCE</p><h3>سجل التحقق</h3><div class="verify-item"><span class="verify-symbol">✓</span><div><strong>هوية الناشر</strong><small>وزارة التخطيط — نطاق رسمي معتمد</small></div></div><div class="verify-item"><span class="verify-symbol">✓</span><div><strong>تاريخ النشر</strong><small>17 أكتوبر 2026 · دقة يوم فقط</small></div></div><div class="verify-item"><span class="verify-symbol">✓</span><div><strong>دليل الصفحة</strong><small>صورة أصلية وبصمة SHA-256</small></div></div><div class="divider-line"></div><span class="field-label">آخر تحقق موثق في السجل</span><div class="observation-time" id="observed-date">جارٍ تحميل وقت التحقق…</div><span class="field-label">البصمة الرقمية للصورة</span><code class="hash-code" id="evidence-hash">جارٍ التحقق…</code><button type="button" class="btn btn-secondary btn-wide" id="copy-hash"><svg class="icon"><use href="#i-copy"/></svg> نسخ البصمة</button><a id="case-report-link" href="/api/case-report" class="btn btn-report hidden" download="MAAL-verified-historical-case.docx"><svg class="icon"><use href="#i-file"/></svg> تنزيل تقرير Word التجريبي</a><a id="original-link" class="external-link" href="https://mped.gov.eg/singlenews?id=7269&lang=ar" rel="noopener noreferrer" target="_blank">الانتقال إلى الخبر الأصلي <svg class="icon"><use href="#i-arrow-up"/></svg></a></aside>
+ </div>
+ <div class="next-step"><span>اكتملت مراجعة المصدر — استكمل رحلة الإشارة</span><button type="button" class="btn btn-secondary" data-go="impact">الخطوة التالية: تحليل الأثر <svg class="icon"><use href="#i-arrow"/></svg></button></div>
+</section>
+
+<section id="view-impact" class="view hidden" aria-label="تحليل الأثر">
+ <div class="content-card impact-intro"><div class="card-heading"><div><p class="eyebrow">BUSINESS IMPACT INTELLIGENCE</p><h3>من الخبر إلى سؤال يهم الشركة</h3></div><span class="badge badge-gold">ملف شركة افتراضي</span></div><p id="case-context">شركة مصرية افتراضية في البنية التحتية والطاقة المتجددة.</p>
+ <div class="impact-triptych"><div><span class="mini-label">FACT / مثبت</span><h4>ماذا أعلن المصدر؟</h4><p id="case-fact">مناقشة رسمية لآلية ضمان تمويل مشروعات البنية التحتية.</p></div><div><span class="mini-label gold-text">INFERENCE / محتمل</span><h4>لماذا قد يهم النشاط؟</h4><p id="case-hypothesis">فرصة متابعة مشروطة بقرارات لاحقة وشروط أهلية واضحة.</p></div><div><span class="mini-label muted-text">UNKNOWN / غير مثبت</span><h4>ما الذي لا نعرفه؟</h4><ul id="case-unknowns" class="unknown-list"></ul></div></div>
+ </div>
+ <div class="insight-warning"><svg class="icon"><use href="#i-shield"/></svg><p><strong>فصل الحقيقة عن التقدير.</strong> لا درجة ثقة حسابية، ولا أثر مالي، ولا شروط تمويل مضمونة دون بيانات موثوقة ومراجعة بشرية.</p></div>
+ <div class="next-step"><span>انتقل من تحليل الأثر إلى مسودات القرار</span><button type="button" class="btn btn-secondary" data-go="decisions">الخطوة التالية: مراجعة التوصيات <svg class="icon"><use href="#i-arrow"/></svg></button></div>
+</section>
+
+<section id="view-decisions" class="view hidden" aria-label="مركز القرارات">
+ <div class="content-card"><div class="card-heading"><div><p class="eyebrow">HUMAN-IN-THE-LOOP DECISIONS</p><h3>توصيات قابلة للفحص، لا أوامر تلقائية</h3></div><span class="badge badge-gold">بانتظار مراجعة بشرية</span></div>
+ <div id="proposals-list" class="proposals-list"><div class="empty-state">جارٍ تحميل التوصيات من تجربة التحقق…</div></div>
+ <div class="review-workspace"><div><p class="eyebrow">EXECUTIVE REVIEW / LOCAL ONLY</p><h4>مذكرة مراجعة القرار</h4><p>اكتب ملاحظتك، ثم انسخ المذكرة متضمنة رابط الدليل وحدود الاستنتاج. <strong>المحتوى لا يُحفظ، ولا يمثل اعتمادًا أو تكليفًا.</strong></p></div>
+ <label for="review-note" class="review-label">ملاحظاتك قبل اتخاذ القرار</label><textarea id="review-note" rows="3" maxlength="1600" placeholder="مثال: نحتاج متابعة إعلان شروط التمويل رسميًا قبل دراسة الأهلية…"></textarea>
+ <div class="review-actions"><span id="review-local-note">خاص بهذه الجلسة فقط — لا يُرسل للخادم</span><button type="button" id="copy-review" class="btn btn-primary"><svg class="icon"><use href="#i-copy"/></svg> نسخ مذكرة المراجعة</button></div></div>
+ <div class="locked-action"><svg class="icon"><use href="#i-lock"/></svg><span>زر الموافقة والتنفيذ غير متاح في هذا الإصدار. لا يتم تسجيل موافقات وهمية أو إرسال تعليمات خارجية.</span></div>
+ </div>
+</section>
+
+<section id="view-operations" class="view hidden" aria-label="التشغيل والأمان">
+ <div class="ops-grid">
+  <div class="content-card"><p class="eyebrow">SYSTEM BOUNDARIES</p><h3>ماذا يعمل الآن؟</h3><div class="op-row"><strong>محرك RASD</strong><span>بنية سحابية قائمة، منفصلة عن هذه الواجهة</span></div><div class="op-row"><strong>واجهة مَآل V0.2</strong><span>معاينة محلية على E: للقراءة فقط</span></div><div class="op-row"><strong>مسار دليل → توصية</strong><span>تجربة تاريخية موثّقة، لا عميل حقيقي</span></div><div class="op-row"><strong>إرسال البريد</strong><span>غير متاح من الواجهة؛ قبول SMTP سابق لا يثبت Inbox</span></div><div class="op-row"><strong>الجدولة الاحتياطية</strong><span>توجد مشكلة قديمة مفتوحة في رؤية سجل التسليم</span></div></div>
+  <div class="content-card"><p class="eyebrow">SECURE BY DEFAULT</p><h3>الحدود الآمنة</h3><ul class="guard-list"><li>الخادم مقيد بـ 127.0.0.1 على الكمبيوتر.</li><li>لا تسجيل دخول أو بيانات عملاء في المعاينة.</li><li>لا API لكتابة بيانات أو إرسال بريد.</li><li>ملفات الدليل محفوظة داخل E وتخضع للتحقق من SHA-256.</li><li>لا تغيير للـGitHub Actions أو أسرار الإنتاج.</li></ul></div>
+ </div>
+</section>
+
+<footer class="global-foot"><div><svg class="icon"><use href="#i-shield"/></svg> معاينة صاحب المشروع فقط — لا بيانات حية ولا إجراءات إنتاجية</div><span>MA'AL V0.3 · <span id="foot-date">آخر جرد مُعتمد</span></span></footer>
+</main>
+</div>
+</div>
+<dialog id="source-dialog" class="app-dialog" aria-labelledby="source-dialog-title"><div class="dialog-head"><div><p class="eyebrow">PUBLISHER CONFIGURATION</p><h3 id="source-dialog-title">تفاصيل المصدر</h3></div><button type="button" class="dialog-close" id="source-close" aria-label="إغلاق تفاصيل المصدر">×</button></div><div id="source-dialog-content"></div><div class="dialog-actions"><button type="button" class="btn btn-secondary" id="source-done">إغلاق</button></div></dialog>
+<dialog id="command-dialog" class="app-dialog command-dialog" aria-labelledby="command-dialog-title"><div class="dialog-head"><div><p class="eyebrow">QUICK NAVIGATION</p><h3 id="command-dialog-title">إلى أين نذهب؟</h3></div><button type="button" class="dialog-close" id="command-close" aria-label="إغلاق البحث السريع">×</button></div><label class="command-search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="command-query" placeholder="ابحث عن القسم أو المهمة" aria-label="البحث عن قسم في الواجهة" autocomplete="off"></label><div id="command-results" class="command-results"></div><p class="context-hint">البحث داخل أقسام الواجهة فقط؛ لا تبحث هذه النافذة في الإنترنت أو قواعد الإنتاج.</p></dialog>
+<div class="toast" role="status" aria-live="polite" id="toast" hidden></div>
+</body></html>
