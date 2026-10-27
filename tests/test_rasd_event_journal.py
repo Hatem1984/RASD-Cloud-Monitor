@@ -79,19 +79,19 @@ class DailyEvidenceEventJournal(unittest.TestCase):
         self.assertEqual(len(day_sections(state, "2026-10-28")["late_previous_22_00"]), 2)
 
     def test_held_source_separated_and_not_report_eligible(self):
-        state = self.store(empty_journal(), candidate("h", verified=False))
+        state = self.store(empty_journal(), candidate("c", verified=False))
         view = day_sections(state, "2026-10-27")
         self.assertEqual(len(view["eligible_00_22"]), 0)
         self.assertEqual(len(view["held_not_deliverable"]), 1)
         with self.assertRaisesRegex(JournalHold, "held_event_cannot_claim"):
-            bad = candidate("x", verified=False)
-            bad["proof"] = candidate("x")["proof"]
+            bad = candidate("d", verified=False)
+            bad["proof"] = candidate("d")["proof"]
             self.store(state, bad)
 
     def test_hold_to_verified_after_original_evidence(self):
-        held = candidate("h", "2026-10-27T09:35:00+03:00", verified=False)
+        held = candidate("c", "2026-10-27T09:35:00+03:00", verified=False)
         state = self.store(empty_journal(), held)
-        state = self.store(state, candidate("h", "2026-10-27T11:01:00+03:00"))
+        state = self.store(state, candidate("c", "2026-10-27T11:01:00+03:00"))
         view = day_sections(state, "2026-10-27")
         self.assertEqual(len(view["eligible_00_22"]), 1)
         self.assertEqual(len(view["held_not_deliverable"]), 0)
@@ -149,7 +149,7 @@ class DailyEvidenceEventJournal(unittest.TestCase):
         self.assertEqual(a, b)
 
     def test_egypt_summer_and_winter_boundaries(self):
-        for day, offset in (("2026-07-05", 3), ("2026-11-05", 2)):
+        for day, offset in (("2026-07-05", 3), ("2025-11-05", 2)):
             with self.subTest(day=day):
                 instant = datetime.fromisoformat(day + "T22:00:00").replace(tzinfo=CAIRO)
                 self.assertEqual(instant.utcoffset().total_seconds(), offset * 3600)
