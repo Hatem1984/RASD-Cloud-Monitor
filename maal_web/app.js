@@ -294,6 +294,34 @@ async function getJSON(url) {
   if(!response.ok) throw new Error(url + ":" + response.status);
   return response.json();
 }
+let lastReviewRevision=null;
+function renderSnapshotReview(data){
+ const meta=data.snapshot_meta;
+ if(meta){
+  if(meta.kind!=="HISTORICAL_READONLY_QA" || meta.source_live_connected!==false ||
+     meta.no_email_sent!==true || meta.source_new_verified_news_count!==0 ||
+     typeof meta.revision!=="string")throw Error("unapproved_snapshot_review");
+  if(meta.revision===lastReviewRevision)return;
+  const d=new Date(meta.generated_utc);
+  if(!Number.isFinite(d.getTime()))throw Error("missing_generation_clock");
+  renderCustomerReport(data);
+  lastReviewRevision=meta.revision;
+  $("customer-snapshot-status").textContent=
+     "آخر تحديث لحزمة المراجعة التاريخية: "+new Intl.DateTimeFormat("ar-EG",{
+      dateStyle:"medium",timeStyle:"medium",timeZone:"Africa/Cairo"
+     }).format(d)+" · مستجدات موثّقة جديدة: صفر · آخر دليل صورة أصلية مؤكد: 17 أكتوبر. هذا ليس فحص RSS حيًا.";
+  return;
+ }
+ lastReviewRevision=null;
+ renderCustomerReport(data);
+ $("customer-snapshot-status").textContent=
+   "نسخة تقرير مؤرشفة؛ لا توجد مزامنة أخبار حية مؤكدة.";
+}
+async function pollSafeReview(){
+ try {const data=await getJSON("/product_report.json");renderSnapshotReview(data);}
+ catch{$("customer-snapshot-status").textContent=
+  "HOLD: تعذّر التحقق من حزمة المراجعة. لا يُفترض وجود أخبار جديدة.";}
+}
 async function loadData() {
   const [snapshot, caseResult] = await Promise.allSettled([
     getJSON("/api/snapshot"),getJSON("/api/case")
@@ -310,7 +338,7 @@ async function loadData() {
     try{renderCase(caseResult.value);}
     catch(err){showCaseUnavailable();}
   }else showCaseUnavailable();
-  getJSON("/product_report.json").then(renderCustomerReport).catch(()=>{
+  getJSON("/product_report.json").then(renderSnapshotReview).catch(()=>{
     $("customer-summary").textContent="هذا التقرير قيد المراجعة: تعذر تحميل نسخة بيانات مؤرخة ومطابقة للعقد.";
     $("customer-report-period").textContent="HOLD — لا توجد نسخة تقرير مؤكدة للعرض الآن.";
     $("customer-report-coverage").textContent="لا يتم إنشاء بدائل تخمينية عند غياب المصدر.";
@@ -499,5 +527,7 @@ function init() {
   navigate(Object.hasOwn(VIEWS,target)?target:"overview",false);
   window.addEventListener("hashchange",()=>navigate(location.hash.slice(1),false));
   loadData();
+  // Existing historical-review UI only: refresh snapshot metadata without build/reload.
+  setInterval(pollSafeReview,12000);
 }
 document.addEventListener("DOMContentLoaded",init);

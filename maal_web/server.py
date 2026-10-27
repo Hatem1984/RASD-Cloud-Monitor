@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sys
 import io
@@ -59,6 +60,26 @@ STATIC = {
     "/brand-symbol.png": (BRAND / "logo_mono_ivory_transparent.png", "image/png"),
     "/brand-logo.png": (BRAND / "logo_primary_reference.png", "image/png"),
 }
+
+STAGED_REVIEW = PROJECT / "04_HISTORICAL_QA" / "MAAL_UNIFIED_SNAPSHOT_REVIEW_20261027" / "current.json"
+
+def get_safe_staging_report() -> dict:
+    """QA-only file reads; never trust caller paths or call RASD production."""
+    original = json.loads((HERE / "product_report.json").read_text("utf8"))
+    candidate = json.loads(STAGED_REVIEW.read_text("utf8"))
+    meta = candidate.pop("snapshot_meta", None)
+    if not isinstance(meta, dict) or meta.get("kind") != "HISTORICAL_READONLY_QA":
+        raise ValueError("invalid_snapshot_kind")
+    if candidate != original:
+        raise ValueError("snapshot_source_changed_without_approved_evidence")
+    if (meta.get("source_new_verified_news_count") != 0 or
+            meta.get("source_live_connected") is not False or
+            meta.get("no_email_sent") is not True):
+        raise ValueError("unverified_freshness_claim")
+    if meta.get("original_gate_e_sha256") != get_case()["evidence_digest"]:
+        raise ValueError("gate_e_original_sha256_mismatch")
+    candidate["snapshot_meta"] = meta
+    return candidate
 
 def get_snapshot() -> dict:
     """Snapshot not live coverage; never claim feeds are healthy."""
@@ -253,6 +274,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/operator/state":
                 try:return self._json_response(200,gateway().dashboard(self._cookie()))
                 except PermissionError:return self._json_response(401,{"error":"login_required"})
+            if path == "/product_report.json" and os.environ.get("MAAL_HISTORICAL_SNAPSHOT_REVIEW") == "true":
+                return self._json_response(200,get_safe_staging_report())
             if path == "/api/snapshot":
                 return self.reply(200, "application/json; charset=utf-8",
                                   json.dumps(get_snapshot(), ensure_ascii=False).encode("utf-8"))
