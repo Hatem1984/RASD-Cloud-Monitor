@@ -1,0 +1,41 @@
+name: MAAL Historical Bundle Integrity - Synthetic Only
+on:
+  pull_request:
+    branches:
+      - feat/maal-unified-staging-snapshot-20261027
+    paths:
+      - 'maal/report_bundle_guard.py'
+      - 'maal_web/server.py'
+      - 'tests/test_maal_report_bundle_integrity.py'
+      - '.github/workflows/maal-report-bundle-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrity-synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Synthetic snapshot ↔ Word/PDF digest contracts (no owner files)
+        run: python -m unittest tests.test_maal_report_bundle_integrity -v
+      - name: Source syntax only
+        run: python -c "import ast,pathlib; [ast.parse(pathlib.Path(p).read_text(encoding='utf8')) for p in ['maal/report_bundle_guard.py', 'maal_web/server.py']]; print('syntax checked')"
+      - name: Refuse owner originals and model binary files in public repository
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+          for path in subprocess.check_output(["git","ls-files"], text=True).splitlines():
+              if path.startswith(("02_PRIVATE_OWNER/","04_HISTORICAL_QA/")):
+                  raise SystemExit("PRIVATE_OWNER_PATH_COMMITTED: "+path)
+              if path.startswith("maal_web/") and Path(path).suffix.lower() in {".docx",".pdf",".sqlite",".gguf",".jpg",".jpeg",".env",".key",".pem"}:
+                  raise SystemExit("PRIVATE_ARTIFACT_COMMITTED: "+path)
+          print("public code only; protected document and screenshot bytes absent")
