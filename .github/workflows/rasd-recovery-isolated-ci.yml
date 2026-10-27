@@ -1,0 +1,32 @@
+name: RASD recovery — isolated synthetic full-day QA (no credentials)
+
+on:
+  push:
+    branches:
+      - feat/rasd-recovery-isolated-20261027
+  pull_request:
+    branches:
+      - feat/rasd-smart-incremental-daily-safe-20261027
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-recovery-isolated-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synthetic-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Full repository regressions including recovered worker and Cairo journal
+        run: python -m unittest discover -s tests -q
+      - name: No-network scheduler preview only
+        run: python scheduled_rasd.py --mode dry_run
