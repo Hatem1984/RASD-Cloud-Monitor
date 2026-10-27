@@ -88,9 +88,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const info=document.createElement("span");info.className="operator-draft-info";
     const title=document.createElement("strong");title.textContent=item.description;
     const meta=document.createElement("small");
-    meta.textContent="الحالة: "+item.state+" · دليل: "+item.evidence_id+(item.approved_by?" · المعتمد: "+item.approved_by:"");
+    meta.textContent="معرّف المسودة: "+item.draft_id+" · الحالة: "+item.state+" · دليل: "+item.evidence_id+(item.approved_by?" · المعتمد: "+item.approved_by:"");
     info.append(title,meta);btn.append(info);
-    btn.addEventListener("click",()=>{app.selected=item.draft_id;renderDrafts();});
+    btn.addEventListener("click",()=>{app.selected=item.draft_id;renderDrafts();feedback("المسودة المختارة: "+item.draft_id+" · الحالة: "+item.state,false);});
     root.append(btn);
   });
   const chosen=app.rows.find(r=>r.draft_id===app.selected);
