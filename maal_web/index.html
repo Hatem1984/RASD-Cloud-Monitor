@@ -159,7 +159,14 @@
  <h3>مختبر الاعتماد البشري والمهمة الداخلية</h3>
  <p>معزول على هذا الكمبيوتر وعلى قرص E. لا تُرسل أي مهام خارجية أو بريد، ولا تُسجل موافقات إنتاج.</p></div>
  <span class="badge badge-gold">بيئة اختبار فقط</span></div>
- <form id="operator-login" class="operator-form">
+ <section id="operator-guest-demo" class="content-card" aria-label="عرض نتائج مَآل بدون كلمة مرور">
+  <p class="eyebrow">LOCAL DEMO · READ ONLY · NO PASSWORD</p>
+  <h4>عرض النتائج الفعلية دون تسجيل دخول</h4>
+  <p>وضع عرض تجريبي محلي على هذا الكمبيوتر: مشاهدة الدليل، تشغيل Qwen3 المُسجل، والتوصية وحالة المهمة. لا يمنح موافقة أو صلاحية تنفيذ.</p>
+  <div id="operator-guest-summary" role="status" aria-live="polite">جارٍ تحميل نتائج الاختبار الفعلية…</div>
+  <button id="operator-show-login" type="button" class="btn btn-secondary">الدخول المحمي للاعتماد لاحقًا</button>
+ </section>
+ <form id="operator-login" class="operator-form" hidden>
  <label>مستخدم الاختبار<input id="operator-username" autocomplete="username" required placeholder="حساب اختبار مالك"></label>
  <label>كلمة مرور الاختبار<input id="operator-password" type="password" autocomplete="current-password" required></label>
  <button type="submit" class="btn btn-secondary">تسجيل الدخول الآمن</button></form>

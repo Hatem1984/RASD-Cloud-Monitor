@@ -5,20 +5,63 @@ document.addEventListener("DOMContentLoaded", () => {
  const by=id=>document.getElementById(id);
  const app={csrf:"", selected:null,rows:[],actor:null,busy:false};
  const feedback=(message,ok=false)=>{let el=by("operator-feedback");el.textContent=message;el.dataset.ok=String(ok);};
+ async function loadGuestPreview(){
+   const root=by("operator-guest-summary");root.replaceChildren();
+   try{
+     const r=await fetch("/api/demo/preview",{cache:"no-store",credentials:"omit"});
+     let data;
+     if(r.ok) data=await r.json();
+     else if(r.status===404){
+       // Existing already-open server may have the new static frontend but not
+       // the preview API until its next controlled restart.
+       const [caseR,modelR]=await Promise.all([
+         fetch("/api/case",{cache:"no-store"}),
+         fetch("/api/ai-analysis",{cache:"no-store"})]);
+       if(!caseR.ok||!modelR.ok)throw new Error("البيانات الموثقة غير متاحة");
+       const source=await caseR.json(),model=await modelR.json();
+       data={mode:"LOCAL_GUEST_READ_ONLY",authenticated:false,
+         can_approve:false,can_execute:false,
+         publisher:source.publisher,source_day:source.published_day,
+         model_run_id:model.run_id,model_seconds:model.inference_seconds,
+         recommendation_unapproved:model.recommendation,
+         drafts:[],audit_events:"غير معروض في الإصدار الحالي",
+         audit_integrity:"يتطلب تحديث الخادم"};
+     }else throw new Error("HTTP "+r.status);
+     if(data.mode!=="LOCAL_GUEST_READ_ONLY"||data.authenticated||data.can_execute||data.can_approve)throw new Error("unsupported_demo_security_mode");
+     const field=(label,value)=>{
+       const row=document.createElement("p");row.className="context-hint";
+       const title=document.createElement("strong");title.textContent=label+" ";
+       const val=document.createElement("span");val.textContent=String(value);
+       row.append(title,val);root.append(row);
+     };
+     field("المصدر الموثق:",data.publisher+" · "+data.source_day+" (خبر تاريخي)");
+     field("معرف تشغيل Qwen3 الحقيقي:",data.model_run_id);
+     field("مدة تشغيل النموذج:",data.model_seconds+" ثانية · نتيجة محفوظة وليست تشغيلًا حيًا الآن");
+     field("التوصية غير المعتمدة:",data.recommendation_unapproved);
+     for(const item of data.drafts){
+       field("المسودة "+item.draft_id+":",item.state+" — "+item.description);
+     }
+     field("سجل التدقيق:",data.audit_events+" حدث · "+data.audit_integrity);
+     field("حدود الصلاحيات:","عرض فقط؛ لا موافقات ولا تنفيذ ولا إرسال بريد.");
+   }catch(err){
+     const p=document.createElement("p");p.textContent="تعذر فتح العرض التجريبي: "+err.message;root.append(p);
+   }
+ }
+
  async function getState(){
   try{
    const r=await fetch("/api/operator/state",{cache:"no-store",credentials:"same-origin"});
    if(!r.ok){loggedOut();return;}
    const data=await r.json();
    app.csrf=data.csrf;app.actor=data.operator;app.rows=data.drafts;
-   by("operator-login").hidden=true;by("operator-authenticated").hidden=false;
+   by("operator-login").hidden=true;by("operator-guest-demo").hidden=true;by("operator-authenticated").hidden=false;
    by("operator-whoami").textContent="مستخدم: "+data.operator+" · بيئة: "+data.tenant+" · "+data.role;
    renderDrafts();renderAudit(data.audit,data.audit_integrity);
   }catch(e){feedback("تعذّر الاتصال بمخزن المهام التجريبي.");}
  }
  function loggedOut(){
    app.csrf="";app.actor=null;app.selected=null;app.rows=[];
-   by("operator-login").hidden=false;by("operator-authenticated").hidden=true;
+   by("operator-login").hidden=true;by("operator-guest-demo").hidden=false;by("operator-authenticated").hidden=true;
    by("operator-password").value="";by("operator-stepup").value="";
  }
  async function post(path,data){
@@ -68,6 +111,10 @@ document.addEventListener("DOMContentLoaded", () => {
     row.append(event,meta);root.append(row);
   });
  }
+ by("operator-show-login").addEventListener("click",()=>{
+   by("operator-login").hidden=false;
+   by("operator-username").focus();
+ });
  by("operator-login").addEventListener("submit",async e=>{
   e.preventDefault();
   try {
@@ -117,5 +164,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }catch(e){feedback(e.message);}
  });
  loggedOut();
+ loadGuestPreview();
  getState();
 });
