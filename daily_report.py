@@ -244,7 +244,12 @@ def _word_hyperlink(paragraph, url, label="فتح الخبر في موقع ال�
     paragraph._p.append(link)
 
 
-def render_docx(report: dict, destination: Path) -> None:
+def render_docx(report: dict, destination: Path, *, editorial_mode: str = "legacy") -> None:
+    """Default legacy report stays untouched; qa_only enables a safer editorial trial."""
+    if editorial_mode not in ("legacy","qa_only"):
+        raise ValueError("editorial_mode_not_approved")
+    if editorial_mode == "qa_only" and not report.get("editorial_archive_only"):
+        raise ValueError("qa_editorial_requires_explicit_archive_flag")
     from docx import Document
     from docx.shared import Inches, Pt, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -290,12 +295,23 @@ def render_docx(report: dict, destination: Path) -> None:
     else:
         count_label = "روابط RSS التي أمكن فحصها"
         article_label = "أخبار مصورة مستوفية"
-    p.add_run(
-        "الحالة: " + COVERAGE_LABELS.get(coverage, coverage) +
-        " | " + count_label + ": " + str(report["verified_links"]) +
-        " | " + article_label + ": " + str(len(report["articles"]))
-    )
+    if editorial_mode=="qa_only":
+        p.add_run("الحالة: عينة أرشيفية للمقارنة وليست تقريرًا مرسلاً أو رصدًا حيًا"
+                  " | مواد خضعت للتحليل التحريري: "+str(len(report["articles"])))
+    else:
+        p.add_run(
+            "الحالة: " + COVERAGE_LABELS.get(coverage, coverage) +
+            " | " + count_label + ": " + str(report["verified_links"]) +
+            " | " + article_label + ": " + str(len(report["articles"]))
+        )
 
+    if editorial_mode == "qa_only":
+        notice = doc.add_paragraph()
+        _rtl(notice)
+        notice.add_run(
+            "مراجعة جودة معزولة من أرشيف تاريخي — لا تمثل رصدًا حيًا أو "
+            "تحققًا جديدًا من صفحات الناشرين، ولا تُرسل عبر البريد."
+        ).bold = True
     if report.get("preview_only"):
         notice = doc.add_paragraph()
         _rtl(notice)
@@ -355,11 +371,43 @@ def render_docx(report: dict, destination: Path) -> None:
                 _rtl(summary)
                 summary.add_run("ملخص كما أورده الناشر في موجز RSS: ").bold = True
                 summary.add_run(article["publisher_excerpt"])
-            note = doc.add_paragraph()
-            _rtl(note)
-            note.add_run("تحليل تحريري مرتبط بموضوع الخبر: ").bold = True
-            note.add_run(editorial_caution(
-                article["headline"], article.get("publisher_excerpt", "")))
+            if editorial_mode == "qa_only":
+                from editorial_quality import EditorialHold, build_editorial_brief
+                try:
+                    brief = build_editorial_brief(
+                        headline=article["headline"],
+                        publisher_excerpt=article.get("publisher_excerpt", ""),
+                        original_url=article["url"],
+                        publisher=SOURCE_LABELS.get(article["source"],article["source"]),
+                        published_day=article["published_at_cairo"][:10],
+                        proof_status="LOCAL_ARCHIVE_QA",
+                        approved_hosts=set(report["editorial_allowed_hosts"]))
+                    fields = [
+                        ("الحقيقة المثبتة في العنوان:",brief["source_fact"]),
+                        ("أهم الأرقام المنشورة:",
+                          "؛ ".join(x["exact_source_span"]+" — "+x["interpretation"]
+                                     for x in brief["figures_from_exact_source_spans"])
+                          or "لا يتضمن العنوان أو المقتطف أرقامًا محددة قابلة للاقتباس."),
+                        ("لماذا يهم الشركات؟",brief["potential_business_relevance"]),
+                        ("خطوة عملية مشروطة:",brief["conditional_next_action"]),
+                        ("ما الذي لم يُثبت؟",brief["what_is_not_established"])
+                    ]
+                    for label, text in fields:
+                        row = doc.add_paragraph()
+                        _rtl(row)
+                        row.add_run(label+" ").bold=True
+                        row.add_run(text)
+                except EditorialHold as error:
+                    row=doc.add_paragraph()
+                    _rtl(row)
+                    row.add_run("HOLD — التحليل التحريري غير قابل للاعتماد: ").bold=True
+                    row.add_run(str(error))
+            else:
+                note = doc.add_paragraph()
+                _rtl(note)
+                note.add_run("تحليل تحريري مرتبط بموضوع الخبر: ").bold = True
+                note.add_run(editorial_caution(
+                    article["headline"], article.get("publisher_excerpt", "")))
             if article.get("evidence_image_path"):
                 evidence_note = doc.add_paragraph()
                 _rtl(evidence_note)
@@ -439,7 +487,7 @@ def render_docx(report: dict, destination: Path) -> None:
         # isolating a fragment or changing meaning for aesthetics.
         doc.paragraphs[-1].paragraph_format.keep_together = True
     doc.core_properties.title = report["title"]
-    doc.core_properties.author = "RASD"
+    doc.core_properties.author = "MA\u0027AL | مَآل" if editorial_mode=="qa_only" else "RASD"
     destination.parent.mkdir(parents=True, exist_ok=True)
     doc.save(destination)
 

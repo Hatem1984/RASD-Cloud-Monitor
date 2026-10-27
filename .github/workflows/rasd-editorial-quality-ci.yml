@@ -1,0 +1,45 @@
+name: RASD Editorial Quality - Isolated CI
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'editorial_quality.py'
+      - 'editorial_quality_qa_runner.py'
+      - 'daily_report.py'
+      - 'tests/test_editorial_quality*.py'
+      - '.github/workflows/rasd-editorial-quality-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-editorial-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install standard offline QA libraries
+        run: python -m pip install -r requirements-test.txt
+      - name: Run source-bound editorial and Word safety unit tests
+        run: python -m unittest tests.test_editorial_quality tests.test_editorial_quality_renderer -v
+      - name: Check Python syntax
+        run: python -m py_compile editorial_quality.py editorial_quality_qa_runner.py daily_report.py
+      - name: Guard against owner-private model, mail, evidence and credential assets
+        shell: python
+        run: |
+          import subprocess,pathlib
+          files=subprocess.check_output(["git","ls-files"],text=True).splitlines()
+          new_files={"editorial_quality.py","editorial_quality_qa_runner.py",
+                     "tests/test_editorial_quality.py",
+                     "tests/test_editorial_quality_renderer.py"}
+          assert new_files.issubset(files)
+          sensitive={".env",".key",".pem",".p12",".pfx",".gguf",".sqlite",".db",".jpg",".jpeg",".png",".docx"}
+          for file in new_files:
+              p=pathlib.PurePosixPath(file)
+              if p.suffix.lower() in sensitive or "private" in file.lower():
+                  raise SystemExit("private_asset_in_editorial_change")
+          print("isolated_source_only_artifact_check_pass")
