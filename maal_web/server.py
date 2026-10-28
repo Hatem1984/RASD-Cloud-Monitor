@@ -344,6 +344,40 @@ class Handler(BaseHTTPRequestHandler):
                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
                 return self.reply(200,mime,bundle[kind],
                     filename="MAAL-Source-Linked-Qwen-Review."+kind)
+            if path == "/api/new-signals":
+                from maal.competition_new_source import verified_cases
+                from maal.competition_new_reasoning import verified_runs, COMPANY
+                captured=verified_cases()
+                runs=verified_runs()
+                entries=[]
+                for item in captured:
+                    selected=next((r for r in runs if r["evidence_id"]==item["evidence_id"]),None)
+                    entries.append({
+                        "case":{
+                            k:item[k] for k in ("evidence_id","publisher","headline",
+                                "original_url","published_day","date_precision",
+                                "observed_at","verification_status","evidence_digest",
+                                "evidence_image_url","sector_angle","proof_method")
+                        },
+                        "ai":None if not selected else {
+                            k:selected[k] for k in ("run_id","status","model",
+                                "elapsed_seconds","token_usage","analysis","error",
+                                "recorded_at","evidence_id")
+                        }
+                    })
+                return self._json_response(200,{
+                    "schema":"MAAL_NEW_OFFICIAL_SIGNALS_V1",
+                    "scope":"OWNER_LOCAL_OFFICIAL_SOURCE_CAPTURE",
+                    "live_schedule":False,"company":COMPANY,
+                    "items":entries,"approval_requires_human":True})
+            if path.startswith("/api/new-signal/image/"):
+                from maal.competition_new_source import ROOT,get_case_from_capture
+                import re
+                ident=path.rsplit("/",1)[-1]
+                if not re.fullmatch(r"[0-9a-f]{24}",ident):
+                    return self._json_response(404,{"error":"invalid_source_id"})
+                record=get_case_from_capture(ROOT/ident)
+                return self.reply(200,"image/jpeg",(ROOT/ident/"publisher-page.jpeg").read_bytes())
             if path == "/api/ai-analysis":
                 return self._json_response(200,get_local_ai_run())
             if path == "/api/evidence":
@@ -434,15 +468,37 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json_response(200,{"run":result,"analysis":get_local_ai_run()})
             if path=="/api/operator/draft":
                 linked_run=body.get("model_run_id")
-                if linked_run is not None:
+                fresh_evidence=body.get("new_evidence_id")
+                evidence=self._evidence_for_draft()
+                if fresh_evidence is not None:
+                    from maal.competition_new_source import ROOT,get_case_from_capture
+                    from maal.competition_new_reasoning import verified_runs
+                    import re
+                    if (not isinstance(fresh_evidence,str) or
+                            not re.fullmatch(r"[0-9a-f]{24}",fresh_evidence)):
+                        raise ValueError("new_evidence_invalid")
+                    case=get_case_from_capture(ROOT/fresh_evidence)
+                    run=next((r for r in verified_runs() if r["evidence_id"]==fresh_evidence
+                              and r["run_id"]==linked_run
+                              and r["status"]=="EVIDENCE_GROUNDED_GENERATIVE_DRAFT"),None)
+                    if not run or body.get("description")!=run["analysis"]["recommendation"]:
+                        raise ValueError("source_model_recommendation_unverified")
+                    evidence=Evidence(case["evidence_id"],case["publisher"],
+                        case["original_url"],case["headline"],
+                        date.fromisoformat(case["published_day"]) if case["published_day"]
+                           else datetime.fromisoformat(case["observed_at"]).date(),
+                        datetime.fromisoformat(case["observed_at"]),
+                        case["evidence_digest"],case["verification_status"])
+                elif linked_run is not None:
                     live_result=get_local_ai_run()
                     if (linked_run!=live_result["run_id"] or
                         body.get("description")!=live_result["recommendation"]):
                         raise ValueError("model_run_and_recommendation_mismatch")
-                result=gate.create(token,csrf,self._evidence_for_draft(),
+                result=gate.create(token,csrf,evidence,
                                    body.get("description",""),body.get("idempotency_key",""),
                                    model_run_id=linked_run)
-                return self._json_response(200,{"draft_id":result,"state":"DRAFT","source_model_run_id":linked_run})
+                return self._json_response(200,{"draft_id":result,"state":"DRAFT",
+                  "evidence_id":evidence.evidence_id,"source_model_run_id":linked_run})
             if path=="/api/operator/approve":
                 result=gate.approve(token,csrf,body.get("draft_id",""),
                                     body.get("stepup_password",""))
