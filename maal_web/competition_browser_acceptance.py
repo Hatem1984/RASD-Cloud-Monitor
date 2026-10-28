@@ -32,6 +32,13 @@ def main():
         assert result["approval"]["authenticated"] is False
         assert result["approval"]["drafts"]==[]
         assert result["operations"]["external_actions"] is False
+        assert result["report"]["ai_run_bound_word_pdf_available"] is True
+        assert page.locator("#agent-report-word").is_visible()
+        assert page.locator("#agent-report-pdf").is_visible()
+        for kind in ("docx","pdf"):
+            asset=page.request.get(ROOT+"api/agent-report."+kind,timeout=15000)
+            assert asset.status==200
+            assert len(asset.body())>5000
         page.screenshot(path=str(OUTPUT/"competition-overview-desktop.png"),full_page=True)
         # Only navigate to the existing owner gate; never approve as the owner.
         page.locator("#agent-journey-review").click()
