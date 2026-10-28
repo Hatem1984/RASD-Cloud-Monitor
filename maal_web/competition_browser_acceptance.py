@@ -21,7 +21,7 @@ def main():
             record_video_dir=str(OUTPUT/"partial_readonly_video"))
         page=context.new_page()
         page.on("pageerror",lambda e:console_errors.append(str(e)))
-        response=page.goto(ROOT,wait_until="networkidle",timeout=20000)
+        response=page.goto(ROOT,wait_until="domcontentloaded",timeout=20000)
         assert response.status==200
         page.wait_for_function(
             "document.querySelectorAll('#agent-journey-steps .customer-answer').length===6",
@@ -42,7 +42,7 @@ def main():
                                   device_scale_factor=1,is_mobile=True,
                                   has_touch=True)
         mp=mobile.new_page()
-        mp.goto(ROOT,wait_until="networkidle",timeout=20000)
+        mp.goto(ROOT,wait_until="domcontentloaded",timeout=20000)
         mp.wait_for_function(
             "document.querySelectorAll('#agent-journey-steps .customer-answer').length===6",
             timeout=12000)
