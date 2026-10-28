@@ -27,8 +27,20 @@ def account():
     if current:entries.append(current)
     valid=[r for r in entries if r.get("role","").upper()=="OWNER"
            and r.get("login") and r.get("password")]
-    if len(valid)!=1:raise RuntimeError("owner_test_credentials_ambiguous")
-    return valid[0]["login"],valid[0]["password"]
+    # The private fixture contains more than one OWNER test tenant. Select
+    # only the principal who already owns the existing Gate H draft.
+    import sqlite3
+    db=sqlite3.connect(
+        "file:E:/MAAL/04_HISTORICAL_QA/MAAL_GATE_H_E2E_20261027/operator.sqlite?mode=ro",
+        uri=True)
+    try:
+        actual=db.execute(
+            "SELECT login FROM demo_task_owners WHERE draft_id=?",
+            ("425b5640-c656-4838-98dc-f2ee477f74da",)).fetchone()
+    finally: db.close()
+    selected=[r for r in valid if actual and r["login"]==actual[0]]
+    if len(selected)!=1:raise RuntimeError("owner_for_original_draft_not_found")
+    return selected[0]["login"],selected[0]["password"]
 
 def wait_page(page):
     page.goto(ROOT,wait_until="domcontentloaded",timeout=15000)
