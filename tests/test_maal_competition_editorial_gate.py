@@ -42,6 +42,9 @@ class GateTests(unittest.TestCase):
                 ('old_fpt_draft','DRAFT_CREATED','{"source_model_run_id":"maal-open-deadbeef","evidence_sha256":"hash_old"}',1),
                 ('new_good_draft','DRAFT_CREATED','{"source_model_run_id":"maal-paired-12345678901234567890123456789012","evidence_sha256":"hash_verified"}',2);
             """)
+        # sqlite3 connection context managers commit but don't close handles
+        # on Windows; close explicitly before TemporaryDirectory cleanup.
+        db.close()
         self.gateway=FakeGate(FakeStore(self.path))
         self.actor={"tenant":"isolated_owner","login":"test_owner"}
 
