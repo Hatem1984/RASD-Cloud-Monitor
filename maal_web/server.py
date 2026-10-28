@@ -58,6 +58,7 @@ STATIC = {
     "/new-signals.js": (HERE / "new-signals.js", "text/javascript; charset=utf-8"),
     "/business-value-study.js": (HERE / "business-value-study.js", "text/javascript; charset=utf-8"),
     "/paired-benchmark.js": (HERE / "paired-benchmark.js", "text/javascript; charset=utf-8"),
+    "/two-stage-results.js": (HERE / "two-stage-results.js", "text/javascript; charset=utf-8"),
     "/product_report.json": (HERE / "product_report.json", "application/json; charset=utf-8"),
     # Explicitly named local owner-review files, not a dynamic user-provided path.
     "/reports/MAAL_Business_Intelligence_Round2_2026-10-27.pdf":
@@ -387,6 +388,11 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("demo_integrity_hold")
                 return self.reply(200,"video/webm",binary,
                       filename="MAAL_Real_Source_Qwen_to_Human_Review_ONLY.webm")
+            if path == "/api/two-stage-results":
+                # Only independently validated local Qwen receipts. No owner
+                # signing, task creation, external action or live-run claims.
+                from maal.competition_two_stage_public import read_results
+                return self._json_response(200,read_results())
             if path == "/api/model-comparison":
                 # Source-backed LOCAL benchmark receipts; no unsupervised
                 # approval or claim that heuristic scores are editorial facts.
