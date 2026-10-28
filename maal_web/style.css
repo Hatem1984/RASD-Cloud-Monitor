@@ -248,3 +248,50 @@ body { font-size: var(--type-body); }
 .customer-downloads{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
 .customer-downloads .btn{text-decoration:none}
 @media(max-width:700px){.report-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}.report-filters label{min-width:0}.customer-downloads .btn{flex:1}}
+
+
+/* MA'AL competition UX — one visible owner entry in the topbar. */
+.account-toolbar{display:flex;align-items:center;gap:8px;min-width:0}
+.account-entry{display:inline-flex;align-items:center;justify-content:center;gap:9px;max-width:270px;min-height:44px;border-radius:12px;border:1px solid #45C9BF;background:linear-gradient(115deg,#20C6B8,#8CE6D9);color:#062B37;padding:9px 17px;font-weight:800;font-size:13px;box-shadow:0 4px 18px #0BD9BB22;transition:transform .15s,background .15s}
+.account-entry:hover{background:#A3EEE2;transform:translateY(-1px)}
+.account-entry .icon{height:17px;width:17px}
+.account-entry span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-entry.signed-in{background:#143E4A;color:#ECF8F5;border-color:#3E948E}
+.header-logout{min-height:44px;background:transparent;border:1px solid #4C6876;border-radius:11px;padding:9px 12px;color:#D4E6E9;font-size:12px;font-weight:700}
+.header-logout:hover{background:#193D50;color:#fff}
+.login-dialog{width:min(450px,calc(100% - 24px));background:linear-gradient(155deg,#123849,#071D2B);border-color:#3A777C;padding:29px}
+.login-dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.login-mark{display:grid;place-items:center;width:52px;height:52px;color:#0C4B54;background:linear-gradient(135deg,#A9EDE1,#39CABC);border-radius:15px}
+.login-mark .icon{width:26px;height:26px}
+.login-dialog .eyebrow{margin:18px 0 2px;font-size:11px}
+.login-dialog h2{margin:0;color:#F7F5EF;font-size:29px;line-height:1.5}
+.login-dialog-summary{font-size:14px;line-height:1.85;color:#C9DCE0;margin:5px 0 20px}
+.login-dialog .operator-form{display:grid;grid-template-columns:minmax(0,1fr);gap:15px;margin:0 0 14px}
+.login-dialog .operator-form label:not(.login-show-password){font-size:14px;color:#EAF5F2;font-weight:700}
+.login-dialog .operator-form input{width:100%;margin-top:7px;border:1px solid #5C8290;border-radius:11px;background:#061E2E;min-height:50px;padding:11px 14px;color:#F7F5EF;direction:rtl}
+.login-dialog .operator-form input:focus{outline:2px solid #4DDAC9;outline-offset:2px}
+.login-dialog .operator-form input::placeholder{color:#93AAB6}
+.login-dialog .operator-form>.btn{width:100%;grid-column:auto;min-height:52px;font-size:15px;border-radius:11px;margin-top:2px}
+.login-show-password{display:flex!important;align-items:center!important;gap:9px!important;color:#C3DBE0!important;font-size:13px!important;font-weight:500!important;cursor:pointer}
+.login-show-password input[type=checkbox]{margin:0!important;width:18px!important;height:18px!important;min-height:18px!important;accent-color:var(--teal)}
+.login-dialog-note{color:#9FBDC6;font-size:12px;line-height:1.85;margin:14px 0 0}
+.login-feedback{border-radius:9px;padding:11px 13px;background:#173B48;color:#A4E9DF;border:1px solid #4C887F;font-size:13px;line-height:1.7}
+.login-feedback[data-error=true]{background:#422B2B;border-color:#AC6E64;color:#FFE0CB}
+.login-dialog button:disabled{opacity:.6}
+@media(max-width:760px){
+ .topbar-side{gap:9px}
+ .topbar .top-tag{display:none}
+ .account-entry{min-height:42px;padding:7px 12px}
+ .header-logout{min-height:42px;padding:7px 10px}
+}
+@media(max-width:460px){
+ .topbar{min-height:62px;height:auto;padding:8px 13px}
+ .topbar-side{gap:7px;min-width:0}
+ .crumbs{max-width:92px;overflow:hidden}
+ .crumbs strong{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .account-entry{max-width:172px;padding:8px 11px;font-size:12px}
+ .account-entry .icon{width:15px;height:15px}
+ .header-logout{font-size:11px;padding:8px}
+ .login-dialog{padding:22px 19px;border-radius:18px}
+ .login-dialog h2{font-size:25px}
+}
