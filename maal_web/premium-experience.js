@@ -82,19 +82,20 @@ document.addEventListener("DOMContentLoaded",()=>{
  const dec=document.createElement("section");dec.className="premium-decision-summary";
  dec.innerHTML='<h3>مركز قرارات المالك</h3><p id="premium-decision-message" role="status">سجّل الدخول لعرض مسوداتك.</p><span class="premium-pill" data-tone="historical">اقتراح AI ≠ موافقة بشرية</span>';
  decision.prepend(dec);
- const lab=document.getElementById("operator-lab");
+ const lab=document.getElementById("advanced-operator-review");
  if(lab){
   const drawer=document.createElement("details");drawer.className="premium-owner-console";
   drawer.id="premium-owner-console";
   const opener=document.createElement("summary");
   opener.textContent="افتح مسوداتك والمراجعة والموافقة المحمية";
   drawer.append(opener);
-  lab.before(drawer);drawer.append(lab);
+  lab.before(drawer);drawer.append(lab);lab.open=true;
   document.getElementById("account-entry")?.addEventListener("click",()=>{
    if(!document.getElementById("header-logout")?.hidden)drawer.open=true;
   });
   document.getElementById("agent-journey-review")?.addEventListener("click",()=>{drawer.open=true});
   document.getElementById("new-signal-draft")?.addEventListener("click",()=>{drawer.open=true});
+  window.addEventListener("maal:benchmark-review-selected",()=>{drawer.open=true});
  }
  const activity=document.createElement("section");activity.className="premium-timeline";
  activity.innerHTML='<h3>المهام وسجل القرارات</h3><div id="premium-audit-events" role="status">سجّل الدخول لعرض السجل الخاص بحسابك.</div>';
