@@ -228,6 +228,61 @@ def run_new_case(evidence_id:str)->dict:
             json.dump(raw,f,ensure_ascii=False,indent=2);f.flush();os.fsync(f.fileno())
     return receipt
 
+def revalidate_saved_run(run_id:str)->dict:
+    """Re-check a genuine saved raw inference after reviewer tightens rules.
+
+    No model invocation, no alteration of original model receipt or response.
+    Sidecar records raw hash and earlier rejection for honest provenance.
+    """
+    if not re.fullmatch(r"maal-open-[0-9a-f]{32}",run_id):
+        raise ValueError("untrusted_saved_model_id")
+    folder=RUN_ROOT/run_id
+    original=json.loads((folder/"receipt.json").read_text("utf8"))
+    if (original["run_id"]!=run_id or
+            original["status"]!="AI_EVALUATION_HOLD" or
+            original["error"]!="new_ai_company_subject_confusion_hold"):
+        raise ValueError("source_run_not_eligible_for_safe_revalidation")
+    raw=(folder/"raw_model_output.json").read_bytes()
+    response=json.loads(raw)
+    parsed=json.loads(response["choices"][0]["message"]["content"])
+    case=get_case_from_capture(ROOT/original["evidence_id"])
+    validated(case,parsed)
+    approval={
+        "schema":"MAAL_VALIDATION_REVISION_V1",
+        "method":"REVALIDATE_SAVED_REAL_INFERENCE_NO_NEW_TOKENS",
+        "original_run_id":run_id,
+        "source_page_sha256":case["evidence_digest"],
+        "raw_model_response_sha256":sha256(raw).hexdigest(),
+        "raw_analysis_sha256":sha256(json.dumps(parsed,ensure_ascii=False,sort_keys=True).encode("utf8")).hexdigest(),
+        "previous_error":original["error"],
+        "accepted_result":"EVIDENCE_GROUNDED_GENERATIVE_DRAFT",
+        "human_editorial_approval":False,
+        "recorded_at":datetime.now(timezone.utc).isoformat(),
+    }
+    with (folder/"validation-revision.json").open("x",encoding="utf8") as f:
+        json.dump(approval,f,ensure_ascii=False,indent=2);f.flush();os.fsync(f.fileno())
+    return approval
+
+def _promote_revalidated(folder:Path,original:dict,case:dict)->dict:
+    revision=json.loads((folder/"validation-revision.json").read_text("utf8"))
+    raw=(folder/"raw_model_output.json").read_bytes()
+    output=json.loads(json.loads(raw)["choices"][0]["message"]["content"])
+    if (revision.get("schema")!="MAAL_VALIDATION_REVISION_V1" or
+        revision.get("method")!="REVALIDATE_SAVED_REAL_INFERENCE_NO_NEW_TOKENS" or
+        revision.get("original_run_id")!=original["run_id"] or
+        revision.get("previous_error")!=original["error"] or
+        revision.get("source_page_sha256")!=case["evidence_digest"] or
+        revision.get("raw_model_response_sha256")!=sha256(raw).hexdigest() or
+        revision.get("raw_analysis_sha256")!=sha256(json.dumps(
+            output,ensure_ascii=False,sort_keys=True).encode("utf8")).hexdigest() or
+        revision.get("accepted_result")!="EVIDENCE_GROUNDED_GENERATIVE_DRAFT" or
+        revision.get("human_editorial_approval") is not False):
+        raise ValueError("validation_sidecar_integrity_hold")
+    validated(case,output)
+    return {**original,"status":"EVIDENCE_GROUNDED_GENERATIVE_DRAFT",
+        "analysis":output,"validation_revision":True,
+        "original_hold_reason":original["error"],"human_editorial_approval":False}
+
 def verified_runs()->list[dict]:
     if not RUN_ROOT.exists():return []
     result=[]
@@ -242,12 +297,19 @@ def verified_runs()->list[dict]:
                     run["schema"]!="MAAL_NEW_CASE_QWEN_RECEIPT_V1"):continue
             if run["status"]=="EVIDENCE_GROUNDED_GENERATIVE_DRAFT":
                 validated(case,run["analysis"])
+            elif (run["status"]=="AI_EVALUATION_HOLD" and
+                  (folder/"validation-revision.json").is_file()):
+                run=_promote_revalidated(folder,run,case)
             result.append(run)
         except (ValueError,KeyError,OSError,TypeError):continue
     return sorted(result,key=lambda x:x["recorded_at"],reverse=True)
 
 if __name__=="__main__":
     import sys
+    if len(sys.argv)==3 and sys.argv[1]=="--revalidate":
+        result=revalidate_saved_run(sys.argv[2])
+        print(json.dumps(result,ensure_ascii=False))
+        raise SystemExit(0)
     for case_id in sys.argv[1:]:
         run=run_new_case(case_id)
         print(json.dumps({"run_id":run["run_id"],"status":run["status"],
