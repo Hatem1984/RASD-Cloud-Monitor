@@ -350,6 +350,11 @@ class Handler(BaseHTTPRequestHandler):
                 from maal.competition_new_reasoning import verified_runs, COMPANY
                 captured=verified_cases()
                 runs=verified_runs()
+                owner_drafts=[]
+                try:
+                    owner_drafts=gateway().dashboard(self._cookie())["drafts"]
+                except PermissionError:
+                    pass
                 entries=[]
                 for item in captured:
                     selected=next((r for r in runs if r["evidence_id"]==item["evidence_id"]),None)
@@ -364,7 +369,13 @@ class Handler(BaseHTTPRequestHandler):
                             k:selected[k] for k in ("run_id","status","model",
                                 "elapsed_seconds","token_usage","analysis","error",
                                 "recorded_at","evidence_id")
-                        }
+                        },
+                        "owner_draft":next(({
+                            "draft_id":d["draft_id"],
+                            "state":d["state"],
+                            "task_id":d.get("task_id")
+                        } for d in owner_drafts if
+                            d["evidence_id"]==item["evidence_id"]),None)
                     })
                 return self._json_response(200,{
                     "schema":"MAAL_NEW_OFFICIAL_SIGNALS_V1",
