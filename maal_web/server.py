@@ -350,6 +350,16 @@ class Handler(BaseHTTPRequestHandler):
                 from maal.competition_new_reasoning import verified_runs, COMPANY
                 captured=verified_cases()
                 runs=verified_runs()
+                # Private editorial review is independent from JSON schema
+                # validity and the owner approval ledger. Missing = HOLD.
+                editorial_path=Path("E:/MAAL/04_HISTORICAL_QA/MAAL_COMPETITION_MVP_20261028/editorial_quality_20261028.json")
+                try:
+                    editorial=json.loads(editorial_path.read_text("utf8"))
+                    if editorial.get("schema")!="MAAL_EDITORIAL_REVIEW_V1":
+                        raise ValueError("untrusted_editorial_review_schema")
+                    assessments=editorial["cases"]
+                except (OSError,ValueError,KeyError,TypeError):
+                    assessments={}
                 owner_drafts=[]
                 try:
                     owner_drafts=gateway().dashboard(self._cookie())["drafts"]
@@ -370,6 +380,12 @@ class Handler(BaseHTTPRequestHandler):
                                 "elapsed_seconds","token_usage","analysis","error",
                                 "recorded_at","evidence_id")
                         },
+                        "editorial_review": (
+                            assessments[item["evidence_id"]]
+                            if selected and
+                               assessments.get(item["evidence_id"],{}).get("run_id")==selected["run_id"]
+                            else {"status":"HOLD","reason":"لم تُعتمد المراجعة التحريرية لهذا التشغيل."}
+                        ),
                         "owner_draft":next(({
                             "draft_id":d["draft_id"],
                             "state":d["state"],
