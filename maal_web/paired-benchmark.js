@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded",()=>{
  const add=(label,value)=>{let n=el("div");n.className="new-signal-section";n.append(el("strong",label),el("p",String(value||"غير محدد")));out.append(n)};
  function show(entry){
    out.replaceChildren();
-   out.append(el("h4",entry.model+" · "+entry.case+" · "+entry.duration_seconds+" ثانية"));
+   out.append(el("h4",entry.model+" · "+entry.case+" · تعليمات "+(entry.prompt_version||"V2")+" · "+entry.duration_seconds+" ثانية"));
    out.append(el("p","تقييم آلي: "+entry.grade.score+"/"+entry.grade.max_score+
      " · "+entry.grade.status+" · القبول التحريري البشري: لم يتم"));
    for(const [name,score] of Object.entries(entry.grade.dimensions))add(name,score+"/2");
