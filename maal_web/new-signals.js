@@ -60,7 +60,18 @@ document.addEventListener("DOMContentLoaded",()=>{
     displayValue(analysis,"الأثر المحتمل على الشركة الافتراضية",x.business_impact);
     list(analysis,"خيارات القرار",x.decision_options);
     list(analysis,"ما لا يزال مجهولًا",x.unknowns);
-    displayValue(analysis,"توصية النموذج — تنتظر المالك",x.recommendation);
+    displayValue(analysis,"توصية النموذج — غير معتمدة تحريرياً",x.recommendation);
+    const editorial=item.editorial_review||{status:"HOLD",reason:"لا توجد مراجعة تحريرية مثبتة"};
+    if(editorial.status!=="APPROVED"){
+      displayValue(analysis,"HOLD تحريري — لا يجوز الاعتماد أو التنفيذ",
+        editorial.reason||"اجتياز عقد JSON ليس اعتمادًا لمحتوى التوصية");
+      action.hidden=!item.owner_draft;
+      action.textContent="افتح مسودة المالك للمراجعة أو الرفض";
+      if(item.owner_draft){
+        displayValue(analysis,"تنبيه", "المسودة الموجودة محفوظة كما هي؛ اعتمادها محجوب إلى حين مراجعة تحليل مستقل.");
+      }
+      return;
+    }
     action.hidden=false;
     action.textContent=item.owner_draft ?
        "افتح المسودة "+item.owner_draft.state+" للمراجعة" :
