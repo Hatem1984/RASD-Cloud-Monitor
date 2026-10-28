@@ -346,6 +346,25 @@ class Handler(BaseHTTPRequestHandler):
                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
                 return self.reply(200,mime,bundle[kind],
                     filename="MAAL-Source-Linked-Qwen-Review."+kind)
+            if path == "/api/competition-demo.webm":
+                from hashlib import sha256
+                root=Path("E:/MAAL/03_REPORTS_AND_REVIEW/MAAL_COMPETITION_MVP_20261028/new_source_demo")
+                manifest=json.loads((root/"walkthrough_acceptance.json").read_text("utf8"))
+                if (manifest.get("status")!="CONTINUOUS_OWNER_REVIEW_DEMO_PASS" or
+                    manifest.get("new_approval_performed") is not False or
+                    manifest.get("new_task_executed") is not False or
+                    manifest.get("video_scope")!="SAVED_REAL_QWEN_INFERENCE_REPLAYED_FROM_VERIFIED_RECEIPT__NO_LIVE_INFERENCE_IN_TAPE"):
+                    raise ValueError("demo_acceptance_provenance_hold")
+                video=Path(manifest["video_path"]).resolve()
+                expected_dir=(root/"continuous_readonly_video").resolve()
+                if video.parent!=expected_dir or video.suffix.lower()!=".webm":
+                    raise ValueError("demo_path_not_authorized")
+                binary=video.read_bytes()
+                if (not 100000<=len(binary)<=150000000 or
+                    sha256(binary).hexdigest()!=manifest["video_sha256"]):
+                    raise ValueError("demo_integrity_hold")
+                return self.reply(200,"video/webm",binary,
+                      filename="MAAL_Real_Source_Qwen_to_Human_Review_ONLY.webm")
             if path == "/api/new-signals":
                 from maal.competition_new_source import verified_cases
                 from maal.competition_new_reasoning import verified_runs, COMPANY
