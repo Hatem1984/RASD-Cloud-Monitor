@@ -106,8 +106,10 @@ def validated(case:dict, result:dict)->dict:
         narrative=result[field]
         if len(re.findall(r"[\u0600-\u06FF]",narrative))<20:
             raise ValueError("new_ai_missing_arabic_business_analysis")
-        if "الشركة الافتراضية" not in narrative:
-            raise ValueError("new_ai_company_subject_confusion_hold")
+    # An explicit beneficiary in recommendation resolves ordinary pronouns
+    # in the tentative impact. Never advise FPT as if it were the owner.
+    if "الشركة الافتراضية" not in result["recommendation"]:
+        raise ValueError("new_ai_company_subject_confusion_hold")
     # Business effects are hypotheses, not claims that the synthetic firm
     # already expanded, profited, partnered or received a grant.
     if not any(s in result["business_impact"] for s in ("قد","ربما","يمكن","احتمال","محتمل")):
