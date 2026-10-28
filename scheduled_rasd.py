@@ -564,6 +564,43 @@ def news_for_rollup(state: dict, day: str, config: dict) -> list[dict]:
     # for cross-publisher duplicates BEFORE sending and private reservation.
     return sorted(news, key=lambda x: (x["published_at_cairo"], x["id"]))
 
+def smart_interval_no_mail(*, config: dict, health: list[dict],
+                           window: str, held_articles: int = 0,
+                           waiting_articles: int = 0) -> dict:
+    """Opt-in half-hour result-only policy. No Word, SMTP or private CAS writes.
+
+    The existing scheduled workflow logs this result as its durable run
+    metadata; the source/inbox ledgers remain unchanged. HOLD events remain
+    eligible for later verification, not declared approved/sent.
+    """
+    if (type(held_articles) is not int or type(waiting_articles) is not int or
+            not 0 <= held_articles <= 200 or not 0 <= waiting_articles <= 200):
+        raise RuntimeError("interval_status_invalid_hold_count")
+    expected = [item["id"] for item in config["feeds"]]
+    if (len(expected) != len(health) or
+            [item.get("feed_id") for item in health] != expected or
+            any(item.get("status") not in ("ok", "failed") for item in health)):
+        raise RuntimeError("source_health_metadata_missing_or_untrusted")
+    degraded = sum(x["status"] == "failed" for x in health)
+    pending = held_articles + waiting_articles
+    result = {
+        "status": ("EVIDENCE_HOLD" if pending else "NO_NEW_VERIFIED_NEWS"),
+        "window": window,
+        "items": 0,
+        "held_articles": held_articles,
+        "waiting_approved_news": waiting_articles,
+        "sources_checked": len(expected),
+        "sources_failed": degraded,
+        "coverage_status": "PARTIAL" if degraded else "SOURCE_LIMITED",
+        "smtp_accepted": False,
+        "inbox_delivery_verified": False,
+        "cas_mutated": False,
+    }
+    print("RASD_SMART_INTERVAL_RESULT=" + json.dumps(
+        result, ensure_ascii=False, sort_keys=True), flush=True)
+    return result
+
+
 def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
                                recipient: str, sender: str, password: str,
                                state: dict, config: dict, health: list[dict],
@@ -774,6 +811,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             if not stories:
                 if mode == "interval_owner_once":
                     return {"status": "no_new_verified_news", "smtp_accepted": False}
+                if os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true":
+                    return smart_interval_no_mail(
+                        config=config, health=health, window=window)
                 return send_empty_interval_status(
                     ledger=ledger, recipient=recipient, sender=sender,
                     password=password, state=state, config=config, health=health,
@@ -820,6 +860,10 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         "smtp_accepted": False,
                         "coverage_status": "SOURCE_ACCESS_HOLD_NO_DELIVERY",
                     }
+                if os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true":
+                    return smart_interval_no_mail(
+                        config=config, health=health, window=window,
+                        held_articles=len(stories), waiting_articles=waiting)
                 return send_empty_interval_status(
                     ledger=ledger, recipient=recipient, sender=sender,
                     password=password, state=state, config=config, health=health,
