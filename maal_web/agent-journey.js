@@ -87,6 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (lab) lab.scrollIntoView({block:"start",behavior:"smooth"});
   });
   refresh();
+  window.addEventListener("maal:auth-changed", refresh);
   // Single source of truth from the current local server. No fake freshness.
   setInterval(refresh,12000);
 });
