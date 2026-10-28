@@ -441,7 +441,7 @@ class Handler(BaseHTTPRequestHandler):
         path=urlsplit(self.path).path
         actions={
             "/api/operator/login","/api/operator/logout",
-            "/api/operator/draft","/api/operator/approve","/api/operator/execute",
+            "/api/operator/draft","/api/operator/approve","/api/operator/reject","/api/operator/execute",
             "/api/ai/run"
         }
         if path not in actions:
@@ -519,6 +519,11 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("editorial_hold_overbroad_fpt_draft")
                 result=gate.approve(token,csrf,body.get("draft_id",""),
                                     body.get("stepup_password",""))
+                return self._json_response(200,result)
+            if path=="/api/operator/reject":
+                result=gate.reject(token,csrf,body.get("draft_id",""),
+                                   body.get("stepup_password",""),
+                                   body.get("reason","EDITORIAL_NOT_ACCEPTED"))
                 return self._json_response(200,result)
             if path=="/api/operator/execute":
                 if body.get("draft_id")=="ea78e338-d2a5-4c5e-a5cc-cbd296017c2c":
