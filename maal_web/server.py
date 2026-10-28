@@ -388,7 +388,7 @@ class Handler(BaseHTTPRequestHandler):
                                 b.get("grade")!=rubric(case,b.get("response_json"),b.get("model_error"))):
                                 continue
                             runs.append({
-                                k:b.get(k) for k in ("run_id","model_key","model",
+                                k:b.get(k) for k in ("run_id","model_key","model","prompt_version",
                                   "case","source_id","source_sha256","duration_seconds",
                                   "model_usage","peak_sampled_working_set_mb",
                                   "grade","response_json","recorded_at",
