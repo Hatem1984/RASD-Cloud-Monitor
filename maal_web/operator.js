@@ -126,6 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if(!app.rows.length){const p=document.createElement("p");p.className="operator-empty";p.textContent="لا توجد مهام داخلية لهذا المستخدم.";root.append(p);}
   app.rows.forEach(item=>{
     const btn=document.createElement("button");btn.type="button";btn.className="operator-draft-item";
+    btn.dataset.draftId=item.draft_id;
     btn.classList.toggle("chosen",app.selected===item.draft_id);
     btn.setAttribute("aria-pressed",String(app.selected===item.draft_id));
     btn.append(svgSvg());
