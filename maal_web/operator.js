@@ -210,6 +210,34 @@ document.addEventListener("DOMContentLoaded", () => {
      feedback("تم تسجيل الخروج بأمان.",true);
    }catch(e){feedback("تعذر تأكيد تسجيل الخروج. لم نفترض إنهاء الجلسة.");}
  }
+ // Independent owner editorial signoff, not the final approval of a draft.
+ window.addEventListener("maal:benchmark-review-selected",e=>{
+   const item=e.detail||{};
+   if(!/^maal-paired-[0-9a-f]{32}$/.test(item.run_id||""))return;
+   by("operator-editorial-review").hidden=false;
+   by("operator-editorial-run").value=item.run_id;
+   by("operator-editorial-summary").textContent=
+     "تشغيل "+item.run_id+" · "+item.model+" · دليل "+item.evidence_id+
+     " · نتيجة آلية "+item.score.score+"/"+item.score.max_score+
+     ". راجع الوقائع والمخاطر والبدائل وعقد المهمة بنفسك قبل الإقرار بصلاحيتها.";
+ });
+ by("operator-editorial-sign").addEventListener("click",async()=>{
+   if(app.role!=="OWNER"){feedback("يجب تسجيل دخول حساب المالك لإتمام المراجعة التحريرية.");return;}
+   const runId=by("operator-editorial-run").value;
+   const password=by("operator-editorial-password").value;
+   if(!runId||!password){feedback("حدّد تشغيلًا مؤهلًا وأدخل كلمة مرور المالك أولًا.");return;}
+   if(!window.confirm("هل راجعت حقائق المصدر وصلة الأعمال وشروط الأثر والمخرج المطلوب، وترى أن هذه التوصية صالحة للمراجعة كمسودة مستقلة؟ لن تُعتمد المهمة بهذا الإجراء."))return;
+   by("operator-editorial-password").value="";
+   try{
+      const r=await post("/api/operator/editorial-signoff",
+         {model_run_id:runId,stepup_password:password});
+      by("operator-description").value=r.task_description;
+      by("operator-description").dataset.modelRunId=runId;
+      by("operator-description").dataset.newEvidenceId=r.evidence_id;
+      feedback("تم تسجيل مراجعة المالك التحريرية. يمكنك الآن إنشاء مسودة جديدة، ثم اتخاذ قرار مستقل بالاعتماد أو الرفض.",true);
+      by("operator-description").focus();
+   }catch(error){feedback(error.message);}
+ });
  by("operator-logout").addEventListener("click",signOut);
  headerLogout.addEventListener("click",signOut);
  by("operator-description").addEventListener("input",()=>{ delete by("operator-description").dataset.modelRunId; delete by("operator-description").dataset.newEvidenceId; });
