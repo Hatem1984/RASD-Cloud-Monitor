@@ -57,12 +57,16 @@ document.addEventListener("DOMContentLoaded", () => {
             "توجد مهمة داخلية موثقة في سجل المالك" :
             "لم يثبت تنفيذ مهمة داخلية في هذه الجلسة")
       );
+      const approvedBundle = data.report.ai_run_bound_word_pdf_available === true;
+      by("agent-report-word").hidden = !approvedBundle;
+      by("agent-report-pdf").hidden = !approvedBundle;
       const modelAge = "الاستدلال محفوظ منذ "+data.ai.recorded_at+
           "، وليس استدلالًا جديدًا عند فتح الصفحة.";
       details.textContent = modelAge+
           " الدليل: "+data.evidence.headline+
-          ". ملف Word يثبت صورة المصدر التاريخية، لكنه ليس تقريرًا مولدًا من هذا التحليل. "+
-          "تقرير AI موحد Word/PDF ما زال غير متاح.";
+          (approvedBundle ?
+            ". التقرير بصيغتي Word/PDF مرتبط بنفس بصمة المصدر ومعرّف النموذج، ويظل مسودة للمراجعة." :
+            ". ملف Word الأساسي يثبت صورة المصدر التاريخية، وتقرير AI الموحد لم يُعتمد بعد.");
       status.textContent = "الدليل والتحليل متطابقان · "+
           (data.approval.authenticated ? "حالة المراجعة مُحمّلة من سجل المالك" :
            "عرض آمن؛ اعتماد المالك غير متحقق")+
