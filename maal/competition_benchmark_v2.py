@@ -153,17 +153,17 @@ def rubric(case,answer,error=None):
     rec=answer["recommendation"]
     task=answer["action_contract"]
     dims["evidence"]=2
-    dims["beneficiary"]=2 if "الشركة الافتراضية" in text and
-      not any(kw in r["causal_link"] for kw in ("شريك مؤكد","عقد مؤكد")) else 0
+    dims["beneficiary"]=2 if ("الشركة الافتراضية" in text and
+      not any(kw in r["causal_link"] for kw in ("شريك مؤكد","عقد مؤكد"))) else 0
     dims["causality"]=2 if any(z in r["causal_link"] for z in
       ("إذا","عند","يتوقف","بشرط","قد","يتطلب","لأن","حال")) else 0
     dims["conditions"]=2 if len(answer["impact_conditions"])>=2 else 0
     dims["alternatives"]=2 if len(set(x.get("action","") for x in answer["alternatives"]))>=2 else 0
-    dims["specific_action"]=2 if (not rec["do_action"] and r["company_fit"] in ("NONE","UNKNOWN")) or
+    dims["specific_action"]=2 if ((not rec["do_action"] and r["company_fit"] in ("NONE","UNKNOWN")) or
       (rec["do_action"] and len(task["deliverable"])>=18 and len(task["completion_criteria"])>=18 and
-       task["owner_role"] not in ("","غير محدد")) else 0
-    dims["priority"]=2 if task["priority"] in ("LOW","MEDIUM","NONE") and
-      (not rec["do_action"] or "دون" in rec["why"] or "بسبب" in rec["why"] or "لأن" in rec["why"] or "حتى" in rec["why"]) else 0
+       task["owner_role"] not in ("","غير محدد"))) else 0
+    dims["priority"]=2 if (task["priority"] in ("LOW","MEDIUM","NONE") and
+      (not rec["do_action"] or "دون" in rec["why"] or "بسبب" in rec["why"] or "لأن" in rec["why"] or "حتى" in rec["why"])) else 0
     dims["topic_fit"]=2 if any(z in text for z in FOCUS[case["source_key"]]["required_any"]) else 0
     dims["authority"]=2
     score=sum(dims.values())
