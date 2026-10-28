@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
   <script src="/operator.js" defer></script>
+  <script src="/agent-journey.js" defer></script>
 </head>
 <body>
 <svg class="icons-def" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -64,6 +65,20 @@
   <div class="page-heading"><div><p class="eyebrow">INTELLIGENCE COMMAND CENTER</p><h1 id="current-heading">وضوح أكبر. <span class="gold">قرار أذكى.</span></h1><p id="current-subheading" class="heading-desc">استكشف كيف تتحول إشارة موثّقة إلى رؤية قابلة للمراجعة.</p></div><div class="heading-status"><span class="outline-tag">نسخة تجريبية غير إنتاجية</span><small id="snapshot-date">آخر جرد معتمد: جارٍ التحقق</small></div></div>
 
 <section id="view-overview" class="view" aria-label="نظرة عامة">
+
+ <section id="agent-journey-board" class="content-card" aria-label="رحلة الوكيل المتصلة">
+  <p class="eyebrow">MA'AL / AGENTIC BUSINESS JOURNEY · LOCAL QA</p>
+  <h2>من الدليل إلى القرار — مسار واحد</h2>
+  <p id="agent-journey-status" role="status" aria-live="polite">جارٍ التأكد من ارتباط المصدر ونتيجة Qwen3 وسجل قرارات المالك.</p>
+  <div id="agent-journey-steps" class="customer-answer-grid" aria-live="polite"></div>
+  <div id="agent-journey-details" class="customer-scope"></div>
+  <div class="customer-actions">
+   <button id="agent-journey-review" type="button" class="btn btn-primary">افتح مراجعة القرار المحمية</button>
+   <a href="/api/case-report" class="btn btn-secondary">ملف الدليل الأصلي Word</a>
+  </div>
+  <p class="customer-scope">تجربة تقنية بدليل رسمي تاريخي وشركة افتراضية. الاعتماد البشري والمهمة الداخلية لا يُفترضان تلقائيًا. لا عرض لأخبار حية.</p>
+ </section>
+
  <section class="customer-brief content-card" aria-label="ملخص استخبارات الأعمال">
    <p class="eyebrow">MA'AL / OWNER BRIEFING · REVIEW ONLY</p>
    <h2>ماذا حدث؟ وما القرار الذي يستحق المراجعة؟</h2>
