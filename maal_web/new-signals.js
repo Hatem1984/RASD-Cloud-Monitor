@@ -53,7 +53,7 @@ document.addEventListener("DOMContentLoaded",()=>{
       return;
     }
     const x=a.analysis;
-    displayValue(analysis,"تشغيل AI الحقيقي",a.run_id+" · "+a.model+
+    displayValue(analysis,"استدلال Qwen3 حقيقي محفوظ سابقًا (ليس بثًا مباشرًا)",a.run_id+" · "+a.model+
       " · "+a.elapsed_seconds+" ثانية");
     list(analysis,"حقائق مقتبسة من صفحة المصدر",x.facts);
     list(analysis,"افتراضات لا يجوز اعتبارها حقائق",x.assumptions);
