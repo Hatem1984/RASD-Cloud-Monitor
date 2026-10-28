@@ -295,3 +295,32 @@ body { font-size: var(--type-body); }
  .login-dialog{padding:22px 19px;border-radius:18px}
  .login-dialog h2{font-size:25px}
 }
+
+/* Source-backed, independent decision cases inside the established MA'AL UI. */
+.new-signal-workspace{margin-bottom:24px;border-color:#288F85;background:linear-gradient(125deg,#103D47,#0A293B 80%)}
+.new-signal-workspace h2{font-size:clamp(21px,2.4vw,29px);margin:5px 0 8px}
+.new-signal-intro{font-size:14px;line-height:1.9;color:#C4D8DC;max-width:950px}
+#new-signal-state{padding:10px 14px;border:1px solid #356775;border-radius:10px;color:#AAE3D9;font-size:13px;margin:14px 0}
+.new-signal-choices{display:flex;flex-wrap:wrap;gap:10px}
+.new-signal-choice{background:#0B283A;border:1px solid #3E6674;border-radius:10px;color:#DEEDEC;padding:10px 13px;min-height:48px;text-align:right;max-width:300px;font-size:13px;font-weight:700}
+.new-signal-choice:hover,.new-signal-choice[aria-pressed=true]{border-color:#56DCD0;background:#15545C;color:#fff}
+.new-signal-evidence{display:grid;gap:10px;margin:20px 0 10px;border-top:1px solid #345F6B;padding-top:16px;min-width:0}
+.new-signal-evidence h3{margin:0;font-size:20px;line-height:1.5}
+.new-signal-meta{color:#C1D6DA;margin:0;font-size:12px}
+.new-signal-proof{width:min(100%,800px);max-height:390px;object-fit:contain;background:#fff;border:1px solid #476B77;border-radius:10px}
+.new-signal-evidence a{width:max-content}
+.new-signal-evidence small{overflow-wrap:anywhere;color:#8CBFC4;font-size:11px}
+.new-signal-analysis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}
+.new-signal-section{min-width:0;padding:15px;border-radius:12px;background:#0C2637;border:1px solid #315265}
+.new-signal-section strong{color:#7FE4D6;font-size:14px}
+.new-signal-section p,.new-signal-section li{font-size:13px;line-height:1.9;color:#D9E7EA;overflow-wrap:anywhere}
+.new-signal-section p{margin:7px 0 0}
+.new-signal-section ul{padding:0 17px 0 0;margin:10px 0}
+.new-signal-section li{margin-bottom:7px}
+#new-signal-draft{font-size:14px;min-height:49px}
+@media(max-width:760px){
+ .new-signal-choices{display:grid;grid-template-columns:1fr}
+ .new-signal-choice{max-width:none;width:100%}
+ .new-signal-analysis{grid-template-columns:1fr}
+ .new-signal-proof{max-height:320px}
+}
