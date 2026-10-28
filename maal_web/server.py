@@ -25,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 from maal.decision_contracts import Evidence
 from maal.operator_gateway import OperatorGateway
+from maal.competition_journey import assemble_agent_journey
 from maal.report_bundle_guard import inspect_bundle
 PROJECT = next((folder for folder in HERE.parents if folder.name.upper() == "MAAL"), None)
 if PROJECT is None:
@@ -49,6 +50,7 @@ STATIC = {
     "/style.css": (HERE / "style.css", "text/css; charset=utf-8"),
     "/app.js": (HERE / "app.js", "text/javascript; charset=utf-8"),
     "/operator.js": (HERE / "operator.js", "text/javascript; charset=utf-8"),
+    "/agent-journey.js": (HERE / "agent-journey.js", "text/javascript; charset=utf-8"),
     "/product_report.json": (HERE / "product_report.json", "application/json; charset=utf-8"),
     # Explicitly named local owner-review files, not a dynamic user-provided path.
     "/reports/MAAL_Business_Intelligence_Round2_2026-10-27.pdf":
@@ -309,6 +311,16 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/snapshot":
                 return self.reply(200, "application/json; charset=utf-8",
                                   json.dumps(get_snapshot(), ensure_ascii=False).encode("utf-8"))
+            if path == "/api/agent-journey":
+                # Compose existing independently verified layers at request time.
+                # Neither anonymous reads nor model suggestions can approve/execute.
+                who = None
+                try:
+                    who = gateway().dashboard(self._cookie())
+                except PermissionError:
+                    pass
+                return self._json_response(
+                    200, assemble_agent_journey(get_case(),get_local_ai_run(),who))
             if path == "/api/ai-analysis":
                 return self._json_response(200,get_local_ai_run())
             if path == "/api/evidence":
