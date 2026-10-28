@@ -107,7 +107,7 @@ class TaskStore:
         if not description.strip() or len(description)>500 or len(idempotency_key)<12:
             raise ValueError("invalid_task_draft_or_idempotency_key")
         if model_run_id is not None and (not isinstance(model_run_id,str) or
-                not model_run_id.startswith("maal-g3-") or len(model_run_id)>100):
+                not model_run_id.startswith(("maal-g3-","maal-open-")) or len(model_run_id)>100):
             raise ValueError("invalid_model_run_reference")
         payload={"evidence_id":evidence.evidence_id,"evidence_hash":evidence.original_page_sha256,
                  "description":description,"model_run_id":model_run_id}
