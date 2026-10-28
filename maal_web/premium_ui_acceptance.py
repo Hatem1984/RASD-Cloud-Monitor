@@ -17,7 +17,14 @@ def run():
             ctx=browser.new_context(viewport={"width":width,"height":900},reduced_motion="reduce")
             page=ctx.new_page();page.on("pageerror",lambda e:failures.append(str(e)))
             assert page.goto(BASE,wait_until="domcontentloaded",timeout=20000).status==200
-            expect(page.locator("#premium-source-count")).to_have_text("3",timeout=15000)
+            try:
+                expect(page.locator("#premium-source-count")).to_have_text("3",timeout=15000)
+            except AssertionError:
+                print("SOURCE_LOAD_HOLD",width,"STATUS",
+                      page.locator("#premium-stage-statement").inner_text(),
+                      "CLIENT_ERRORS",failures,flush=True)
+                page.screenshot(path=str(OUT/f"load_hold_{width}.png"))
+                raise
             assert page.locator("#premium-executive").is_visible()
             assert page.locator("#premium-hold-count").inner_text()=="3"
             assert page.locator(".nav-link").count()==7
