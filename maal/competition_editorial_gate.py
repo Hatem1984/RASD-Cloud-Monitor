@@ -40,6 +40,21 @@ def verified_candidate(run_id):
         raise ValueError("model_grade_no_longer_matches_frozen_rubric")
     if answer["recommendation"]["do_action"] is not True:
         raise ValueError("no_recommendation_no_task")
+    # These extra release guards do not alter frozen benchmark scoring.
+    # An English-only answer or a task with no causal business fit cannot be
+    # treated as an Arabic owner-reviewable actionable decision.
+    narrative=json.dumps({
+       k:answer[k] for k in ("business_relevance","impact_conditions",
+          "alternatives","recommendation","action_contract","unknowns")
+    },ensure_ascii=False)
+    if len(re.findall(r"[\u0600-\u06FF]",narrative))<35:
+        raise ValueError("arabic_business_decision_not_established")
+    if (answer["business_relevance"]["company_fit"]=="NONE" and
+        answer["recommendation"]["do_action"] is True):
+        raise ValueError("no_causal_business_fit_for_action")
+    if re.search(r"(?i)(?:USD|EGP|EUR|\$)\s*\d|\d[\d,.]*\s*(?:دولار|جنيه|يورو|مليون)\b",
+                 narrative):
+        raise ValueError("unverified_financial_numbers_in_business_decision")
     contract=answer["action_contract"]
     title=contract["title"].strip()
     deliverable=contract["deliverable"].strip()
