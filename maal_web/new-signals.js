@@ -14,14 +14,20 @@ document.addEventListener("DOMContentLoaded",()=>{
     if(cls)el.className=cls;
     return el;
   };
+  const disclosure=(label)=>{
+    const details=node("details",null,"new-signal-section premium-disclosure");
+    details.open=label.startsWith("01") || label.startsWith("HOLD") ||
+      label.startsWith("05");
+    details.append(node("summary",label));
+    return details;
+  };
   const displayValue=(parent,label,value)=>{
-    const wrapper=node("div",null,"new-signal-section");
-    wrapper.append(node("strong",label),node("p",value||"غير مثبت"));
+    const wrapper=disclosure(label);
+    wrapper.append(node("p",value||"غير مثبت"));
     parent.append(wrapper);
   };
   const list=(parent,label,values)=>{
-    const group=node("div",null,"new-signal-section");
-    group.append(node("strong",label));
+    const group=disclosure(label);
     const ul=node("ul");for(const v of values||[]){ul.append(node("li",v));}
     group.append(ul);parent.append(group);
   };
@@ -32,8 +38,9 @@ document.addEventListener("DOMContentLoaded",()=>{
     });
     const c=item.case;const a=item.ai;
     evidence.replaceChildren();evidence.hidden=false;
-    const meta=node("p",c.publisher+" | "+(c.published_day||"تاريخ النشر غير مثبت")+
-       " | دليل: "+c.evidence_id,"new-signal-meta");
+    const meta=node("p",c.publisher+" · نُشر: "+(c.published_day||"تاريخ النشر غير مثبت")+
+       " · التقطت الصفحة: "+(c.observed_at||"وقت الرصد غير مثبت")+
+       " · دليل: "+c.evidence_id,"new-signal-meta");
     const title=node("h3",c.headline);
     const image=document.createElement("img");
     image.src=c.evidence_image_url;image.alt="لقطة صفحة الناشر الأصلية: "+c.headline;
@@ -55,12 +62,17 @@ document.addEventListener("DOMContentLoaded",()=>{
     const x=a.analysis;
     displayValue(analysis,"استدلال Qwen3 حقيقي محفوظ سابقًا (ليس بثًا مباشرًا)",a.run_id+" · "+a.model+
       " · "+a.elapsed_seconds+" ثانية");
-    list(analysis,"حقائق مقتبسة من صفحة المصدر",x.facts);
-    list(analysis,"افتراضات لا يجوز اعتبارها حقائق",x.assumptions);
-    displayValue(analysis,"الأثر المحتمل على الشركة الافتراضية",x.business_impact);
-    list(analysis,"خيارات القرار",x.decision_options);
-    list(analysis,"ما لا يزال مجهولًا",x.unknowns);
-    displayValue(analysis,"توصية النموذج — غير معتمدة تحريرياً",x.recommendation);
+    list(analysis,"01 · الوقائع المثبتة من المصدر",x.facts);
+    list(analysis,"03 · افتراضات وشروط الأثر غير المثبتة",x.assumptions);
+    displayValue(analysis,"02 · صلة الحدث بالشركة وأثره المحتمل",x.business_impact);
+    list(analysis,"04 · خيارات القرار",x.decision_options);
+    list(analysis,"مجهولات تؤثر في القرار",x.unknowns);
+    displayValue(analysis,"05 · توصية AI — غير معتمدة تحريرياً",x.recommendation);
+    displayValue(analysis,"06 · عقد الإجراء وحدود التنفيذ",
+      item.owner_draft?
+      "توجد مسودة قرار مرتبطة؛ حالتها "+item.owner_draft.state+
+      ". لا تعني اعتمادًا جديدًا، ولا يجوز التنفيذ دون المراجعة والموافقة البشرية.":
+      "لا يوجد عقد إجراء مقبول لهذه الحالة. تفاصيل التنفيذ معلقة على استدلال مناسب ومراجعة مستقلة.");
     const editorial=item.editorial_review||{status:"HOLD",reason:"لا توجد مراجعة تحريرية مثبتة"};
     if(editorial.status!=="APPROVED"){
       displayValue(analysis,"HOLD تحريري — لا يجوز الاعتماد أو التنفيذ",
@@ -97,7 +109,14 @@ document.addEventListener("DOMContentLoaded",()=>{
         return;
       }
       for(const item of data.items){
-        const b=node("button",item.case.headline,"new-signal-choice");
+        const b=node("button",null,"new-signal-choice");
+        const heading=node("strong",item.case.headline);
+        const when=node("small",item.case.publisher+" · "+
+          (item.case.published_day||"تاريخ النشر غير مثبت")+" · مصدر تاريخي محفوظ");
+        const badge=node("span",item.editorial_review?.status==="APPROVED"?
+            "VERIFIED · REVIEWED":"VERIFIED SOURCE · EDITORIAL HOLD","premium-pill");
+        badge.dataset.tone=item.editorial_review?.status==="APPROVED"?"verified":"hold";
+        b.append(heading,when,badge);
         b.type="button";b.dataset.evidence=item.case.evidence_id;
         b.setAttribute("aria-pressed","false");
         b.title=item.case.publisher+" · "+(item.case.published_day||"غير مؤرخ")+
@@ -108,7 +127,9 @@ document.addEventListener("DOMContentLoaded",()=>{
       status.textContent=data.items.length+
         " صفحات ناشرين أصلية محفوظة · "+
         data.items.filter(x=>x.ai?.status==="EVIDENCE_GROUNDED_GENERATIVE_DRAFT").length+
-        " تحليل مقبول من Qwen3 · لا موافقات آلية";
+        " استجابة اجتازت فحص نموذج آلي · "+
+        data.items.filter(x=>x.editorial_review?.status==="APPROVED").length+
+        " قبولات تحريرية مثبتة · لا موافقات آلية";
       choose(data.items.find(x=>x.case.source_key==="fpt")||
              data.items.find(x=>x.ai?.status==="EVIDENCE_GROUNDED_GENERATIVE_DRAFT")||
              data.items[0]);
