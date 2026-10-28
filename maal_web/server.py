@@ -294,7 +294,23 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         try:
             if path == "/api/operator/state":
-                try:return self._json_response(200,gateway().dashboard(self._cookie()))
+                try:
+                    gate=gateway();token=self._cookie()
+                    state=gate.dashboard(token)
+                    actor=gate.require(token)
+                    from maal.competition_editorial_gate import require_draft_allowed
+                    for draft in state["drafts"]:
+                        eligible=False
+                        if draft["state"] in ("DRAFT","APPROVED"):
+                            try:
+                                require_draft_allowed(gate,actor,draft["draft_id"])
+                                eligible=True
+                            except (OSError,ValueError,TypeError,KeyError,PermissionError,RuntimeError):
+                                pass  # Fail closed; never infer editorial acceptance.
+                        draft["can_approve"]=eligible and draft["state"]=="DRAFT" and actor["role"]=="OWNER"
+                        draft["can_execute"]=eligible and draft["state"]=="APPROVED" and actor["role"]=="OWNER"
+                        draft["editorial_status"]="MODEL_SOURCE_RUBRIC_AND_HUMAN_REVIEW_VERIFIED" if eligible else "HOLD_OR_NOT_ACTIONABLE"
+                    return self._json_response(200,state)
                 except PermissionError:return self._json_response(401,{"error":"login_required"})
             if path == "/product_report.json" and os.environ.get("MAAL_HISTORICAL_SNAPSHOT_REVIEW") == "true":
                 return self._json_response(200,get_safe_staging_report())
