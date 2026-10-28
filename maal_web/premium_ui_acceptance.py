@@ -8,6 +8,14 @@ import json
 
 OUT=Path("E:/MAAL/03_REPORTS_AND_REVIEW/MAAL_COMPETITION_MVP_20261028/premium_ui_qa")
 BASE="http://127.0.0.1:52344"
+def navigate(page,width,view):
+    if width<=1040:
+        toggle=page.locator("#premium-navigation-toggle")
+        toggle.click()
+        expect(toggle).to_have_attribute("aria-expanded","true")
+    navigate(page,width,view)
+    if width<=1040:
+        expect(page.locator("#premium-navigation-toggle")).to_have_attribute("aria-expanded","false")
 def run():
     OUT.mkdir(parents=True,exist_ok=True)
     failures=[];rows=[]
@@ -30,21 +38,35 @@ def run():
             assert page.locator(".nav-link").count()==7
             assert page.locator("#account-entry").is_visible()
             if width<=1040:
-                assert page.locator("#account-entry").bounding_box()["y"]<page.locator(".nav-link").first.bounding_box()["y"]
+                toggle=page.locator("#premium-navigation-toggle")
+                assert toggle.is_visible()
+                expect(toggle).to_have_attribute("aria-expanded","false")
+                toggle.focus()
+                page.keyboard.press("Enter")
+                expect(toggle).to_have_attribute("aria-expanded","true")
+                assert page.locator(".nav-link").first.is_visible()
+                page.keyboard.press("Escape")
+                expect(toggle).to_have_attribute("aria-expanded","false")
+                assert toggle.evaluate("(el)=>document.activeElement===el")
+                assert page.locator("#account-entry").bounding_box()["y"]<page.locator("#premium-navigation").bounding_box()["y"] if page.locator("#premium-navigation").is_visible() else True
+            else:
+                assert not page.locator("#premium-navigation-toggle").is_visible()
             page.screenshot(path=str(OUT/f"after_{width}.png"),animations="disabled")
             page.locator("#premium-go-signals").click()
             page.locator("#new-signal-choices .new-signal-choice").first.wait_for()
             assert page.locator("#new-signal-choices .new-signal-choice").count()==3
             page.screenshot(path=str(OUT/f"signals_{width}.png"),animations="disabled")
-            page.locator('.nav-link[data-view="impact"]').click()
+            navigate(page,width,"impact")
             page.locator("#paired-ai-benchmark").evaluate("(el)=>el.open=true")
             page.locator("#paired-benchmark-list button").first.wait_for(timeout=10000)
             assert page.locator("#paired-benchmark-list button").count()>=6
             page.locator("#paired-benchmark-list button").first.click()
             page.screenshot(path=str(OUT/f"analysis_{width}.png"),animations="disabled")
-            page.locator('.nav-link[data-view="decisions"]').click()
+            navigate(page,width,"decisions")
             page.locator("#account-entry").click()
             assert page.locator("#login-dialog").is_visible()
+            assert page.locator("#operator-username").is_visible()
+            assert page.locator("#login-dialog").get_attribute("aria-labelledby")=="login-dialog-title"
             page.locator("#login-close").click()
             assert not page.locator("#login-dialog").is_visible()
             for view in ("overview","monitor","impact","decisions","operations","report","evidence"):
