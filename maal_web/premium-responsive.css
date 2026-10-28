@@ -64,3 +64,49 @@
  .maal-premium .sidebar{padding:7px}
  .maal-premium main{padding:13px 9px}
 }
+
+/* Accessible seven-section mobile navigation, no hidden horizontal strip. */
+.premium-navigation-toggle{display:none}
+.premium-navigation-backdrop[hidden]{display:none!important}
+@media(max-width:1040px){
+ .maal-premium .premium-navigation-toggle{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:none;
+  border-radius:10px;min-height:44px;min-width:44px;padding:8px 12px;
+  border:1px solid #C8D7D9;background:#F0F7F5;color:#173C49;
+  font-size:13px;font-weight:750;cursor:pointer;
+ }
+ .maal-premium .premium-navigation-toggle [aria-hidden]{font-size:19px;line-height:1}
+ .maal-premium .sidebar{
+  display:none;position:fixed;z-index:80;top:64px;right:0;left:auto;
+  width:min(340px,90vw);height:calc(100dvh - 64px);min-height:0;
+  overflow-y:auto;overscroll-behavior:contain;
+  box-shadow:-12px 10px 45px #061A2980;padding:17px 14px 25px;
+ }
+ .maal-premium .sidebar.premium-drawer-open{display:flex;flex-direction:column;gap:13px}
+ .maal-premium .sidebar .main-nav{display:grid;grid-template-columns:1fr;overflow:visible;gap:4px;padding:0;scroll-snap-type:none}
+ .maal-premium .sidebar .nav-link{
+  display:flex;justify-content:flex-start;align-items:center;width:100%;
+  min-height:48px;font-size:14px;padding:11px 13px;scroll-snap-align:none;
+ }
+ .premium-navigation-backdrop:not([hidden]){
+  display:block;position:fixed;z-index:79;inset:64px 0 0 0;
+  background:rgba(3,22,35,.55);border:0;padding:0;cursor:pointer;
+ }
+ .maal-premium .topbar{grid-area:top}
+ .maal-premium main{grid-area:main}
+ .maal-premium .global-foot{grid-area:foot}
+ .maal-premium .shell{grid-template-areas:"top" "main" "foot"}
+}
+@media(max-width:590px){
+ .maal-premium .premium-navigation-toggle span:last-child{display:none}
+ .maal-premium .premium-navigation-toggle{padding:7px;min-width:44px}
+ .maal-premium .topbar-side{min-width:0}
+ .maal-premium .account-entry{max-width:157px}
+ .maal-premium .sidebar{top:59px;height:calc(100dvh - 59px)}
+ .premium-navigation-backdrop:not([hidden]){top:59px}
+}
+@media(max-width:350px){
+ .maal-premium .topbar{gap:4px}
+ .maal-premium .account-entry{max-width:132px}
+ .maal-premium .premium-mobile-brand img{width:29px;height:29px}
+}
