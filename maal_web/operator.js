@@ -48,21 +48,65 @@ document.addEventListener("DOMContentLoaded", () => {
    }
  }
 
+ const dialog=by("login-dialog");
+ const accountButton=by("account-entry");
+ const accountLabel=by("account-entry-label");
+ const headerLogout=by("header-logout");
+ const loginFeedback=by("login-feedback");
+ function announceLogin(message,error=false){
+   loginFeedback.hidden=!message;
+   loginFeedback.textContent=message;
+   loginFeedback.dataset.error=String(error);
+ }
+ function showLogin(){
+   if(app.actor)return goToMyDecisions();
+   announceLogin("");
+   if(!dialog.open)dialog.showModal();
+   by("operator-username").focus();
+ }
+ function goToMyDecisions(){
+   const nav=document.querySelector('.nav-link[data-view="decisions"]');
+   if(nav)nav.click();
+   const advanced=by("advanced-operator-review");
+   if(advanced)advanced.open=true;
+   const target=by("operator-drafts");
+   if(target)target.scrollIntoView({behavior:"smooth",block:"center"});
+ }
+ function syncAccountHeader(){
+   const signedIn=Boolean(app.actor);
+   accountLabel.textContent=signedIn?"قراراتي · "+app.actor:"تسجيل الدخول";
+   accountButton.classList.toggle("signed-in",signedIn);
+   accountButton.setAttribute("aria-haspopup",signedIn?"false":"dialog");
+   accountButton.setAttribute("aria-label",signedIn?"فتح قرارات حساب "+app.actor:"تسجيل الدخول إلى مَآل");
+   headerLogout.hidden=!signedIn;
+ }
  async function getState(){
-  try{
-   const r=await fetch("/api/operator/state",{cache:"no-store",credentials:"same-origin"});
-   if(!r.ok){loggedOut();return;}
-   const data=await r.json();
-   app.csrf=data.csrf;app.actor=data.operator;app.rows=data.drafts;
-   by("operator-login").hidden=true;by("operator-guest-demo").hidden=true;by("operator-authenticated").hidden=false;
-   by("operator-whoami").textContent="مستخدم: "+data.operator+" · بيئة: "+data.tenant+" · "+data.role;
-   renderDrafts();renderAudit(data.audit,data.audit_integrity);
-  }catch(e){feedback("تعذّر الاتصال بمخزن المهام التجريبي.");}
+   try{
+     const r=await fetch("/api/operator/state",{cache:"no-store",credentials:"same-origin"});
+     if(r.status===401){loggedOut();return false;}
+     if(!r.ok)throw new Error("state_unavailable");
+     const data=await r.json();
+     app.csrf=data.csrf;app.actor=data.operator;app.rows=data.drafts;
+     by("operator-guest-demo").hidden=true;
+     by("operator-authenticated").hidden=false;
+     by("operator-whoami").textContent="مستخدم: "+data.operator+" · بيئة: "+data.tenant+" · "+data.role;
+     syncAccountHeader();
+     renderDrafts();renderAudit(data.audit,data.audit_integrity);
+     window.dispatchEvent(new Event("maal:auth-changed"));
+     return true;
+   }catch(e){
+     feedback("تعذّر الاتصال بمخزن المهام التجريبي. لم نفترض نجاح الدخول.");
+     return false;
+   }
  }
  function loggedOut(){
    app.csrf="";app.actor=null;app.selected=null;app.rows=[];
-   by("operator-login").hidden=true;by("operator-guest-demo").hidden=false;by("operator-authenticated").hidden=true;
+   by("operator-guest-demo").hidden=false;by("operator-authenticated").hidden=true;
    by("operator-password").value="";by("operator-stepup").value="";
+   by("login-reveal-password").checked=false;
+   by("operator-password").type="password";
+   syncAccountHeader();
+   window.dispatchEvent(new Event("maal:auth-changed"));
  }
  async function post(path,data){
   const headers={"Content-Type":"application/json"};
@@ -111,24 +155,53 @@ document.addEventListener("DOMContentLoaded", () => {
     row.append(event,meta);root.append(row);
   });
  }
- by("operator-show-login").addEventListener("click",()=>{
-   by("operator-login").hidden=false;
-   by("operator-username").focus();
+ accountButton.addEventListener("click",()=>app.actor?goToMyDecisions():showLogin());
+ by("operator-show-login").addEventListener("click",showLogin);
+ by("login-close").addEventListener("click",()=>dialog.close());
+ dialog.addEventListener("close",()=>{
+   by("operator-password").value="";
+   by("login-reveal-password").checked=false;
+   by("operator-password").type="password";
+   announceLogin("");
+ });
+ by("login-reveal-password").addEventListener("change",()=>{
+   by("operator-password").type=by("login-reveal-password").checked?"text":"password";
  });
  by("operator-login").addEventListener("submit",async e=>{
-  e.preventDefault();
-  try {
-   await post("/api/operator/login",{login:by("operator-username").value.trim(),
-                                     password:by("operator-password").value});
-   feedback("تمت المصادقة مع حساب الاختبار.",true);
-   await getState();
-  }catch(e){feedback(e.message);}
-  finally{by("operator-password").value="";}
+   e.preventDefault();
+   if(app.busy)return;
+   const submit=by("login-submit");app.busy=true;submit.disabled=true;
+   submit.textContent="جارٍ التحقق من بياناتك…";
+   announceLogin("");
+   try{
+     await post("/api/operator/login",{
+       login:by("operator-username").value.trim(),
+       password:by("operator-password").value
+     });
+     const confirmed=await getState();
+     if(!confirmed)throw new Error("تعذر إثبات جلسة الدخول. جرّب مجددًا.");
+     dialog.close();
+     feedback("تم تسجيل الدخول. قراراتك ومسوداتك ظاهرة هنا.",true);
+     goToMyDecisions();
+   }catch(error){
+     announceLogin(error.message,true);
+     by("operator-password").focus();
+   }finally{
+     by("operator-password").value="";
+     submit.disabled=false;submit.textContent="الدخول إلى مساحة قراراتي";app.busy=false;
+   }
  });
- by("operator-logout").addEventListener("click",async()=>{
-  try{await post("/api/operator/logout",{});loggedOut();feedback("تم تسجيل الخروج.",true);}
-  catch(e){feedback(e.message);}
- });
+ async function signOut(){
+   if(app.busy)return;
+   try{
+     await post("/api/operator/logout",{});
+     loggedOut();
+     if(dialog.open)dialog.close();
+     feedback("تم تسجيل الخروج بأمان.",true);
+   }catch(e){feedback("تعذر تأكيد تسجيل الخروج. لم نفترض إنهاء الجلسة.");}
+ }
+ by("operator-logout").addEventListener("click",signOut);
+ headerLogout.addEventListener("click",signOut);
  by("operator-description").addEventListener("input",()=>{ delete by("operator-description").dataset.modelRunId; });
  by("operator-create").addEventListener("click",async()=>{
   const description=by("operator-description").value.trim();
