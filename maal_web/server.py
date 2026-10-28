@@ -53,6 +53,7 @@ STATIC = {
     "/agent-journey.js": (HERE / "agent-journey.js", "text/javascript; charset=utf-8"),
     "/new-signals.js": (HERE / "new-signals.js", "text/javascript; charset=utf-8"),
     "/business-value-study.js": (HERE / "business-value-study.js", "text/javascript; charset=utf-8"),
+    "/paired-benchmark.js": (HERE / "paired-benchmark.js", "text/javascript; charset=utf-8"),
     "/product_report.json": (HERE / "product_report.json", "application/json; charset=utf-8"),
     # Explicitly named local owner-review files, not a dynamic user-provided path.
     "/reports/MAAL_Business_Intelligence_Round2_2026-10-27.pdf":
@@ -365,6 +366,42 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("demo_integrity_hold")
                 return self.reply(200,"video/webm",binary,
                       filename="MAAL_Real_Source_Qwen_to_Human_Review_ONLY.webm")
+            if path == "/api/model-comparison":
+                # Source-backed LOCAL benchmark receipts; no unsupervised
+                # approval or claim that heuristic scores are editorial facts.
+                from maal.competition_run_paired import ROOT as BENCH_ROOT
+                from maal.competition_benchmark_v2 import VERSION,rubric
+                from maal.competition_new_source import ROOT as CAPTURE_ROOT,get_case_from_capture
+                runs=[]
+                if BENCH_ROOT.exists():
+                    for folder in BENCH_ROOT.iterdir():
+                        if not folder.is_dir() or not (folder/"receipt.json").is_file():
+                            continue
+                        try:
+                            b=json.loads((folder/"receipt.json").read_text("utf8"))
+                            if (b.get("schema")!="MAAL_PAIRED_QWEN_BENCH_V2" or
+                                b.get("rubric_version")!=VERSION or
+                                b.get("run_id")!=folder.name):continue
+                            case=get_case_from_capture(CAPTURE_ROOT/b["source_id"])
+                            if (case["evidence_digest"]!=b["source_sha256"] or
+                                case["original_url"]!=b["case_url"] or
+                                b.get("grade")!=rubric(case,b.get("response_json"),b.get("model_error"))):
+                                continue
+                            runs.append({
+                                k:b.get(k) for k in ("run_id","model_key","model",
+                                  "case","source_id","source_sha256","duration_seconds",
+                                  "model_usage","peak_sampled_working_set_mb",
+                                  "grade","response_json","recorded_at",
+                                  "model_error","iteration")
+                            })
+                        except (OSError,ValueError,TypeError,KeyError):continue
+                runs.sort(key=lambda r:r["recorded_at"],reverse=True)
+                return self._json_response(200,{
+                    "schema":"MAAL_INDEPENDENT_MODEL_BENCHMARK_V2",
+                    "rubric_version":VERSION,
+                    "company_type":"SYNTHETIC_EGYPT_DIGITAL_STUDIO",
+                    "model_generated":True,"editorial_approval":False,
+                    "no_human_action_automated":True,"items":runs})
             if path == "/api/new-signals":
                 from maal.competition_new_source import verified_cases
                 from maal.competition_new_reasoning import verified_runs, COMPANY
