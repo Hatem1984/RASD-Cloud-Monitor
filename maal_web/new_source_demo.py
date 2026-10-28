@@ -74,7 +74,8 @@ def main():
         target=page.locator('.operator-draft-item[data-draft-id="'+DRAFT+'"]')
         target.wait_for(state="visible",timeout=9000)
         assert target.get_attribute("aria-pressed")=="true"
-        assert page.locator("#operator-approve").is_enabled()
+        assert page.locator("#operator-approve").is_disabled()  # Editorial HOLD enforced
+        assert page.locator("#operator-reject").is_enabled()  # Human refusal allowed
         # This is the HUMAN STEP: intentionally DO NOT click approve/execute.
         page.screenshot(path=str(OUT/"new_pending_owner_draft_no_approval.png"),full_page=False)
         page.wait_for_timeout(6500)
