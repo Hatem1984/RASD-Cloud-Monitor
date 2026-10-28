@@ -122,13 +122,27 @@ def run():
             "(x)=>x.getBoundingClientRect().width <= window.innerWidth-10")
         m.keyboard.press("Escape")
         assert not m.locator("#login-dialog").evaluate("(x)=>x.open")
+        # A real local OWNER test login must remain easy on narrow phones.
+        m.locator("#account-entry").click()
+        m.locator("#operator-username").fill(username)
+        m.locator("#operator-password").fill(password)
+        m.locator("#login-submit").click()
+        m.locator("#login-dialog").wait_for(state="hidden",timeout=12000)
+        assert m.locator("#account-entry-label").inner_text().startswith("قراراتي")
+        assert m.locator("#header-logout").is_visible()
+        assert m.locator("#view-decisions").is_visible()
+        header=m.locator("#account-entry").bounding_box()
+        assert header is not None and header["x"]+header["width"]<=392
+        m.screenshot(path=str(OUTPUT/"mobile-after-login.png"),full_page=False)
+        m.locator("#header-logout").click()
+        m.locator("#header-logout").wait_for(state="hidden",timeout=10000)
         mobile.close()
         browser.close()
     assert not errors,errors
     receipt={"status":"LOGIN_USABILITY_ACCEPTANCE_PASS",
       "desktop_authentic_owner_login":True,"password_exposed":False,
       "original_draft_still_pending":True,"no_approval_or_task_execution":True,
-      "mobile_header_login_visible":True,"modal_keyboard_escape":True,
+      "mobile_header_login_visible":True,"mobile_owner_login_logout":True,"modal_keyboard_escape":True,
       "wrong_password_error_handled":True,"refresh_session_persists":True,
       "logout_clears_session":True,"javascript_errors":[]}
     (OUTPUT/"ux_acceptance.json").write_text(json.dumps(receipt,indent=2),encoding="utf-8")
