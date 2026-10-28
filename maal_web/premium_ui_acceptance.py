@@ -3,7 +3,7 @@
 Read-only Playwright at 1440/820/390/320. Never triggers approval or execution.
 """
 from pathlib import Path
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 import json
 
 OUT=Path("E:/MAAL/03_REPORTS_AND_REVIEW/MAAL_COMPETITION_MVP_20261028/premium_ui_qa")
@@ -17,7 +17,7 @@ def run():
             ctx=browser.new_context(viewport={"width":width,"height":900},reduced_motion="reduce")
             page=ctx.new_page();page.on("pageerror",lambda e:failures.append(str(e)))
             assert page.goto(BASE,wait_until="domcontentloaded",timeout=20000).status==200
-            page.wait_for_function("document.getElementById('premium-source-count')?.textContent==='3'",timeout=15000)
+            expect(page.locator("#premium-source-count")).to_have_text("3",timeout=15000)
             assert page.locator("#premium-executive").is_visible()
             assert page.locator("#premium-hold-count").inner_text()=="3"
             assert page.locator(".nav-link").count()==7
