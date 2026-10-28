@@ -148,6 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
     root.prepend(banner);
   }
   by("operator-approve").disabled=isEditorialHold||app.role!=="OWNER"||!chosen||chosen.state!=="DRAFT";
+  by("operator-reject").disabled=app.role!=="OWNER"||!chosen||chosen.state!=="DRAFT";
   by("operator-execute").disabled=isEditorialHold||app.role!=="OWNER"||!chosen||!["APPROVED","EXECUTED"].includes(chosen.state);
  }
  function renderAudit(audit,integrity){
@@ -237,6 +238,24 @@ document.addEventListener("DOMContentLoaded", () => {
       draft_id:app.selected,stepup_password:secret});
    feedback("تم توثيق موافقة حساب الاختبار "+data.approved_by+" داخل بيئة E.",true);
    await getState();
+  }catch(e){feedback(e.message);}
+ });
+ by("operator-reject").addEventListener("click",async()=>{
+  if(!app.selected)return;
+  const choice=app.rows.find(r=>r.draft_id===app.selected);
+  if(!choice||choice.state!=="DRAFT")return;
+  if(!by("operator-stepup").value){
+    feedback("أدخل كلمة مرور المالك لتأكيد رفض المسودة.");return;
+  }
+  if(!window.confirm("هل تؤكد رفض المسودة المحددة؟ سيتم تسجيل قرار الرفض ولا تنشأ أي مهمة."))
+    return;
+  const secret=by("operator-stepup").value;
+  by("operator-stepup").value="";
+  try{
+    const data=await post("/api/operator/reject",{
+      draft_id:app.selected,stepup_password:secret,reason:"EDITORIAL_NOT_ACCEPTED"});
+    feedback("تم تسجيل رفض بشري موثق للمسودة، دون تنفيذ أي مهمة. · "+data.state,true);
+    await getState();
   }catch(e){feedback(e.message);}
  });
  by("operator-execute").addEventListener("click",async()=>{
