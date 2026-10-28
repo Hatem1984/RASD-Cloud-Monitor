@@ -170,6 +170,27 @@ class TaskStore:
         if raise_token:
             raise PermissionError("approval_challenge_invalid")
 
+    def reject(self,draft_id:str,principal:str,reason:str="EDITORIAL_NOT_ACCEPTED")->str:
+        """Record an owner's explicit refusal without any task or model action."""
+        if not isinstance(principal,str) or not 1<=len(principal)<=100:
+            raise ValueError("invalid_owner_rejection_identity")
+        if reason not in {"EDITORIAL_NOT_ACCEPTED","BUSINESS_NOT_RELEVANT",
+                          "INSUFFICIENT_EVIDENCE","OTHER"}:
+            raise ValueError("invalid_rejection_reason")
+        with self.db() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row=conn.execute("SELECT state FROM drafts WHERE draft_id=?",(draft_id,)).fetchone()
+            if row is None:raise ValueError("reject_draft_not_found")
+            if row["state"]=="REJECTED":return "REJECTED"
+            if row["state"]!="DRAFT":raise ValueError("only_pending_draft_can_be_rejected")
+            task=conn.execute("SELECT 1 FROM tasks WHERE draft_id=?",(draft_id,)).fetchone()
+            if task is not None:raise RuntimeError("rejected_draft_cannot_have_task")
+            conn.execute("UPDATE drafts SET state='REJECTED',approval_secret_hash=NULL WHERE draft_id=?",
+                         (draft_id,))
+            self._audit(conn,draft_id,"HUMAN_REJECTED",principal,
+                        {"reason":reason,"external_action":False,"task_created":False})
+        return "REJECTED"
+
     def execute(self,draft_id:str,inject_failure:bool=False)->str:
         """Only inserts an internal test task, never an external action."""
         with self.db() as conn:
