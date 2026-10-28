@@ -62,6 +62,14 @@ document.addEventListener("DOMContentLoaded",()=>{
     list(analysis,"ما لا يزال مجهولًا",x.unknowns);
     displayValue(analysis,"توصية النموذج — تنتظر المالك",x.recommendation);
     action.hidden=false;
+    action.textContent=item.owner_draft ?
+       "افتح المسودة "+item.owner_draft.state+" للمراجعة" :
+       "جهّز مسودة قرار جديدة للمراجعة البشرية";
+    if(item.owner_draft){
+      displayValue(analysis,"حالة قرار المالك المرتبط",
+        item.owner_draft.state+" · "+item.owner_draft.draft_id+
+        (item.owner_draft.task_id?" · مهمة "+item.owner_draft.task_id:" · لم تُنفّذ مهمة بعد"));
+    }
   };
   async function load(){
     try{
@@ -100,6 +108,17 @@ document.addEventListener("DOMContentLoaded",()=>{
   }
   action.addEventListener("click",()=>{
     if(!current?.ai?.analysis || current.ai.status!=="EVIDENCE_GROUNDED_GENERATIVE_DRAFT")return;
+    const existing=current.owner_draft;
+    if(existing){
+      document.querySelector('.nav-link[data-view="decisions"]')?.click();
+      const advanced=by("advanced-operator-review");if(advanced)advanced.open=true;
+      const old=Array.from(document.querySelectorAll(".operator-draft-item"))
+        .find(b=>b.dataset.draftId===existing.draft_id);
+      if(old)old.click();
+      by("operator-lab")?.scrollIntoView({block:"start",behavior:"smooth"});
+      if(by("header-logout")?.hidden)by("account-entry")?.click();
+      return;
+    }
     const recommendation=current.ai.analysis.recommendation;
     const field=by("operator-description");
     field.value=recommendation;
@@ -116,4 +135,5 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
   });
   load();
+  window.addEventListener("maal:auth-changed",load);
 });
