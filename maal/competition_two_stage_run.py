@@ -41,7 +41,7 @@ def messages_1(case):
       {"role":"user","content":json.dumps({
        "version":VERSION,"stage":"EVIDENCE_AND_BUSINESS_RELEVANCE",
        "company":task["company"],"decision_question":FOCUS[case["source_key"]]["question"],
-       "publisher":task["publisher"],"publisher_quote_options":quotes[:6],
+       "publisher":task["publisher"],"publisher_quote_options":quotes,
        "untrusted_publisher_excerpt":task["untrusted_publisher_excerpt"],
        "instructions":[
         "اختر 1-2 وقائع حرفية من publisher_quote_options فقط.",
@@ -121,7 +121,7 @@ def run_case(case):
         write_new(folder/"stage2.json",s2)
     grade=frozen_acceptance(case,s1["output"] if stage1_valid else None,
                             s2["output"] if s2 and not s2["error"] else None,
-                            s1["error"],s2["error"] if s2 else None)
+                            s1["error"],s2["error"] if s2 else None,run_id)
     receipt={"schema":"MAAL_TWO_STAGE_REASONING_V1","version":VERSION,
       "model":MODEL_NAME,"model_key":MODEL_KEY,"run_id":run_id,
       "case":case["source_key"],"source_id":case["evidence_id"],
