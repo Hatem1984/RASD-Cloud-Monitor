@@ -96,8 +96,15 @@ document.addEventListener("DOMContentLoaded",()=>{
   };
   async function load(){
     try{
-      const response=await fetch("/api/new-signals",{cache:"no-store",credentials:"same-origin"});
-      if(!response.ok)throw new Error("تعذر تحميل أدلة المصادر المقبولة");
+      let response=null;
+      for(let attempt=0;attempt<3;attempt++){
+        try{
+          response=await fetch("/api/new-signals",{cache:"no-store",credentials:"same-origin"});
+          if(response.ok)break;
+        }catch(_){response=null;}
+        if(attempt<2)await new Promise(resolve=>setTimeout(resolve,(attempt+1)*650));
+      }
+      if(!response || !response.ok)throw new Error("تعذر تحميل أدلة المصادر المقبولة");
       const data=await response.json();
       if(data.schema!=="MAAL_NEW_OFFICIAL_SIGNALS_V1" ||
          data.live_schedule!==false || data.approval_requires_human!==true){
