@@ -50,7 +50,7 @@ def main():
         page.locator(".new-signal-choice").first.wait_for(timeout=13000)
         measurements["page_and_sources_ready_seconds"]=round(perf_counter()-start,3)
         assert page.locator(".new-signal-choice").count()==3
-        page.wait_for_timeout(1200)
+        page.wait_for_timeout(3000)
         start=perf_counter()
         fpt=page.locator('.new-signal-choice[data-evidence="'+FPT+'"]')
         fpt.click()
@@ -63,7 +63,10 @@ def main():
         assert "الشركة الافتراضية" in page.locator("#new-signal-analysis").inner_text()
         measurements["new_source_analysis_visible_seconds"]=round(perf_counter()-start,3)
         page.screenshot(path=str(OUT/"new_real_fpt_evidence_and_analysis.png"),full_page=True)
-        page.wait_for_timeout(1700)
+        page.locator("#new-signal-analysis").scroll_into_view_if_needed()
+        page.wait_for_timeout(7000)
+        page.locator("#new-signal-draft").scroll_into_view_if_needed()
+        page.wait_for_timeout(4000)
         # Existing owner draft is retrieved from authenticated Gate H DB.
         page.locator("#new-signal-draft").click()
         page.locator("#operator-authenticated").wait_for(state="visible",timeout=9000)
@@ -74,7 +77,7 @@ def main():
         assert page.locator("#operator-approve").is_enabled()
         # This is the HUMAN STEP: intentionally DO NOT click approve/execute.
         page.screenshot(path=str(OUT/"new_pending_owner_draft_no_approval.png"),full_page=False)
-        page.wait_for_timeout(2100)
+        page.wait_for_timeout(6500)
         assert not errors,errors
         video=page.video
         context.close()
