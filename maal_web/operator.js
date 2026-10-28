@@ -139,8 +139,16 @@ document.addEventListener("DOMContentLoaded", () => {
     root.append(btn);
   });
   const chosen=app.rows.find(r=>r.draft_id===app.selected);
-  by("operator-approve").disabled=app.role!=="OWNER"||!chosen||chosen.state!=="DRAFT";
-  by("operator-execute").disabled=app.role!=="OWNER"||!chosen||!["APPROVED","EXECUTED"].includes(chosen.state);
+  const isEditorialHold=chosen?.draft_id==="ea78e338-d2a5-4c5e-a5cc-cbd296017c2c";
+  if(isEditorialHold){
+    const banner=document.createElement("p");
+    banner.className="operator-audit-integrity";
+    banner.style.color="#f0b78b";
+    banner.textContent="HOLD تحريري: توصية FPT الحالية واسعة وتفترض تعاونًا غير مثبت. لا يجوز اعتمادها أو تنفيذها. يلزم تحليل جديد ومراجعة مستقلة.";
+    root.prepend(banner);
+  }
+  by("operator-approve").disabled=isEditorialHold||app.role!=="OWNER"||!chosen||chosen.state!=="DRAFT";
+  by("operator-execute").disabled=isEditorialHold||app.role!=="OWNER"||!chosen||!["APPROVED","EXECUTED"].includes(chosen.state);
  }
  function renderAudit(audit,integrity){
   const root=by("operator-audit");root.replaceChildren();
