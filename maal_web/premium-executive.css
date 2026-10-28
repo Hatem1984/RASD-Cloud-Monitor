@@ -85,3 +85,20 @@
 .maal-premium .operator-draft-info{min-width:0}
 .maal-premium .operator-draft-info strong{line-height:1.85}
 .maal-premium .operator-draft-item{min-height:88px}
+
+/* Owner-facing decision shell; legacy operator controls remain functional but
+   are intentionally progressive, not the first owner screen. */
+.maal-premium .premium-owner-console{background:#FFF;border:1px solid var(--p-line);border-radius:15px;margin:15px 0 22px;overflow:hidden}
+.maal-premium .premium-owner-console>summary{cursor:pointer;padding:18px 23px;font-size:16px;font-weight:800;color:#143A4B;min-height:55px;background:#F2F8F6}
+.maal-premium .premium-owner-console[open]>summary{border-bottom:1px solid var(--p-line)}
+.maal-premium .premium-owner-console #operator-lab{margin:18px;min-width:0}
+.maal-premium .premium-source-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:10px 0}
+.maal-premium .premium-source-field{display:grid;gap:3px;border:1px solid #DEE7E8;background:#F8FAFB;border-radius:10px;padding:9px 13px}
+.maal-premium .premium-source-field strong{font-size:12px;color:#3C5A66}
+.maal-premium .premium-source-field span{color:#193C4B;font-size:13px;overflow-wrap:anywhere}
+.maal-premium #new-signal-analysis .premium-disclosure:first-child{grid-column:1/-1}
+@media(max-width:590px){
+ .maal-premium .premium-owner-console>summary{font-size:14px;padding:13px}
+ .maal-premium .premium-owner-console #operator-lab{margin:9px}
+ .maal-premium .premium-source-fields{grid-template-columns:1fr}
+}
