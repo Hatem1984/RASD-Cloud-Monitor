@@ -143,9 +143,13 @@ document.addEventListener("DOMContentLoaded",()=>{
   set("premium-signal-desc","حدث منشور ومثبت، أما أثره على الشركة الافتراضية فمشروط ببيانات لم تُثبت بعد.");
   set("premium-signal-impact",r.status==="APPROVED"?"مراجعة مسجلة؛ قرار المالك مستقل.":"HOLD — لا توصية تنفيذية مقبولة لهذه الإشارة.");
   const pill=$("premium-signal-status");
-  if(pill){pill.textContent=r.status==="APPROVED"?"دليل ومراجعة":"دليل موثق · تحليل HOLD";pill.dataset.tone=r.status==="APPROVED"?"verified":"hold"}
- }).catch(()=>{set("premium-stage-statement","تعذر التحقق من الأدلة. لا يوجد قرار جاهز.");
-  set("premium-signal-title","تعذر قراءة المصدر المحلي.")});
+  if(pill){pill.textContent=r.status==="APPROVED"?"دليل محفوظ ومراجعة مثبتة":"دليل محفوظ · التوصية غير مقبولة";pill.dataset.tone=r.status==="APPROVED"?"verified":"hold"}
+ }).catch(()=>{set("premium-stage-statement","المصدر غير متاح حاليًا؛ لا يمكن تقييم إشارة أو اعتماد قرار.");
+  set("premium-signal-title","تعذّر التحقق من مصدر الإشارة.");
+  set("premium-source-count","—");set("premium-hold-count","—");
+  const pill=$("premium-signal-status");
+  if(pill){pill.textContent="المصدر غير متاح";pill.dataset.tone="hold"}
+ });
  async function refreshOwner(){
   try{
    const r=await fetch("/api/operator/state",{cache:"no-store",credentials:"same-origin"});
