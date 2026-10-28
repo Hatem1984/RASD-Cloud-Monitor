@@ -59,7 +59,7 @@
 <div class="workspace">
 <header class="topbar">
   <div class="crumbs"><span>مَآل / استخبارات الأعمال</span><svg class="icon"><use href="#i-arrow"/></svg><strong id="current-view-label">القيادة</strong></div>
-  <div class="topbar-side"><button type="button" class="quick-open" id="quick-open" title="بحث سريع وتنقل — Ctrl+K" aria-haspopup="dialog"><svg class="icon"><use href="#i-search"/></svg><span>بحث سريع</span><kbd>Ctrl K</kbd></button><span class="top-tag"><span class="status-dot"></span> LOCAL · PRIVATE</span><div class="avatar" aria-label="وضع تجربة المالك">M</div></div>
+  <div class="topbar-side"><button type="button" class="quick-open" id="quick-open" title="بحث سريع وتنقل — Ctrl+K" aria-haspopup="dialog"><svg class="icon"><use href="#i-search"/></svg><span>بحث سريع</span><kbd>Ctrl K</kbd></button><span class="top-tag"><span class="status-dot"></span> LOCAL · PRIVATE</span><div class="account-toolbar"><button type="button" id="account-entry" class="account-entry" aria-haspopup="dialog" aria-controls="login-dialog"><svg class="icon"><use href="#i-lock"/></svg><span id="account-entry-label">تسجيل الدخول</span></button><button type="button" id="header-logout" class="header-logout" hidden>خروج</button></div></div>
 </header>
 <main id="content" tabindex="-1">
   <div class="page-heading"><div><p class="eyebrow">INTELLIGENCE COMMAND CENTER</p><h1 id="current-heading">وضوح أكبر. <span class="gold">قرار أذكى.</span></h1><p id="current-subheading" class="heading-desc">استكشف كيف تتحول إشارة موثّقة إلى رؤية قابلة للمراجعة.</p></div><div class="heading-status"><span class="outline-tag">نسخة تجريبية غير إنتاجية</span><small id="snapshot-date">آخر جرد معتمد: جارٍ التحقق</small></div></div>
@@ -244,12 +244,9 @@
   <h4>عرض النتائج الفعلية دون تسجيل دخول</h4>
   <p>وضع عرض تجريبي محلي على هذا الكمبيوتر: مشاهدة الدليل، تشغيل Qwen3 المُسجل، والتوصية وحالة المهمة. لا يمنح موافقة أو صلاحية تنفيذ.</p>
   <div id="operator-guest-summary" role="status" aria-live="polite">جارٍ تحميل نتائج الاختبار الفعلية…</div>
-  <button id="operator-show-login" type="button" class="btn btn-secondary">الدخول المحمي للاعتماد لاحقًا</button>
+  <button id="operator-show-login" type="button" class="btn btn-secondary">الدخول إلى حساب المالك</button>
  </section>
- <form id="operator-login" class="operator-form" hidden>
- <label>مستخدم الاختبار<input id="operator-username" autocomplete="username" required placeholder="حساب اختبار مالك"></label>
- <label>كلمة مرور الاختبار<input id="operator-password" type="password" autocomplete="current-password" required></label>
- <button type="submit" class="btn btn-secondary">تسجيل الدخول الآمن</button></form>
+
  <div id="operator-authenticated" hidden>
  <div class="operator-authbar"><span id="operator-whoami"></span><button type="button" id="operator-logout" class="btn btn-secondary">تسجيل الخروج</button></div>
  <label class="operator-action-label">وصف المهمة الداخلية
@@ -272,7 +269,7 @@
 <section id="view-operations" class="view hidden" aria-label="التشغيل والأمان">
  <div class="ops-grid">
   <div class="content-card"><p class="eyebrow">SYSTEM BOUNDARIES</p><h3>ماذا يعمل الآن؟</h3><div class="op-row"><strong>محرك RASD</strong><span>بنية سحابية قائمة، منفصلة عن هذه الواجهة</span></div><div class="op-row"><strong>واجهة مَآل V0.2</strong><span>معاينة محلية على E: للقراءة فقط</span></div><div class="op-row"><strong>مسار دليل → توصية</strong><span>تجربة تاريخية موثّقة، لا عميل حقيقي</span></div><div class="op-row"><strong>إرسال البريد</strong><span>غير متاح من الواجهة؛ قبول SMTP سابق لا يثبت Inbox</span></div><div class="op-row"><strong>الجدولة الاحتياطية</strong><span>توجد مشكلة قديمة مفتوحة في رؤية سجل التسليم</span></div></div>
-  <div class="content-card"><p class="eyebrow">SECURE BY DEFAULT</p><h3>الحدود الآمنة</h3><ul class="guard-list"><li>الخادم مقيد بـ 127.0.0.1 على الكمبيوتر.</li><li>لا تسجيل دخول أو بيانات عملاء في المعاينة.</li><li>لا API لكتابة بيانات أو إرسال بريد.</li><li>ملفات الدليل محفوظة داخل E وتخضع للتحقق من SHA-256.</li><li>لا تغيير للـGitHub Actions أو أسرار الإنتاج.</li></ul></div>
+  <div class="content-card"><p class="eyebrow">SECURE BY DEFAULT</p><h3>الحدود الآمنة</h3><ul class="guard-list"><li>الخادم مقيد بـ 127.0.0.1 على الكمبيوتر.</li><li>دخول تجريبي محلي محمي، ولا توجد حسابات عملاء منشورة.</li><li>توجد فقط واجهات مهمة داخلية محمية، ولا إرسال بريد.</li><li>ملفات الدليل محفوظة داخل E وتخضع للتحقق من SHA-256.</li><li>لا تغيير للـGitHub Actions أو أسرار الإنتاج.</li></ul></div>
  </div>
 </section>
 
@@ -280,6 +277,20 @@
 </main>
 </div>
 </div>
+<dialog id="login-dialog" class="app-dialog login-dialog" aria-labelledby="login-dialog-title" aria-describedby="login-dialog-summary">
+ <div class="login-dialog-head"><div class="login-mark" aria-hidden="true"><svg class="icon"><use href="#i-lock"/></svg></div><button type="button" id="login-close" class="dialog-close" aria-label="إغلاق تسجيل الدخول">×</button></div>
+ <p class="eyebrow">MA'AL / SECURE OWNER ACCESS</p>
+ <h2 id="login-dialog-title">أهلًا بيك في مَآل</h2>
+ <p id="login-dialog-summary" class="login-dialog-summary">سجّل دخولك علشان تراجع قراراتك وتتابع مهامك، من غير ما تدور في القوائم.</p>
+ <form id="operator-login" class="operator-form">
+  <label for="operator-username">اسم المستخدم<input id="operator-username" autocomplete="username" autocapitalize="none" spellcheck="false" required placeholder="اسم مستخدم الحساب" maxlength="80"></label>
+  <label for="operator-password">كلمة المرور<input id="operator-password" type="password" autocomplete="current-password" required placeholder="أدخل كلمة المرور" maxlength="180"></label>
+  <label class="login-show-password" for="login-reveal-password"><input id="login-reveal-password" type="checkbox"> إظهار كلمة المرور</label>
+  <button id="login-submit" type="submit" class="btn btn-primary">الدخول إلى مساحة قراراتي</button>
+ </form>
+ <div id="login-feedback" class="login-feedback" role="status" aria-live="polite" hidden></div>
+ <p class="login-dialog-note">هذا حساب مختبر محلي آمن. لا موافقة على القرارات أو تنفيذ للمهام بمجرد تسجيل الدخول.</p>
+</dialog>
 <dialog id="source-dialog" class="app-dialog" aria-labelledby="source-dialog-title"><div class="dialog-head"><div><p class="eyebrow">PUBLISHER CONFIGURATION</p><h3 id="source-dialog-title">تفاصيل المصدر</h3></div><button type="button" class="dialog-close" id="source-close" aria-label="إغلاق تفاصيل المصدر">×</button></div><div id="source-dialog-content"></div><div class="dialog-actions"><button type="button" class="btn btn-secondary" id="source-done">إغلاق</button></div></dialog>
 <dialog id="command-dialog" class="app-dialog command-dialog" aria-labelledby="command-dialog-title"><div class="dialog-head"><div><p class="eyebrow">QUICK NAVIGATION</p><h3 id="command-dialog-title">إلى أين نذهب؟</h3></div><button type="button" class="dialog-close" id="command-close" aria-label="إغلاق البحث السريع">×</button></div><label class="command-search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="command-query" placeholder="ابحث عن القسم أو المهمة" aria-label="البحث عن قسم في الواجهة" autocomplete="off"></label><div id="command-results" class="command-results"></div><p class="context-hint">البحث داخل أقسام الواجهة فقط؛ لا تبحث هذه النافذة في الإنترنت أو قواعد الإنتاج.</p></dialog>
 <div class="toast" role="status" aria-live="polite" id="toast" hidden></div>
