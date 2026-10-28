@@ -478,6 +478,7 @@ class Handler(BaseHTTPRequestHandler):
         actions={
             "/api/operator/login","/api/operator/logout",
             "/api/operator/draft","/api/operator/approve","/api/operator/reject","/api/operator/execute",
+            "/api/operator/editorial-signoff",
             "/api/ai/run"
         }
         if path not in actions:
@@ -514,6 +515,11 @@ class Handler(BaseHTTPRequestHandler):
                 from maal.demo_runtime import infer_to_local_receipt
                 result=infer_to_local_receipt(get_case(),MODEL_RUN)
                 return self._json_response(200,{"run":result,"analysis":get_local_ai_run()})
+            if path=="/api/operator/editorial-signoff":
+                from maal.competition_editorial_gate import sign_owner_editorial
+                result=sign_owner_editorial(gate,token,csrf,body.get("model_run_id"),
+                                             body.get("stepup_password",""))
+                return self._json_response(200,result)
             if path=="/api/operator/draft":
                 linked_run=body.get("model_run_id")
                 fresh_evidence=body.get("new_evidence_id")
@@ -525,45 +531,31 @@ class Handler(BaseHTTPRequestHandler):
                     if (not isinstance(fresh_evidence,str) or
                             not re.fullmatch(r"[0-9a-f]{24}",fresh_evidence)):
                         raise ValueError("new_evidence_invalid")
-                    case=get_case_from_capture(ROOT/fresh_evidence)
-                    run=next((r for r in verified_runs() if r["evidence_id"]==fresh_evidence
-                              and r["run_id"]==linked_run
-                              and r["status"]=="EVIDENCE_GROUNDED_GENERATIVE_DRAFT"),None)
-                    if not run or body.get("description")!=run["analysis"]["recommendation"]:
-                        raise ValueError("source_model_recommendation_unverified")
-                    # An automated model score is NEVER an editorial green light.
-                    # New drafts need a private run-bound acceptance receipt.
-                    editorial=Path("E:/MAAL/04_HISTORICAL_QA/MAAL_COMPETITION_MVP_20261028/editorial_quality_20261028.json")
-                    try:
-                        assessment=json.loads(editorial.read_text("utf8"))
-                        editorial_match=assessment["cases"][fresh_evidence]
-                    except (OSError,ValueError,TypeError,KeyError):
-                        raise ValueError("unreviewed_new_source_hold")
-                    if (editorial_match.get("run_id")!=linked_run or
-                        editorial_match.get("status")!="APPROVED"):
-                        raise ValueError("new_source_editorial_hold")
+                    # ONE GENERAL immutable editorial gate for ANY source or
+                    # draft. No run-specific/hardcoded FPT exception exists.
+                    from maal.competition_editorial_gate import check_run_binding
+                    case,verified_run,description=check_run_binding(gate.store,linked_run,actor)
+                    if (case["evidence_id"]!=fresh_evidence or
+                        body.get("description")!=description):
+                        raise ValueError("model_evidence_or_action_contract_hold")
                     evidence=Evidence(case["evidence_id"],case["publisher"],
                         case["original_url"],case["headline"],
                         date.fromisoformat(case["published_day"]) if case["published_day"]
                            else datetime.fromisoformat(case["observed_at"]).date(),
                         datetime.fromisoformat(case["observed_at"]),
                         case["evidence_digest"],case["verification_status"])
-                elif linked_run is not None:
-                    live_result=get_local_ai_run()
-                    if (linked_run!=live_result["run_id"] or
-                        body.get("description")!=live_result["recommendation"]):
-                        raise ValueError("model_run_and_recommendation_mismatch")
+                else:
+                    # Historical unbound owner drafts remain readable, but may
+                    # NOT be created/approved by this competition endpoint.
+                    raise ValueError("new_draft_requires_evidence_and_editorial_signoff")
                 result=gate.create(token,csrf,evidence,
                                    body.get("description",""),body.get("idempotency_key",""),
                                    model_run_id=linked_run)
                 return self._json_response(200,{"draft_id":result,"state":"DRAFT",
                   "evidence_id":evidence.evidence_id,"source_model_run_id":linked_run})
             if path=="/api/operator/approve":
-                # Editorial HOLD is independent of model schema acceptance.
-                # Do not let the historically overbroad FPT recommendation be
-                # approved as an actionable owner task through direct API.
-                if body.get("draft_id")=="ea78e338-d2a5-4c5e-a5cc-cbd296017c2c":
-                    raise ValueError("editorial_hold_overbroad_fpt_draft")
+                from maal.competition_editorial_gate import require_draft_allowed
+                require_draft_allowed(gate,actor,body.get("draft_id",""))
                 result=gate.approve(token,csrf,body.get("draft_id",""),
                                     body.get("stepup_password",""))
                 return self._json_response(200,result)
@@ -573,8 +565,8 @@ class Handler(BaseHTTPRequestHandler):
                                    body.get("reason","EDITORIAL_NOT_ACCEPTED"))
                 return self._json_response(200,result)
             if path=="/api/operator/execute":
-                if body.get("draft_id")=="ea78e338-d2a5-4c5e-a5cc-cbd296017c2c":
-                    raise ValueError("editorial_hold_overbroad_fpt_draft")
+                from maal.competition_editorial_gate import require_draft_allowed
+                require_draft_allowed(gate,actor,body.get("draft_id",""))
                 result=gate.execute(token,csrf,body.get("draft_id",""))
                 return self._json_response(200,result)
         except PermissionError:
