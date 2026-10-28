@@ -10,7 +10,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   let current=null;
   const node=(tag,text,cls)=>{
     const el=document.createElement(tag);
-    if(text!==undefined)el.textContent=String(text);
+    if(text!==undefined && text!==null)el.textContent=String(text);
     if(cls)el.className=cls;
     return el;
   };
