@@ -142,6 +142,17 @@ class OperatorGateway:
         return {"draft_id":draft_id,"state":"APPROVED_BY_AUTHENTICATED_TEST_OWNER",
                 "approved_by":actor["login"],"production_approval":False}
 
+    def reject(self,token,csrf,draft_id,stepup_password,reason):
+        actor=self.require(token,csrf)
+        if actor["role"]!="OWNER":raise PermissionError("rejection_restricted_to_owner")
+        self._owner_draft(actor,draft_id)
+        with self.store.db() as db:
+            verified=self._verify_password(db,actor["login"],stepup_password)
+        if not verified:raise PermissionError("stepup_authentication_failed")
+        return {"draft_id":draft_id,
+                "state":self.store.reject(draft_id,actor["login"],reason),
+                "approved_by":None,"task_created":False,"external_action":False}
+
     def execute(self,token,csrf,draft_id):
         actor=self.require(token,csrf)
         if actor["role"]!="OWNER":raise PermissionError("execute_restricted_to_owner")
