@@ -134,7 +134,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const title=document.createElement("strong");title.textContent=item.description;
     const meta=document.createElement("small");
     meta.textContent="معرّف المسودة: "+item.draft_id+" · الحالة: "+item.state+" · دليل: "+item.evidence_id+(item.approved_by?" · المعتمد: "+item.approved_by:"");
-    info.append(title,meta);btn.append(info);
+    const states=document.createElement("span");
+    states.className="premium-decision-states";
+    const addStage=(label,tone)=>{
+      const chip=document.createElement("span");chip.className="premium-decision-stage";
+      chip.dataset.tone=tone;chip.textContent=label;states.append(chip);
+    };
+    addStage(item.state==="EXECUTED"?"حالة تاريخية منفذة":"اقتراح للمراجعة","neutral");
+    addStage(item.can_approve===true || item.can_execute===true?
+      "مراجعة تحريرية مثبتة":"لا قبول تحريري لهذه المسودة","hold");
+    addStage(item.state==="DRAFT"?"ينتظر قرار المالك":
+      item.state==="EXECUTED"?"قرار بشري سابق وتنفيذ داخلي":
+      item.state==="REJECTED"?"رفضه المالك":item.state,
+      item.state==="EXECUTED"?"verified":"neutral");
+    info.append(title,states,meta);btn.append(info);
     btn.addEventListener("click",()=>{app.selected=item.draft_id;renderDrafts();feedback("المسودة المختارة: "+item.draft_id+" · الحالة: "+item.state,false);});
     root.append(btn);
   });
