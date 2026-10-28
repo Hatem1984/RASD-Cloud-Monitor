@@ -26,7 +26,7 @@ class RejectionAcceptance(unittest.TestCase):
         self.store=TaskStore.__new__(TaskStore)
         self.store.path=self.dbfile
     def query(self,sql,args=()):
-        with sqlite3.connect(self.dbfile) as db:return db.execute(sql,args).fetchall()
+        with sqlite3.connect(self.dbfile) as db:\n            result=db.execute(sql,args).fetchall()\n        db.close()\n        return result
     def test_human_rejection_is_final_and_idempotent(self):
         self.assertEqual(self.store.reject("fpt","test-owner","EDITORIAL_NOT_ACCEPTED"),"REJECTED")
         self.assertEqual(self.store.reject("fpt","test-owner","EDITORIAL_NOT_ACCEPTED"),"REJECTED")
