@@ -57,9 +57,14 @@ def mem_working_set(pid):
     finally:k.CloseHandle(ctypes.c_void_p(h))
     return None
 
-def run_once(model_key,case,iteration):
+def run_once(model_key,case,iteration,prompt_variant="V2"):
     base,model=SERVERS[model_key]
-    task=task_for_case(case)
+    if prompt_variant=="V3":
+        from maal.competition_prompt_v3 import task_for_case_v3
+        task=task_for_case_v3(case)
+    elif prompt_variant=="V2":
+        task=task_for_case(case)
+    else:raise ValueError("unknown_prompt_variant")
     quotes,_=source_prompt(case)
     schema=output_schema(quotes)
     payload={"model":model,"messages":[
@@ -104,6 +109,7 @@ def run_once(model_key,case,iteration):
         "rubric_version":VERSION,
         "run_id":run_id,
         "model_key":model_key,"model":model,"case":case["source_key"],
+        "prompt_version":prompt_variant,
         "iteration":iteration,
         "source_id":case["evidence_id"],
         "source_sha256":case["evidence_digest"],
@@ -137,12 +143,14 @@ def main():
         raise SystemExit("Usage: python -m maal.competition_run_paired 1.7B|4B [repeat_count]")
     model_key=sys.argv[1]
     repeat=int(sys.argv[2]) if len(sys.argv)>2 else 1
+    prompt_variant=sys.argv[3] if len(sys.argv)>3 else "V2"
+    if prompt_variant not in ("V2","V3"):raise ValueError("unsupported_prompt_variant")
     if not 1<=repeat<=2:raise ValueError("repeat_count_out_of_scope")
     cases={v["source_key"]:v for v in verified_cases()}
     if not set(CASES).issubset(cases):raise RuntimeError("not_all_official_capture_proofs_exist")
     for iteration in range(1,repeat+1):
         for key in CASES:
-            result=run_once(model_key,cases[key],iteration)
+            result=run_once(model_key,cases[key],iteration,prompt_variant)
             print(json.dumps({
                 "case":key,"model":model_key,"run_id":result["run_id"],
                 "sec":result["duration_seconds"],
