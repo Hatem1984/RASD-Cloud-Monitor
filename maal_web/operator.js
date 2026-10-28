@@ -141,8 +141,11 @@ document.addEventListener("DOMContentLoaded", () => {
       chip.dataset.tone=tone;chip.textContent=label;states.append(chip);
     };
     addStage(item.state==="EXECUTED"?"حالة تاريخية منفذة":"اقتراح للمراجعة","neutral");
-    addStage(item.can_approve===true || item.can_execute===true?
-      "مراجعة تحريرية مثبتة":"لا قبول تحريري لهذه المسودة","hold");
+    addStage(item.state==="EXECUTED"?"مسار تاريخي بمعيار سابق":
+      item.can_approve===true || item.can_execute===true?
+      "مراجعة تحريرية مثبتة":"HOLD تحريري — غير مؤهل للاعتماد",
+      item.state==="EXECUTED"?"neutral":
+      item.can_approve===true || item.can_execute===true?"verified":"hold");
     addStage(item.state==="DRAFT"?"ينتظر قرار المالك":
       item.state==="EXECUTED"?"قرار بشري سابق وتنفيذ داخلي":
       item.state==="REJECTED"?"رفضه المالك":item.state,
