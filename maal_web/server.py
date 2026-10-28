@@ -51,6 +51,7 @@ STATIC = {
     "/app.js": (HERE / "app.js", "text/javascript; charset=utf-8"),
     "/operator.js": (HERE / "operator.js", "text/javascript; charset=utf-8"),
     "/agent-journey.js": (HERE / "agent-journey.js", "text/javascript; charset=utf-8"),
+    "/new-signals.js": (HERE / "new-signals.js", "text/javascript; charset=utf-8"),
     "/product_report.json": (HERE / "product_report.json", "application/json; charset=utf-8"),
     # Explicitly named local owner-review files, not a dynamic user-provided path.
     "/reports/MAAL_Business_Intelligence_Round2_2026-10-27.pdf":
@@ -357,7 +358,7 @@ class Handler(BaseHTTPRequestHandler):
                             k:item[k] for k in ("evidence_id","publisher","headline",
                                 "original_url","published_day","date_precision",
                                 "observed_at","verification_status","evidence_digest",
-                                "evidence_image_url","sector_angle","proof_method")
+                                "evidence_image_url","sector_angle","proof_method","source_key")
                         },
                         "ai":None if not selected else {
                             k:selected[k] for k in ("run_id","status","model",
