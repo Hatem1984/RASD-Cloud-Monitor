@@ -26,8 +26,8 @@ def run():
                 assert page.locator("#account-entry").bounding_box()["y"]<page.locator(".nav-link").first.bounding_box()["y"]
             page.screenshot(path=str(OUT/f"after_{width}.png"),animations="disabled")
             page.locator("#premium-go-signals").click()
-            page.locator(".new-signal-choice").first.wait_for()
-            assert page.locator(".new-signal-choice").count()==3
+            page.locator("#new-signal-choices .new-signal-choice").first.wait_for()
+            assert page.locator("#new-signal-choices .new-signal-choice").count()==3
             page.screenshot(path=str(OUT/f"signals_{width}.png"),animations="disabled")
             page.locator('.nav-link[data-view="impact"]').click()
             page.locator("#paired-ai-benchmark").evaluate("(el)=>el.open=true")
