@@ -89,7 +89,7 @@ def validate_stage_two(case,response,stage_one,run_id):
         raise ValueError("stage2_not_testable")
     if not _no_financial_claim(response):raise ValueError("stage2_invented_financial_claim")
     return True
-def frozen_acceptance(case,s1,s2,error1=None,error2=None):
+def frozen_acceptance(case,s1,s2,error1=None,error2=None,expected_stage_one_run_id=None):
     """Fixed structural gate. A candidate requires an independent human editorial review."""
     if error1 or not s1:
         return {"status":"HOLD","reason":str(error1 or "missing_stage1"),"critical":True}
@@ -101,7 +101,9 @@ def frozen_acceptance(case,s1,s2,error1=None,error2=None):
                 "action_contradictions":0 if s2 is None else 1}
     if error2 or s2 is None:
         return {"status":"HOLD","reason":str(error2 or "stage2_missing"),"critical":True}
-    try:validate_stage_two(case,s2,s1,s2["stage_one_run_id"])
+    if not expected_stage_one_run_id:
+        return {"status":"HOLD","reason":"missing_verified_stage_one_run_binding","critical":True}
+    try:validate_stage_two(case,s2,s1,expected_stage_one_run_id)
     except (ValueError,KeyError,TypeError) as exc:
         return {"status":"HOLD","reason":str(exc),"critical":True}
     return {"status":"CANDIDATE_FOR_INDEPENDENT_EDITORIAL",
