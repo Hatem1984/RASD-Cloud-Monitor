@@ -3,7 +3,7 @@
    This browser never receives owner challenge secrets or raw SQLite files. */
 document.addEventListener("DOMContentLoaded", () => {
  const by=id=>document.getElementById(id);
- const app={csrf:"", selected:null,rows:[],actor:null,busy:false};
+ const app={csrf:"", selected:null,rows:[],actor:null,role:null,busy:false};
  const feedback=(message,ok=false)=>{let el=by("operator-feedback");el.textContent=message;el.dataset.ok=String(ok);};
  async function loadGuestPreview(){
    const root=by("operator-guest-summary");root.replaceChildren();
@@ -74,7 +74,7 @@ document.addEventListener("DOMContentLoaded", () => {
  }
  function syncAccountHeader(){
    const signedIn=Boolean(app.actor);
-   accountLabel.textContent=signedIn?"قراراتي · "+app.actor:"تسجيل الدخول";
+   accountLabel.textContent=signedIn?"قراراتي"+(app.rows.filter(r=>r.state==="DRAFT").length?" ("+app.rows.filter(r=>r.state==="DRAFT").length+")":""):"تسجيل الدخول";
    accountButton.classList.toggle("signed-in",signedIn);
    accountButton.setAttribute("aria-haspopup",signedIn?"false":"dialog");
    accountButton.setAttribute("aria-label",signedIn?"فتح قرارات حساب "+app.actor:"تسجيل الدخول إلى مَآل");
@@ -86,7 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
      if(r.status===401){loggedOut();return false;}
      if(!r.ok)throw new Error("state_unavailable");
      const data=await r.json();
-     app.csrf=data.csrf;app.actor=data.operator;app.rows=data.drafts;
+     app.csrf=data.csrf;app.actor=data.operator;app.role=data.role;app.rows=data.drafts;
      by("operator-guest-demo").hidden=true;
      by("operator-authenticated").hidden=false;
      by("operator-whoami").textContent="مستخدم: "+data.operator+" · بيئة: "+data.tenant+" · "+data.role;
@@ -100,7 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
    }
  }
  function loggedOut(){
-   app.csrf="";app.actor=null;app.selected=null;app.rows=[];
+   app.csrf="";app.actor=null;app.role=null;app.selected=null;app.rows=[];
    by("operator-guest-demo").hidden=false;by("operator-authenticated").hidden=true;
    by("operator-password").value="";by("operator-stepup").value="";
    by("login-reveal-password").checked=false;
@@ -138,8 +138,8 @@ document.addEventListener("DOMContentLoaded", () => {
     root.append(btn);
   });
   const chosen=app.rows.find(r=>r.draft_id===app.selected);
-  by("operator-approve").disabled=!chosen||chosen.state!=="DRAFT";
-  by("operator-execute").disabled=!chosen||!["APPROVED","EXECUTED"].includes(chosen.state);
+  by("operator-approve").disabled=app.role!=="OWNER"||!chosen||chosen.state!=="DRAFT";
+  by("operator-execute").disabled=app.role!=="OWNER"||!chosen||!["APPROVED","EXECUTED"].includes(chosen.state);
  }
  function renderAudit(audit,integrity){
   const root=by("operator-audit");root.replaceChildren();
