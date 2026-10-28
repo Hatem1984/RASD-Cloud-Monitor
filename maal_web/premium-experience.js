@@ -55,8 +55,25 @@ document.addEventListener("DOMContentLoaded",()=>{
   const d=new Date(v);return !v||isNaN(+d)?"غير مثبت":
    new Intl.DateTimeFormat("ar-EG",{timeZone:"Africa/Cairo",dateStyle:"medium"}).format(d)
  }
- fetch("/api/new-signals",{cache:"no-store",credentials:"same-origin"})
- .then(r=>{if(!r.ok)throw Error("source unavailable");return r.json()})
+ const fetchVerifiedSources=async()=>{
+  // The source gateway re-checks original screenshots and SHA-256 for every
+  // request. Never substitute stale data if a transient read fails.
+  let lastError;
+  for(let attempt=0;attempt<3;attempt++){
+   try{
+    const response=await fetch("/api/new-signals",{cache:"no-store",credentials:"same-origin"});
+    if(!response.ok)throw new Error("source gateway HTTP "+response.status);
+    const data=await response.json();
+    if(data.schema!=="MAAL_NEW_OFFICIAL_SIGNALS_V1")throw new Error("source contract HOLD");
+    return data;
+   }catch(e){
+    lastError=e;
+    if(attempt<2)await new Promise(resolve=>setTimeout(resolve,(attempt+1)*650));
+   }
+  }
+  throw lastError;
+ };
+ fetchVerifiedSources()
  .then(data=>{
   if(data.schema!=="MAAL_NEW_OFFICIAL_SIGNALS_V1")throw Error("unsafe data");
   const items=data.items||[],pending=items.filter(x=>x.editorial_review?.status!=="APPROVED");
