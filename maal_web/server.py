@@ -52,6 +52,7 @@ STATIC = {
     "/operator.js": (HERE / "operator.js", "text/javascript; charset=utf-8"),
     "/agent-journey.js": (HERE / "agent-journey.js", "text/javascript; charset=utf-8"),
     "/new-signals.js": (HERE / "new-signals.js", "text/javascript; charset=utf-8"),
+    "/business-value-study.js": (HERE / "business-value-study.js", "text/javascript; charset=utf-8"),
     "/product_report.json": (HERE / "product_report.json", "application/json; charset=utf-8"),
     # Explicitly named local owner-review files, not a dynamic user-provided path.
     "/reports/MAAL_Business_Intelligence_Round2_2026-10-27.pdf":
