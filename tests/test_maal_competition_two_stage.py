@@ -41,12 +41,16 @@ class TwoStageSafetyTests(unittest.TestCase):
  def test_valid_candidate_is_not_approval(self):
   self.assertTrue(validate_stage_one(self.case,self.s1))
   self.assertTrue(validate_stage_two(self.case,self.s2,self.s1,"maal-two-stage-123"))
-  self.assertEqual(frozen_acceptance(self.case,self.s1,self.s2)["status"],"CANDIDATE_FOR_INDEPENDENT_EDITORIAL")
+  self.assertEqual(frozen_acceptance(self.case,self.s1,self.s2,expected_stage_one_run_id="maal-two-stage-123")["status"],"CANDIDATE_FOR_INDEPENDENT_EDITORIAL")
  def test_abstain_never_calls_stage_two(self):
   x={**self.s1,"outcome":"MONITOR_ONLY","company_fit":"UNKNOWN"}
   self.assertEqual(frozen_acceptance(self.case,x,None)["status"],"ABSTAIN_VALID")
   self.assertRaises(ValueError,validate_stage_two,self.case,self.s2,x,"maal-two-stage-123")
   self.assertEqual(frozen_acceptance(self.case,x,self.s2)["action_contradictions"],1)
+ def test_approval_gate_needs_actual_stage1_binding(self):
+  self.assertEqual(frozen_acceptance(self.case,self.s1,self.s2)["status"],"HOLD")
+  self.assertEqual(frozen_acceptance(self.case,self.s1,self.s2,
+                  expected_stage_one_run_id="wrong")["status"],"HOLD")
  def test_unfounded_action_blocked(self):
   x={**self.s1,"company_fit":"NONE"}
   self.assertRaises(ValueError,validate_stage_one,self.case,x)
