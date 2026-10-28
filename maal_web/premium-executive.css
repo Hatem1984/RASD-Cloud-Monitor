@@ -75,3 +75,13 @@
  .maal-premium .new-signal-choice strong{font-size:13px}
  .maal-premium .new-signal-choice{min-height:104px}
 }
+
+/* Clearly separate AI suggestion, editorial eligibility, human approval.
+   Owner-only buttons remain protected by the existing server-side API. */
+.maal-premium .premium-decision-states{display:flex;flex-wrap:wrap;gap:7px;margin:9px 0 10px}
+.maal-premium .premium-decision-stage{display:inline-flex;align-items:center;min-height:30px;padding:5px 10px;border-radius:99px;font-size:11px;font-weight:700;line-height:1.5;background:#153548;color:#DDEEF0;border:1px solid #4F7380}
+.maal-premium .premium-decision-stage[data-tone=hold]{background:#423224;border-color:#9C7348;color:#FFE1B9}
+.maal-premium .premium-decision-stage[data-tone=verified]{background:#124738;border-color:#358F7E;color:#D0FFF3}
+.maal-premium .operator-draft-info{min-width:0}
+.maal-premium .operator-draft-info strong{line-height:1.85}
+.maal-premium .operator-draft-item{min-height:88px}
