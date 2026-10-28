@@ -106,3 +106,13 @@
 .maal-premium .premium-owner-console #advanced-operator-review{display:block!important;border:0;background:transparent;margin:0;padding:0;box-shadow:none}
 .maal-premium .premium-owner-console #advanced-operator-review>summary{display:none}
 .maal-premium .premium-owner-console #operator-lab{margin:12px;max-width:100%}
+
+/* Two-stage model quality lab: customer-readable, explicitly unapproved. */
+.maal-premium .premium-two-stage{margin-bottom:19px}
+.maal-premium .premium-two-stage>h2{font-size:23px;line-height:1.4;color:#071B2B;margin:0 0 7px}
+.maal-premium #two-stage-status{padding:11px 15px;background:#EDF5F3;border:1px solid #CADEDA;border-radius:10px;color:#214F53;font-size:14px;line-height:1.8}
+.maal-premium #two-stage-entries{display:grid;gap:10px}
+.maal-premium .premium-two-stage-item{background:#F7FAFA;border:1px solid #D6E3E4;border-radius:12px;padding:12px 17px;color:#214250;min-width:0}
+.maal-premium .premium-two-stage-item>summary{font-size:15px;font-weight:800;cursor:pointer;min-height:42px}
+.maal-premium .premium-two-stage-item p{line-height:1.9;font-size:14px;overflow-wrap:anywhere}
+.maal-premium .premium-two-stage-item a{display:inline-flex;text-decoration:none}
