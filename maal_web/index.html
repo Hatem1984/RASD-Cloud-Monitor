@@ -12,6 +12,7 @@
   <script src="/agent-journey.js" defer></script>
   <script src="/new-signals.js" defer></script>
   <script src="/business-value-study.js" defer></script>
+  <script src="/paired-benchmark.js" defer></script>
 </head>
 <body>
 <svg class="icons-def" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -76,6 +77,13 @@
   <div id="new-signal-choices" class="new-signal-choices"></div>
   <div id="new-signal-evidence" class="new-signal-evidence" hidden></div>
   <div id="new-signal-analysis" class="new-signal-analysis"></div>
+  <details id="paired-ai-benchmark" class="new-signal-section" style="margin:16px 0">
+    <summary><strong>مقارنة التفكير التجاري — Qwen3 1.7B مقابل 4B</strong></summary>
+    <p class="customer-scope">نفس الدليل والشركة والسؤال وعقد القرار، مع نتائج تشغيلات جديدة وأوقاتها الحقيقية. درجة AI ليست موافقة تحريرية، ولا قرارًا من المالك.</p>
+    <div id="paired-benchmark-state" role="status" aria-live="polite">جارٍ قراءة نتائج المقارنة…</div>
+    <div id="paired-benchmark-list"></div>
+    <div id="paired-benchmark-detail" class="new-signal-analysis"></div>
+  </details>
   <button type="button" class="btn btn-primary" id="new-signal-draft" hidden>مراجعة التوصية وإعداد مسودة قرار</button>
   <a class="btn btn-secondary" href="/api/competition-demo.webm" id="new-signal-demo-download">تحميل فيديو الرحلة المتصلة — قبل الموافقة البشرية</a>
   <p class="customer-scope">الصور لقطات فعلية من مواقع الناشرين؛ أوقات النشر تُعرض فقط إذا أثبتها المصدر. لا يضغط الذكاء الاصطناعي اعتمادًا ولا ينفذ مهمة نيابة عن المالك.</p>
@@ -279,6 +287,14 @@
  <label class="operator-action-label">وصف المهمة الداخلية
  <textarea id="operator-description" rows="2" maxlength="500" placeholder="مثال: متابعة البيان الرسمي المقبل وتحديث مذكرة القرار..."></textarea></label>
  <button id="operator-create" type="button" class="btn btn-secondary">إنشاء مسودة مهمة مرتبطة بالدليل</button>
+ <section id="operator-editorial-review" class="content-card" hidden aria-label="مراجعة تحريرية بشرية مستقلة">
+  <p class="eyebrow">OWNER EDITORIAL SIGNOFF · HUMAN ONLY</p>
+  <h4>قرار مستقل حول جودة توصية الوكيل</h4>
+  <p>المراجعة الآلية لا تكفي. بعد فحص المصدر والصلة التجارية والبدائل والمخرج، المالك وحده يؤكد جودة التحليل. بعدها فقط تُجهَّز مسودة منفصلة؛ الاعتماد والتنفيذ إجراءان آخران منفصلان.</p>
+  <div id="operator-editorial-summary"></div>
+  <input id="operator-editorial-run" type="hidden">
+  <button type="button" id="operator-editorial-sign" class="btn btn-secondary">أقرّ بصلاحية التوصية للمراجعة بصفتي المالك</button>
+ </section>
  <div id="operator-drafts" class="operator-drafts" aria-live="polite"></div>
  <div class="operator-approval"><label for="operator-stepup">أعد كتابة كلمة المرور لتأكيد اعتماد المسودة المختارة</label>
  <input id="operator-stepup" type="password" autocomplete="off" placeholder="مطلوبة لكل موافقة فعلية">
