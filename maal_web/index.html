@@ -11,6 +11,7 @@
   <script src="/operator.js" defer></script>
   <script src="/agent-journey.js" defer></script>
   <script src="/new-signals.js" defer></script>
+  <script src="/business-value-study.js" defer></script>
 </head>
 <body>
 <svg class="icons-def" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -77,6 +78,17 @@
   <div id="new-signal-analysis" class="new-signal-analysis"></div>
   <button type="button" class="btn btn-primary" id="new-signal-draft" hidden>مراجعة التوصية وإعداد مسودة قرار</button>
   <p class="customer-scope">الصور لقطات فعلية من مواقع الناشرين؛ أوقات النشر تُعرض فقط إذا أثبتها المصدر. لا يضغط الذكاء الاصطناعي اعتمادًا ولا ينفذ مهمة نيابة عن المالك.</p>
+  <details class="new-signal-section" id="business-value-study" style="margin-top:16px">
+   <summary>قياس فائدة مَآل — مقارنة بشرية حقيقية (اختياري)</summary>
+   <p class="customer-scope">المهمة نفسها في المسارين: تحقّق من خبر FPT الرسمي، وحدّد هل يستدعي خطوة متابعة داخلية لشركة رقمية صغيرة. ابدأ مؤقت المسار اليدوي قبل البحث والتحقق والكتابة، ثم ابدأ مؤقت مَآل قبل استخدامه. لا تضع كلمة مرور أو بيانات عملاء.</p>
+   <div class="customer-actions"><button id="value-manual-start" type="button" class="btn btn-secondary">بدء المسار اليدوي</button><button id="value-manual-stop" type="button" class="btn btn-secondary" disabled>إنهاء المسار اليدوي</button></div>
+   <label>نتيجة المسار اليدوي ومصدره<textarea id="value-manual-note" rows="2" maxlength="700" placeholder="اكتب القرار، سبب القرار، ورابط المصدر الذي تحققت منه."></textarea></label>
+   <div class="customer-actions"><button id="value-agent-start" type="button" class="btn btn-secondary" disabled>بدء مسار مَآل</button><button id="value-agent-stop" type="button" class="btn btn-secondary" disabled>إنهاء مسار مَآل</button></div>
+   <label>نتيجة مسار مَآل بعد المراجعة البشرية<textarea id="value-agent-note" rows="2" maxlength="700" placeholder="اكتب هل تقبل التوصية أو ترفضها ولماذا، وما الأخطاء التي اكتشفتها."></textarea></label>
+   <p id="value-benchmark-state" class="customer-scope" role="status" aria-live="polite">لم تُقَس أي مدة بشرية بعد. لا توجد نسبة توفير وقت مثبتة.</p>
+   <button id="value-benchmark-download" type="button" class="btn btn-primary" disabled>حفظ مقارنة الزمن والقرار JSON</button>
+  </details>
+
  </section>
 
 
