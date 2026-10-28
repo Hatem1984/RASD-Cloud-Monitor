@@ -511,6 +511,17 @@ class Handler(BaseHTTPRequestHandler):
                               and r["status"]=="EVIDENCE_GROUNDED_GENERATIVE_DRAFT"),None)
                     if not run or body.get("description")!=run["analysis"]["recommendation"]:
                         raise ValueError("source_model_recommendation_unverified")
+                    # An automated model score is NEVER an editorial green light.
+                    # New drafts need a private run-bound acceptance receipt.
+                    editorial=Path("E:/MAAL/04_HISTORICAL_QA/MAAL_COMPETITION_MVP_20261028/editorial_quality_20261028.json")
+                    try:
+                        assessment=json.loads(editorial.read_text("utf8"))
+                        editorial_match=assessment["cases"][fresh_evidence]
+                    except (OSError,ValueError,TypeError,KeyError):
+                        raise ValueError("unreviewed_new_source_hold")
+                    if (editorial_match.get("run_id")!=linked_run or
+                        editorial_match.get("status")!="APPROVED"):
+                        raise ValueError("new_source_editorial_hold")
                     evidence=Evidence(case["evidence_id"],case["publisher"],
                         case["original_url"],case["headline"],
                         date.fromisoformat(case["published_day"]) if case["published_day"]
