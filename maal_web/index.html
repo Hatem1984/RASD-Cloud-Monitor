@@ -10,6 +10,7 @@
   <script src="/app.js" defer></script>
   <script src="/operator.js" defer></script>
   <script src="/agent-journey.js" defer></script>
+  <script src="/new-signals.js" defer></script>
 </head>
 <body>
 <svg class="icons-def" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -66,6 +67,19 @@
 
 <section id="view-overview" class="view" aria-label="نظرة عامة">
 
+ <section id="new-signal-workspace" class="content-card new-signal-workspace" aria-label="تجربة حالات أعمال جديدة من مصادر رسمية">
+  <p class="eyebrow">MA'AL / VERIFIED SIGNALS → GENERATIVE QWEN3</p>
+  <h2>إشارات جديدة تستحق القرار</h2>
+  <p class="new-signal-intro">مَآل يلتقط صفحات ناشرين رسميين، ويحفظ صورة الصفحة وبصمتها، ثم يطلب من Qwen3 تحليل أثرها على شركة رقمية افتراضية. كل استنتاج هنا مسودة، وليس قرارًا معتمدًا أو خبرًا مباشرًا لحظة بلحظة.</p>
+  <div id="new-signal-state" role="status" aria-live="polite">جارٍ تحميل أدلة المصادر المستقلة…</div>
+  <div id="new-signal-choices" class="new-signal-choices"></div>
+  <div id="new-signal-evidence" class="new-signal-evidence" hidden></div>
+  <div id="new-signal-analysis" class="new-signal-analysis"></div>
+  <button type="button" class="btn btn-primary" id="new-signal-draft" hidden>مراجعة التوصية وإعداد مسودة قرار</button>
+  <p class="customer-scope">الصور لقطات فعلية من مواقع الناشرين؛ أوقات النشر تُعرض فقط إذا أثبتها المصدر. لا يضغط الذكاء الاصطناعي اعتمادًا ولا ينفذ مهمة نيابة عن المالك.</p>
+ </section>
+
+
  <section id="agent-journey-board" class="content-card" aria-label="رحلة الوكيل المتصلة">
   <p class="eyebrow">MA'AL / AGENTIC BUSINESS JOURNEY · LOCAL QA</p>
   <h2>من الدليل إلى القرار — مسار واحد</h2>
@@ -97,7 +111,7 @@
   <div class="hero-orbit hero-orbit-one"></div><div class="hero-orbit hero-orbit-two"></div>
   <div class="hero-body"><div class="hero-kicker"><span class="kicker-line"></span> AGENTIC BUSINESS & DECISION INTELLIGENCE</div>
    <h2>من ضجيج الإشارات <br>إلى <em>وضوح القرار.</em></h2>
-   <p>ارصد ما يهم، تحقق من الدليل، افهم التأثير، ثم اختر الإجراء المناسب. في هذه المعاينة نعرض <strong>حالة تاريخية موثّقة واحدة</strong> دون ادعاء تحليل حي أو تنفيذ مستقل.</p>
+   <p>ارصد ما يهم، تحقق من الدليل، افهم التأثير، ثم اختر الإجراء المناسب. معاينة الدليل التاريخي أدناه منفصلة عن <strong>حالات الناشرين الجديدة أعلاه</strong>؛ وكلها للتقييم المحلي وليست تيار أخبار لحظيًا.</p>
    <button type="button" class="btn btn-primary" data-go="evidence">استكشف الدليل الحقيقي <svg class="icon"><use href="#i-arrow"/></svg></button>
   </div>
   <div class="hero-graphic" aria-hidden="true"><div class="signal-ring sr1"></div><div class="signal-ring sr2"></div><div class="signal-ring sr3"></div><div class="pulse-core"><svg class="icon"><use href="#i-spark"/></svg></div><div class="micro-label">SIGNAL → DECISION</div></div>
