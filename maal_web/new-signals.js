@@ -31,6 +31,10 @@ document.addEventListener("DOMContentLoaded",()=>{
     const ul=node("ul");for(const v of values||[]){ul.append(node("li",v));}
     group.append(ul);parent.append(group);
   };
+  const readableDate=value=>{if(!value)return "غير مثبت";const time=new Date(value);
+    return Number.isNaN(+time)?"غير مثبت":new Intl.DateTimeFormat("ar-EG",{
+      timeZone:"Africa/Cairo",year:"numeric",month:"long",day:"numeric"
+    }).format(time)};
   const choose=item=>{
     current=item;
     choices.querySelectorAll("button").forEach(btn=>{
@@ -38,9 +42,17 @@ document.addEventListener("DOMContentLoaded",()=>{
     });
     const c=item.case;const a=item.ai;
     evidence.replaceChildren();evidence.hidden=false;
-    const meta=node("p",c.publisher+" · نُشر: "+(c.published_day||"تاريخ النشر غير مثبت")+
-       " · التقطت الصفحة: "+(c.observed_at||"وقت الرصد غير مثبت")+
-       " · دليل: "+c.evidence_id,"new-signal-meta");
+    const meta=node("div",null,"premium-source-fields");
+    const metadata=[
+       ["الناشر",c.publisher||"غير مثبت"],
+       ["تاريخ النشر",readableDate(c.published_day)],
+       ["تاريخ الالتقاط",readableDate(c.observed_at)],
+       ["حالة المصدر","دليل ناشر أصلي محفوظ، وليس إشارة حية"],
+    ];
+    for(const [label,value] of metadata){
+      const item=node("div",null,"premium-source-field");
+      item.append(node("strong",label),node("span",value));meta.append(item);
+    }
     const title=node("h3",c.headline);
     const image=document.createElement("img");
     image.src=c.evidence_image_url;image.alt="لقطة صفحة الناشر الأصلية: "+c.headline;
@@ -60,6 +72,11 @@ document.addEventListener("DOMContentLoaded",()=>{
       return;
     }
     const x=a.analysis;
+    if(item.editorial_review?.status!=="APPROVED"){
+      displayValue(analysis,"سبب عدم قبول القرار",
+        "الخبر موثق، لكن توصية الذكاء الاصطناعي لم تجتز المراجعة التحريرية. "+
+        "قد لا تكون مناسبة للشركة الافتراضية أو لا توضح صلة الحدث بها، لذلك لا يمكن اعتمادها بعد.");
+    }
     displayValue(analysis,"استدلال Qwen3 حقيقي محفوظ سابقًا (ليس بثًا مباشرًا)",a.run_id+" · "+a.model+
       " · "+a.elapsed_seconds+" ثانية");
     list(analysis,"01 · الوقائع المثبتة من المصدر",x.facts);
@@ -119,7 +136,7 @@ document.addEventListener("DOMContentLoaded",()=>{
         const b=node("button",null,"new-signal-choice");
         const heading=node("strong",item.case.headline);
         const when=node("small",item.case.publisher+" · "+
-          (item.case.published_day||"تاريخ النشر غير مثبت")+" · مصدر تاريخي محفوظ");
+          readableDate(item.case.published_day)+" · مصدر تاريخي محفوظ");
         const badge=node("span",item.editorial_review?.status==="APPROVED"?
             "VERIFIED · REVIEWED":"VERIFIED SOURCE · EDITORIAL HOLD","premium-pill");
         badge.dataset.tone=item.editorial_review?.status==="APPROVED"?"verified":"hold";
