@@ -312,15 +312,38 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, "application/json; charset=utf-8",
                                   json.dumps(get_snapshot(), ensure_ascii=False).encode("utf-8"))
             if path == "/api/agent-journey":
-                # Compose existing independently verified layers at request time.
-                # Neither anonymous reads nor model suggestions can approve/execute.
+                # All visible claims derive from one unchanged original and
+                # one persisted, independently checked local model receipt.
                 who = None
                 try:
                     who = gateway().dashboard(self._cookie())
                 except PermissionError:
                     pass
-                return self._json_response(
-                    200, assemble_agent_journey(get_case(),get_local_ai_run(),who))
+                case=get_case()
+                ai=get_local_ai_run()
+                journey=assemble_agent_journey(case,ai,who)
+                try:
+                    from maal.competition_report_bundle import read_bound_bundle
+                    manifest,_=read_bound_bundle(case,ai,MODEL_RUN.parent/"reports")
+                    journey["report"].update({
+                        "status":"SOURCE_LINKED_QWEN_WORD_PDF_QA",
+                        "ai_run_bound_word_pdf_available":True,
+                        "docx_url":"/api/agent-report.docx",
+                        "pdf_url":"/api/agent-report.pdf",
+                        "manifest_sha256_report":manifest["docx_sha256"],
+                    })
+                except (OSError,ValueError,KeyError):
+                    pass  # Never represent a stale/incomplete bundle as ready.
+                return self._json_response(200,journey)
+            if path in ("/api/agent-report.docx","/api/agent-report.pdf"):
+                # Pin both download bytes to the current original and model.
+                from maal.competition_report_bundle import read_bound_bundle
+                _,bundle=read_bound_bundle(get_case(),get_local_ai_run(),MODEL_RUN.parent/"reports")
+                kind="pdf" if path.endswith(".pdf") else "docx"
+                mime=("application/pdf" if kind=="pdf" else
+                      "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                return self.reply(200,mime,bundle[kind],
+                    filename="MAAL-Source-Linked-Qwen-Review."+kind)
             if path == "/api/ai-analysis":
                 return self._json_response(200,get_local_ai_run())
             if path == "/api/evidence":
