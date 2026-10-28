@@ -36,7 +36,7 @@ CASE_DIR = PROJECT / "03_REPORTS_AND_REVIEW" / "MAAL_GATE_E_ACCEPTANCE_20261026"
 CASE_JSON = CASE_DIR / "MAAL-historical-signal-demo.json"
 CASE_IMAGE = CASE_DIR / "official-original.jpg"
 CASE_REPORT = CASE_DIR / "MAAL-historical-signal-demo.docx"
-MODEL_RUN=PROJECT/"04_HISTORICAL_QA"/"MAAL_GATE_H_E2E_20261027"/"fresh_model_run.json"
+MODEL_RUN=PROJECT/"04_HISTORICAL_QA"/"MAAL_COMPETITION_MVP_20261028"/"fresh_model_run.json"
 # Isolated demo state, NOT a Gmail/private-ledger database.
 OP_DB=PROJECT/"04_HISTORICAL_QA"/"MAAL_GATE_H_E2E_20261027"/"operator.sqlite"
 _GATEWAY=None
