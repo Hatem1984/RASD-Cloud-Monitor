@@ -178,6 +178,19 @@ class OperatorGateway:
                 WHERE o.login=? AND o.tenant=?
                 ORDER BY a.sequence DESC LIMIT 80
             """,(actor["login"],actor["tenant"]))]
+        # Editorial review is a distinct human decision; render its owner-
+        # scoped audit events alongside draft approval and execution events.
+        with self.store.db() as db:
+            exists=db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='editorial_signoffs'").fetchone()
+            if exists:
+                reviews=[dict(row) for row in db.execute("""
+                    SELECT a.sequence,a.timestamp,a.draft_id,a.event,a.actor
+                    FROM audit a JOIN editorial_signoffs s
+                      ON a.draft_id='editorial:'||s.model_run_id
+                    WHERE s.reviewer=? AND s.tenant=?
+                    ORDER BY a.sequence DESC LIMIT 40
+                """,(actor["login"],actor["tenant"]))]
+                events=sorted(events+reviews,key=lambda x:x["sequence"],reverse=True)[:80]
         return {"operator":actor["login"],"tenant":actor["tenant"],"role":actor["role"],
                 "csrf":actor["csrf"],"drafts":drafts,"audit":events,
                 "audit_integrity":self.store.verify_audit()["integrity"],
