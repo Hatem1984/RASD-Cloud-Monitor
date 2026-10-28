@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded",()=>{
  const closeNav=(returnFocus=false)=>{
   if(!sidebar)return;
   sidebar.classList.remove("premium-drawer-open");backdrop.hidden=true;
+  sidebar.removeAttribute("role");sidebar.removeAttribute("aria-modal");
   navButton?.setAttribute("aria-expanded","false");
   navButton?.setAttribute("aria-label","فتح قائمة أقسام مَآل");
   if(returnFocus && navButton?.offsetParent!==null)navButton.focus();
@@ -47,6 +48,7 @@ document.addEventListener("DOMContentLoaded",()=>{
    const opening=!sidebar.classList.contains("premium-drawer-open");
    if(opening){
     sidebar.classList.add("premium-drawer-open");backdrop.hidden=false;
+    sidebar.setAttribute("role","dialog");sidebar.setAttribute("aria-modal","true");
     navButton.setAttribute("aria-expanded","true");
     navButton.setAttribute("aria-label","إغلاق قائمة أقسام مَآل");
     sidebar.querySelector(".nav-link.active")?.focus();
@@ -54,8 +56,17 @@ document.addEventListener("DOMContentLoaded",()=>{
   });
   backdrop.addEventListener("click",()=>closeNav(true));
   document.addEventListener("keydown",event=>{
-   if(event.key==="Escape" && sidebar.classList.contains("premium-drawer-open")){
-    event.preventDefault();closeNav(true);
+   if(!sidebar.classList.contains("premium-drawer-open"))return;
+   if(event.key==="Escape"){event.preventDefault();closeNav(true);return}
+   if(event.key==="Tab"){
+    const visible=[...sidebar.querySelectorAll(".nav-link:not([disabled])")];
+    if(!visible.length)return;
+    const first=visible[0],last=visible[visible.length-1];
+    if(event.shiftKey && document.activeElement===first){
+     event.preventDefault();last.focus();
+    }else if(!event.shiftKey && document.activeElement===last){
+     event.preventDefault();first.focus();
+    }
    }
   });
   window.addEventListener("resize",()=>{if(innerWidth>1040)closeNav()});
