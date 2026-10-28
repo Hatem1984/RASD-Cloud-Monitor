@@ -16,10 +16,51 @@ document.addEventListener("DOMContentLoaded",()=>{
  const logo=document.querySelector(".brand-icon");
  if(logo){logo.src="/brand-symbol-approved.png";logo.alt="رمز مَآل المعتمد";}
  const top=document.querySelector(".topbar");
+ const sidebar=document.querySelector(".sidebar");
+ const backdrop=document.createElement("button");
+ backdrop.type="button";backdrop.id="premium-navigation-backdrop";
+ backdrop.className="premium-navigation-backdrop";backdrop.hidden=true;
+ backdrop.setAttribute("aria-label","إغلاق قائمة الأقسام");
+ document.body.append(backdrop);
+ const closeNav=(returnFocus=false)=>{
+  if(!sidebar)return;
+  sidebar.classList.remove("premium-drawer-open");backdrop.hidden=true;
+  navButton?.setAttribute("aria-expanded","false");
+  navButton?.setAttribute("aria-label","فتح قائمة أقسام مَآل");
+  if(returnFocus && navButton?.offsetParent!==null)navButton.focus();
+ };
+ let navButton=null;
  if(top){const mark=document.createElement("div");mark.className="premium-mobile-brand";
   const img=document.createElement("img");img.src="/brand-symbol-approved.png";img.alt="";
   const label=document.createElement("span");label.textContent="مَآل";
-  mark.append(img,label);top.prepend(mark)}
+  mark.append(img,label);top.prepend(mark);
+  navButton=document.createElement("button");navButton.type="button";
+  navButton.id="premium-navigation-toggle";navButton.className="premium-navigation-toggle";
+  navButton.setAttribute("aria-controls","premium-navigation");
+  navButton.setAttribute("aria-label","فتح قائمة أقسام مَآل");
+  navButton.setAttribute("aria-expanded","false");
+  const icon=document.createElement("span");icon.setAttribute("aria-hidden","true");icon.textContent="☰";
+  const txt=document.createElement("span");txt.textContent="الأقسام";
+  navButton.append(icon,txt);mark.after(navButton);
+  sidebar.id="premium-navigation";
+  navButton.addEventListener("click",()=>{
+   const opening=!sidebar.classList.contains("premium-drawer-open");
+   if(opening){
+    sidebar.classList.add("premium-drawer-open");backdrop.hidden=false;
+    navButton.setAttribute("aria-expanded","true");
+    navButton.setAttribute("aria-label","إغلاق قائمة أقسام مَآل");
+    sidebar.querySelector(".nav-link.active")?.focus();
+   }else closeNav(true);
+  });
+  backdrop.addEventListener("click",()=>closeNav(true));
+  document.addEventListener("keydown",event=>{
+   if(event.key==="Escape" && sidebar.classList.contains("premium-drawer-open")){
+    event.preventDefault();closeNav(true);
+   }
+  });
+  window.addEventListener("resize",()=>{if(innerWidth>1040)closeNav()});
+  links.forEach(button=>button.addEventListener("click",()=>closeNav()));
+ }
  const go=view=>links.find(x=>x.dataset.view===view)?.click();
  const overview=$("view-overview"),monitor=$("view-monitor"),impact=$("view-impact");
  const decision=$("view-decisions"),operations=$("view-operations"),report=$("view-report");
@@ -41,6 +82,20 @@ document.addEventListener("DOMContentLoaded",()=>{
  const dec=document.createElement("section");dec.className="premium-decision-summary";
  dec.innerHTML='<h3>مركز قرارات المالك</h3><p id="premium-decision-message" role="status">سجّل الدخول لعرض مسوداتك.</p><span class="premium-pill" data-tone="historical">اقتراح AI ≠ موافقة بشرية</span>';
  decision.prepend(dec);
+ const lab=document.getElementById("operator-lab");
+ if(lab){
+  const drawer=document.createElement("details");drawer.className="premium-owner-console";
+  drawer.id="premium-owner-console";
+  const opener=document.createElement("summary");
+  opener.textContent="افتح مسوداتك والمراجعة والموافقة المحمية";
+  drawer.append(opener);
+  lab.before(drawer);drawer.append(lab);
+  document.getElementById("account-entry")?.addEventListener("click",()=>{
+   if(!document.getElementById("header-logout")?.hidden)drawer.open=true;
+  });
+  document.getElementById("agent-journey-review")?.addEventListener("click",()=>{drawer.open=true});
+  document.getElementById("new-signal-draft")?.addEventListener("click",()=>{drawer.open=true});
+ }
  const activity=document.createElement("section");activity.className="premium-timeline";
  activity.innerHTML='<h3>المهام وسجل القرارات</h3><div id="premium-audit-events" role="status">سجّل الدخول لعرض السجل الخاص بحسابك.</div>';
  operations.prepend(activity);
