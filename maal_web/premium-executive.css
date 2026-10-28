@@ -52,3 +52,26 @@
 .premium-event:last-child{border-color:transparent;padding-bottom:0}
 .premium-timeline .premium-muted{font-size:14px}
 .premium-reports-head .btn{background:#E9F3F1;color:#173E4D;border:1px solid #D0E4DE}
+
+/* Evidence and reasoning readability: verified source != editorial acceptance. */
+.maal-premium .new-signal-choice strong{display:block;font-size:14px;line-height:1.58;overflow-wrap:anywhere}
+.maal-premium .new-signal-choice small{display:block;color:#57717D;font-size:12px;line-height:1.6;margin:8px 0}
+.maal-premium .new-signal-choice .premium-pill{font-size:10px;padding:5px 9px;line-height:1.5}
+.maal-premium #new-signal-analysis .premium-disclosure{min-height:58px;align-self:start}
+.maal-premium #new-signal-analysis .premium-disclosure>summary{display:list-item;cursor:pointer;min-height:37px;padding:7px 0;color:#174A51;font-weight:800;font-size:14px;line-height:1.7}
+.maal-premium #new-signal-analysis .premium-disclosure>summary:hover{color:#0E7067}
+.maal-premium #new-signal-analysis .premium-disclosure[open]{border-color:#B7D9D4;background:#F1F9F7}
+.maal-premium #new-signal-analysis .premium-disclosure :is(p,li){font-size:14px;color:#304F60;line-height:1.95}
+.maal-premium #new-signal-analysis .premium-disclosure>p{margin-top:9px}
+.maal-premium .premium-event{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:9px 20px 17px 0;min-height:61px}
+.maal-premium .premium-event:not(:last-child){border-bottom:1px solid #ECF1F2}
+.maal-premium .premium-event strong{line-height:1.5}
+.maal-premium .premium-event small{white-space:nowrap;color:#637C89}
+.maal-premium .premium-event:last-child{padding-bottom:8px}
+.maal-premium .premium-insight button,.maal-premium .premium-decision-summary button{font-family:"Tajawal","Noto Sans Arabic","Segoe UI",Tahoma,sans-serif;font-weight:750}
+.maal-premium .premium-featured .premium-insight p{overflow-wrap:anywhere}
+@media(max-width:590px){
+ .maal-premium .premium-event{align-items:flex-start;flex-direction:column;gap:3px}
+ .maal-premium .new-signal-choice strong{font-size:13px}
+ .maal-premium .new-signal-choice{min-height:104px}
+}
