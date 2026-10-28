@@ -30,7 +30,9 @@ def main():
         page.goto(BASE,wait_until="domcontentloaded")
         expect(page.locator("#premium-owner-count")).to_have_text("2",timeout=10000)
         page.locator('.nav-link[data-view="decisions"]').click()
-        page.locator("#advanced-operator-review").evaluate("(e)=>e.open=true")
+        page.locator("#premium-owner-console").evaluate("(e)=>e.open=true")
+        assert page.locator("#premium-owner-console").is_visible()
+        assert page.locator("#advanced-operator-review").get_attribute("open") is not None
         draft=page.locator('.operator-draft-item[data-draft-id="ea78e338-d2a5-4c5e-a5cc-cbd296017c2c"]')
         draft.wait_for(timeout=10000);draft.click()
         assert page.locator("#operator-approve").is_disabled()
