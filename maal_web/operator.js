@@ -202,16 +202,18 @@ document.addEventListener("DOMContentLoaded", () => {
  }
  by("operator-logout").addEventListener("click",signOut);
  headerLogout.addEventListener("click",signOut);
- by("operator-description").addEventListener("input",()=>{ delete by("operator-description").dataset.modelRunId; });
+ by("operator-description").addEventListener("input",()=>{ delete by("operator-description").dataset.modelRunId; delete by("operator-description").dataset.newEvidenceId; });
  by("operator-create").addEventListener("click",async()=>{
   const description=by("operator-description").value.trim();
   if(description.length<8){feedback("اكتب وصفًا للمهمة التجريبية أولًا.");return;}
   try{
    const linkedRun=by("operator-description").dataset.modelRunId||null;
+   const newEvidenceId=by("operator-description").dataset.newEvidenceId||null;
    const data=await post("/api/operator/draft",{
-      description,idempotency_key:crypto.randomUUID()+"|"+Date.now(),model_run_id:linkedRun});
+      description,idempotency_key:crypto.randomUUID()+"|"+Date.now(),model_run_id:linkedRun,new_evidence_id:newEvidenceId});
    app.selected=data.draft_id;by("operator-description").value="";
    delete by("operator-description").dataset.modelRunId;
+   delete by("operator-description").dataset.newEvidenceId;
    feedback("تم إنشاء مسودة مرتبطة بالدليل الموثّق فقط.",true);
    await getState();
   }catch(e){feedback(e.message);}
