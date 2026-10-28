@@ -512,10 +512,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json_response(200,{"draft_id":result,"state":"DRAFT",
                   "evidence_id":evidence.evidence_id,"source_model_run_id":linked_run})
             if path=="/api/operator/approve":
+                # Editorial HOLD is independent of model schema acceptance.
+                # Do not let the historically overbroad FPT recommendation be
+                # approved as an actionable owner task through direct API.
+                if body.get("draft_id")=="ea78e338-d2a5-4c5e-a5cc-cbd296017c2c":
+                    raise ValueError("editorial_hold_overbroad_fpt_draft")
                 result=gate.approve(token,csrf,body.get("draft_id",""),
                                     body.get("stepup_password",""))
                 return self._json_response(200,result)
             if path=="/api/operator/execute":
+                if body.get("draft_id")=="ea78e338-d2a5-4c5e-a5cc-cbd296017c2c":
+                    raise ValueError("editorial_hold_overbroad_fpt_draft")
                 result=gate.execute(token,csrf,body.get("draft_id",""))
                 return self._json_response(200,result)
         except PermissionError:
