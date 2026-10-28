@@ -102,3 +102,7 @@
  .maal-premium .premium-owner-console #operator-lab{margin:9px}
  .maal-premium .premium-source-fields{grid-template-columns:1fr}
 }
+
+.maal-premium .premium-owner-console #advanced-operator-review{display:block!important;border:0;background:transparent;margin:0;padding:0;box-shadow:none}
+.maal-premium .premium-owner-console #advanced-operator-review>summary{display:none}
+.maal-premium .premium-owner-console #operator-lab{margin:12px;max-width:100%}
