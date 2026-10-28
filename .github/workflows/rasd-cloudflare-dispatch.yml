@@ -34,6 +34,7 @@ jobs:
     environment: rasd-production
     env:
       RASD_AUTOMATION_ENABLED: 'true'
+      RASD_SMART_NO_EMPTY_INTERVAL_EMAIL: 'true' # owner-requested: no empty or image-HOLD 30m mail; daily unchanged
       RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
       RASD_JOB_CRON: '7,37 * * * *'
       RASD_CLOUDFLARE_ORIGIN: ${{ inputs.origin }}
@@ -79,6 +80,7 @@ jobs:
     environment: rasd-production
     env:
       RASD_AUTOMATION_ENABLED: 'true'
+      RASD_SMART_NO_EMPTY_INTERVAL_EMAIL: 'true' # owner-requested: no empty or image-HOLD 30m mail; daily unchanged
       RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
       RASD_JOB_CRON: '0 19,20 * * *'
       RASD_CLOUDFLARE_ORIGIN: ${{ inputs.origin }}
