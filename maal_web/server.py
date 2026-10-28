@@ -48,6 +48,10 @@ def gateway():
 STATIC = {
     "/": (HERE / "index.html", "text/html; charset=utf-8"),
     "/style.css": (HERE / "style.css", "text/css; charset=utf-8"),
+    "/premium-tokens.css": (HERE / "premium-tokens.css", "text/css; charset=utf-8"),
+    "/premium-executive.css": (HERE / "premium-executive.css", "text/css; charset=utf-8"),
+    "/premium-responsive.css": (HERE / "premium-responsive.css", "text/css; charset=utf-8"),
+    "/premium-experience.js": (HERE / "premium-experience.js", "text/javascript; charset=utf-8"),
     "/app.js": (HERE / "app.js", "text/javascript; charset=utf-8"),
     "/operator.js": (HERE / "operator.js", "text/javascript; charset=utf-8"),
     "/agent-journey.js": (HERE / "agent-journey.js", "text/javascript; charset=utf-8"),
@@ -64,6 +68,7 @@ STATIC = {
         "MAAL_Business_Intelligence_Round2_2026-10-27.docx",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
     "/brand-symbol.png": (BRAND / "logo_mono_ivory_transparent.png", "image/png"),
+    "/brand-symbol-approved.png": (BRAND / "logo_symbol_only_dark.png", "image/png"),
     "/brand-logo.png": (BRAND / "logo_primary_reference.png", "image/png"),
 }
 
