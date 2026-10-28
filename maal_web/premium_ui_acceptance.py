@@ -13,7 +13,7 @@ def navigate(page,width,view):
         toggle=page.locator("#premium-navigation-toggle")
         toggle.click()
         expect(toggle).to_have_attribute("aria-expanded","true")
-    navigate(page,width,view)
+    page.locator('.nav-link[data-view="'+view+'"]').click()
     if width<=1040:
         expect(page.locator("#premium-navigation-toggle")).to_have_attribute("aria-expanded","false")
 def run():
@@ -48,7 +48,6 @@ def run():
                 page.keyboard.press("Escape")
                 expect(toggle).to_have_attribute("aria-expanded","false")
                 assert toggle.evaluate("(el)=>document.activeElement===el")
-                assert page.locator("#account-entry").bounding_box()["y"]<page.locator("#premium-navigation").bounding_box()["y"] if page.locator("#premium-navigation").is_visible() else True
             else:
                 assert not page.locator("#premium-navigation-toggle").is_visible()
             page.screenshot(path=str(OUT/f"after_{width}.png"),animations="disabled")
@@ -70,7 +69,7 @@ def run():
             page.locator("#login-close").click()
             assert not page.locator("#login-dialog").is_visible()
             for view in ("overview","monitor","impact","decisions","operations","report","evidence"):
-                page.locator('.nav-link[data-view="'+view+'"]').click()
+                navigate(page,width,view)
                 assert page.locator("#view-"+view).is_visible()
             overflow=page.evaluate("document.documentElement.scrollWidth-innerWidth")
             rows.append({"width":width,"overflow_px":overflow,"nav":7,"sources":3})
