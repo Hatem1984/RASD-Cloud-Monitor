@@ -73,9 +73,9 @@
 
 <section id="view-overview" class="view" aria-label="نظرة عامة">
 
- <section id="new-signal-workspace" class="content-card new-signal-workspace" aria-label="تجربة حالات أعمال جديدة من مصادر رسمية">
+ <section id="new-signal-workspace" class="content-card new-signal-workspace" aria-label="أدلة ناشرين رسميين محفوظة وتحليلات للمراجعة">
   <p class="eyebrow">MA'AL / VERIFIED SIGNALS → GENERATIVE QWEN3</p>
-  <h2>إشارات جديدة تستحق القرار</h2>
+  <h2>أدلة رسمية محفوظة للتحقق والمراجعة</h2>
   <p class="new-signal-intro">مَآل يلتقط صفحات ناشرين رسميين، ويحفظ صورة الصفحة وبصمتها، ثم يطلب من Qwen3 تحليل أثرها على شركة رقمية افتراضية. كل استنتاج هنا مسودة، وليس قرارًا معتمدًا أو خبرًا مباشرًا لحظة بلحظة.</p>
   <div id="new-signal-state" role="status" aria-live="polite">جارٍ تحميل أدلة المصادر المستقلة…</div>
   <div id="new-signal-choices" class="new-signal-choices"></div>
@@ -239,7 +239,7 @@
  <div class="impact-triptych"><div><span class="mini-label">FACT / مثبت</span><h4>ماذا أعلن المصدر؟</h4><p id="case-fact">مناقشة رسمية لآلية ضمان تمويل مشروعات البنية التحتية.</p></div><div><span class="mini-label gold-text">INFERENCE / محتمل</span><h4>لماذا قد يهم النشاط؟</h4><p id="case-hypothesis">فرصة متابعة مشروطة بقرارات لاحقة وشروط أهلية واضحة.</p></div><div><span class="mini-label muted-text">UNKNOWN / غير مثبت</span><h4>ما الذي لا نعرفه؟</h4><ul id="case-unknowns" class="unknown-list"></ul></div></div>
  </div>
  <section class="content-card ai-result-lab" aria-label="تحليل نموذج AI محلي فعلي">
-   <div class="card-heading"><div><p class="eyebrow">GATE G3 / VERIFIED LOCAL MODEL RUN</p><h3>تحليل AI فعلي — للمراجعة البشرية</h3></div>
+   <div class="card-heading"><div><p class="eyebrow">VERIFIED MODEL RECORD · ADVANCED DETAILS</p><h3>تحليل AI فعلي — للمراجعة البشرية</h3></div>
      <span class="badge badge-gold" id="ai-run-badge">لم يتم اعتماد النتيجة</span></div>
    <p class="ai-run-note" id="ai-run-status">لا توجد نتيجة جديدة بعد؛ يمكن لصاحب حساب المختبر تشغيل Qwen3 فعليًا.</p>
    <button type="button" id="ai-fresh-run" class="btn btn-secondary">تشغيل تحليل Qwen3 جديد من الدليل الموثق (CPU محلي)</button>
@@ -263,7 +263,7 @@
 <section id="view-decisions" class="view hidden" aria-label="مركز القرارات">
  <section class="content-card customer-decisions">
   <h2>قراراتي المقترحة</h2>
-  <p class="customer-scope">توصيات للمراجعة فقط — لا مهام مُنفّذة، ولا موافقة إنتاجية.</p>
+  <p class="customer-scope">هذا القسم يضم توصيات محفوظة ومهام اختبارية معزولة. لا تُعد أي مسودة موافقة إنتاجية.</p>
   <div id="customer-decision-list"></div><p class="customer-scope">المسؤولون والمواعيد مقترحون للمتابعة فقط، ولا يعني ظهورها إنشاء مهام.</p>
  </section>
  <div class="content-card"><div class="card-heading"><div><p class="eyebrow">HUMAN-IN-THE-LOOP DECISIONS</p><h3>توصيات قابلة للفحص، لا أوامر تلقائية</h3></div><span class="badge badge-gold">بانتظار مراجعة بشرية</span></div>
@@ -272,10 +272,10 @@
  <label for="review-note" class="review-label">ملاحظاتك قبل اتخاذ القرار</label><textarea id="review-note" rows="3" maxlength="1600" placeholder="مثال: نحتاج متابعة إعلان شروط التمويل رسميًا قبل دراسة الأهلية…"></textarea>
  <div class="review-actions"><span id="review-local-note">خاص بهذه الجلسة فقط — لا يُرسل للخادم</span><button type="button" id="copy-review" class="btn btn-primary"><svg class="icon"><use href="#i-copy"/></svg> نسخ مذكرة المراجعة</button></div></div>
  <details class="advanced-technical" id="advanced-operator-review">
- <summary>للمشغّل فقط: مختبر المصادقة والاعتماد الداخلي التجريبي</summary>
+ <summary>المراجعة الداخلية المحمية — تفاصيل المالك</summary>
  <section id="operator-lab" class="operator-lab" aria-label="مختبر الموافقة البشرية الفعلية">
- <div class="operator-lab-heading"><div><p class="eyebrow">GATE H · AUTHENTICATED OWNER REVIEW (TEST ONLY)</p>
- <h3>مختبر الاعتماد البشري والمهمة الداخلية</h3>
+ <div class="operator-lab-heading"><div><p class="eyebrow">PRIVATE OWNER DECISIONS · LOCAL TEST</p>
+ <h3>مراجعة المسودات واتخاذ قرار المالك</h3>
  <p>معزول على هذا الكمبيوتر وعلى قرص E. لا تُرسل أي مهام خارجية أو بريد، ولا تُسجل موافقات إنتاج.</p></div>
  <span class="badge badge-gold">بيئة اختبار فقط</span></div>
  <section id="operator-guest-demo" class="content-card" aria-label="عرض نتائج مَآل بدون كلمة مرور">
@@ -318,7 +318,7 @@
 
 <section id="view-operations" class="view hidden" aria-label="التشغيل والأمان">
  <div class="ops-grid">
-  <div class="content-card"><p class="eyebrow">SYSTEM BOUNDARIES</p><h3>ماذا يعمل الآن؟</h3><div class="op-row"><strong>محرك RASD</strong><span>بنية سحابية قائمة، منفصلة عن هذه الواجهة</span></div><div class="op-row"><strong>واجهة مَآل V0.2</strong><span>معاينة محلية على E: للقراءة فقط</span></div><div class="op-row"><strong>مسار دليل → توصية</strong><span>تجربة تاريخية موثّقة، لا عميل حقيقي</span></div><div class="op-row"><strong>إرسال البريد</strong><span>غير متاح من الواجهة؛ قبول SMTP سابق لا يثبت Inbox</span></div><div class="op-row"><strong>الجدولة الاحتياطية</strong><span>توجد مشكلة قديمة مفتوحة في رؤية سجل التسليم</span></div></div>
+  <div class="content-card"><p class="eyebrow">SYSTEM BOUNDARIES</p><h3>ماذا يعمل الآن؟</h3><div class="op-row"><strong>محرك RASD</strong><span>بنية سحابية قائمة، منفصلة عن هذه الواجهة</span></div><div class="op-row"><strong>واجهة مَآل المحلية</strong><span>معاينة محلية على E: للقراءة فقط</span></div><div class="op-row"><strong>مسار دليل → توصية</strong><span>تجربة تاريخية موثّقة، لا عميل حقيقي</span></div><div class="op-row"><strong>إرسال البريد</strong><span>غير متاح من الواجهة؛ قبول SMTP سابق لا يثبت Inbox</span></div><div class="op-row"><strong>الجدولة الاحتياطية</strong><span>توجد مشكلة قديمة مفتوحة في رؤية سجل التسليم</span></div></div>
   <div class="content-card"><p class="eyebrow">SECURE BY DEFAULT</p><h3>الحدود الآمنة</h3><ul class="guard-list"><li>الخادم مقيد بـ 127.0.0.1 على الكمبيوتر.</li><li>دخول تجريبي محلي محمي، ولا توجد حسابات عملاء منشورة.</li><li>توجد فقط واجهات مهمة داخلية محمية، ولا إرسال بريد.</li><li>ملفات الدليل محفوظة داخل E وتخضع للتحقق من SHA-256.</li><li>لا تغيير للـGitHub Actions أو أسرار الإنتاج.</li></ul></div>
  </div>
 </section>
