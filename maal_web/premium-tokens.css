@@ -1,0 +1,72 @@
+/* MA'AL approved 2026 brandbook: executive light canvas + navy identity */
+:root{
+ --p-navy:#071B2B;--p-azure:#143C5A;--p-teal:#1EC4B6;
+ --p-gold:#D4AF72;--p-ivory:#F7F5EF;--p-graphite:#2E3A46;
+ --p-ink:#153347;--p-muted:#526776;--p-white:#FFFFFF;
+ --p-line:#DCE5E8;--p-soft:#EFF6F5;--p-shadow:0 14px 50px #0A253011;
+ --p-radius:18px;--p-focus:#14766E;
+}
+.maal-premium{background:var(--p-ivory);font-family:"Tajawal","Noto Sans Arabic","Segoe UI",Tahoma,Arial,sans-serif}
+.maal-premium .shell{grid-template-columns:262px minmax(0,1fr)}
+.maal-premium .sidebar{background:var(--p-navy);border-color:#2A465B;padding:23px 16px;gap:21px}
+.maal-premium .brand-area{padding:0 8px 23px;border-color:#274457}
+.maal-premium .brand-icon{width:65px;height:65px;object-fit:contain;filter:none}
+.maal-premium .brand-type strong{font-size:26px;color:#FFF}
+.maal-premium .brand-type small{font-size:12px;color:#C5D8DB}
+.maal-premium .nav-caption{color:#98B5BE;font-size:12px}
+.maal-premium .sidebar .main-nav{display:grid;grid-template-columns:1fr;gap:4px}
+.maal-premium .sidebar .nav-link{font-size:14px;min-height:49px;padding:11px 15px;flex-direction:row;align-items:center;gap:12px;border-radius:10px;color:#C7D7DE}
+.maal-premium .sidebar .nav-link:hover{background:#153749;color:#FFF}
+.maal-premium .sidebar .nav-link.active{background:#174151;color:#FFF;border:1px solid #37756E;border-right:3px solid var(--p-teal);box-shadow:none}
+.maal-premium .workspace{background:var(--p-ivory)}
+.maal-premium .topbar{height:auto;min-height:76px;background:#FFF;border-bottom:1px solid var(--p-line);padding:12px clamp(18px,3vw,44px);box-shadow:0 4px 14px #102A3708}
+.maal-premium .crumbs,.maal-premium .crumbs strong{font-size:13px;color:#415A68}
+.maal-premium .topbar-side{gap:12px}
+.maal-premium .topbar .top-tag{background:#EAF7F3;color:#185B57;border-color:#BCDCD4;font-size:10px}
+.maal-premium .quick-open{color:#23465B;background:#FAFCFC;border:1px solid var(--p-line)}
+.maal-premium .account-entry{min-height:44px;border:1px solid #12776E;border-radius:10px;background:#157D72;color:#FFF;box-shadow:none;font-size:13px}
+.maal-premium .account-entry:hover{background:#0F6B61;transform:none}
+.maal-premium .account-entry.signed-in{background:var(--p-navy);color:#FFF;border-color:#29495B}
+.maal-premium .header-logout{background:#FFF;border:1px solid var(--p-line);color:#23465B}
+.maal-premium main{max-width:1680px;padding:29px clamp(16px,3vw,45px) 26px}
+.maal-premium .page-heading{margin-bottom:21px;align-items:center}
+.maal-premium .page-heading h1{color:var(--p-navy);font-size:clamp(27px,2.7vw,38px);line-height:1.38}
+.maal-premium .page-heading .heading-desc{color:#4D6876;font-size:14px}
+.maal-premium .page-heading .eyebrow{color:#176E66;font-size:11px}
+.maal-premium .heading-status .outline-tag{background:#FBF4E8;border-color:#D8C5A5;color:#795627}
+.maal-premium .heading-status small{color:#566F7D}
+.maal-premium .global-foot{color:#576E7C;border-color:var(--p-line);padding-inline:25px}
+.maal-premium :is(button,a,input,textarea,select,summary):focus-visible{outline:3px solid var(--p-focus);outline-offset:3px}
+.maal-premium .btn{min-height:44px;border-radius:10px;font-size:14px}
+.maal-premium .btn-primary{background:#157D72;color:#FFF;border-color:#157D72}
+.maal-premium .btn-primary:hover{background:#0E6C62}
+.maal-premium .content-card{border-radius:16px;box-shadow:0 4px 19px #0B25360C}
+.maal-premium .login-dialog{background:var(--p-navy);color:var(--p-white);max-height:calc(100dvh - 38px);overflow-y:auto}
+.maal-premium .new-signal-workspace{background:#FFF;border:1px solid var(--p-line);color:var(--p-ink);padding:25px}
+.maal-premium .new-signal-workspace h2{color:var(--p-navy)}
+.maal-premium .new-signal-workspace .eyebrow{color:#17766B}
+.maal-premium .new-signal-intro{color:#516C78;font-size:14px}
+.maal-premium #new-signal-state{color:#1C5B56;border:1px solid #CEE5DF;background:#F0F9F5}
+.maal-premium .new-signal-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.maal-premium .new-signal-choice{background:#F8FAFB;border:1px solid #D7E3E6;color:#193F50;min-height:84px;width:100%;max-width:none;text-align:right;border-radius:12px;padding:15px;line-height:1.65;font-size:13px;box-shadow:none}
+.maal-premium .new-signal-choice:hover,.maal-premium .new-signal-choice[aria-pressed=true]{color:#123D38;background:#E9F7F3;border-color:#269D8F;box-shadow:inset 0 3px 0 #1EC4B6}
+.maal-premium .new-signal-evidence{border-color:#D7E3E6}
+.maal-premium .new-signal-evidence h3{color:#183C4D}
+.maal-premium .new-signal-meta,.maal-premium .new-signal-evidence small{color:#526F7B}
+.maal-premium .new-signal-analysis{grid-template-columns:repeat(2,minmax(0,1fr))}
+.maal-premium .new-signal-section{background:#F7FAFB;border-color:#DCE5E8;color:#1A394A}
+.maal-premium .new-signal-section strong{color:#164B51}
+.maal-premium .new-signal-section :is(p,li){font-size:14px;color:#34505D}
+.maal-premium #paired-ai-benchmark,.maal-premium #business-value-study{background:#FFF;border:1px solid var(--p-line);border-radius:15px;padding:19px 21px;margin:0 0 20px;color:#1B3B4C}
+.maal-premium #paired-ai-benchmark>summary,.maal-premium #business-value-study>summary{cursor:pointer;color:#173B4C;font-size:15px;font-weight:800;min-height:44px}
+.maal-premium #paired-benchmark-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:12px 0}
+.maal-premium #paired-benchmark-detail{grid-template-columns:repeat(2,minmax(0,1fr))}
+.maal-premium #paired-benchmark-detail>h4,.maal-premium #paired-benchmark-detail>p{grid-column:1/-1;color:#254B5C}
+.maal-premium .operator-draft-item{min-height:70px}
+.maal-premium .operator-actions{display:flex;flex-wrap:wrap;gap:10px}
+.maal-premium .operator-actions button{min-height:44px}
+.maal-premium .operator-draft-info small{overflow-wrap:anywhere;unicode-bidi:plaintext}
+.maal-premium .hash-code,.maal-premium .new-signal-evidence small{direction:ltr;text-align:left;overflow-wrap:anywhere;unicode-bidi:isolate}
+.maal-premium #business-value-study .customer-scope{color:#466371}
+.maal-premium #business-value-study :is(input,textarea){background:#FFF;color:#234050;border:1px solid #B9CBD3}
+@media(prefers-reduced-motion:reduce){.maal-premium *,.maal-premium *::before,.maal-premium *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}

@@ -1,0 +1,112 @@
+/* Mobile first refinement — the owner login stays ABOVE nav on mobile. */
+@media(max-width:1240px){
+ .premium-hero{grid-template-columns:1fr minmax(210px,.7fr)}
+ .premium-featured{grid-template-columns:1fr}
+ .premium-flow{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:1040px){
+ .maal-premium .shell{display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"top" "nav" "main" "foot"}
+ .maal-premium .workspace{display:contents}
+ .maal-premium .topbar{grid-area:top;position:sticky;top:0;z-index:45;min-height:66px;padding:9px 18px}
+ .maal-premium .sidebar{grid-area:nav;position:relative;top:auto;min-height:0;padding:8px 15px;gap:0;background:#071B2B;border-left:0;border-bottom:1px solid #2E5261}
+ .maal-premium .sidebar :is(.brand-area,.nav-caption,.sidebar-bottom){display:none}
+ .maal-premium .sidebar .main-nav{display:flex;grid-template-columns:none;gap:5px;overflow-x:auto;scroll-snap-type:x proximity;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 0 5px}
+ .maal-premium .sidebar .nav-link{width:auto;min-width:115px;flex:0 0 auto;flex-direction:row;justify-content:center;gap:8px;font-size:12px;min-height:48px;padding:9px 12px;scroll-snap-align:start}
+ .maal-premium .sidebar .nav-link.active{border:1px solid #34736E;border-bottom:2px solid #1EC4B6}
+ .maal-premium main{grid-area:main;min-height:70vh}
+ .maal-premium .global-foot{grid-area:foot;padding:15px 20px}
+ .maal-premium .crumbs{display:none}
+ .maal-premium .topbar-side{flex:1;justify-content:flex-end}
+ .premium-mobile-brand{display:flex;align-items:center;gap:7px;font-size:15px;font-weight:850;color:#071B2B}
+ .premium-mobile-brand img{width:33px;height:33px;object-fit:contain}
+}
+@media(max-width:820px){
+ .premium-hero{grid-template-columns:1fr;padding:24px}
+ .premium-hero-aside{padding:16px}
+ .maal-premium .new-signal-choices{grid-template-columns:1fr}
+ .maal-premium .new-signal-choice{min-height:63px}
+ .maal-premium #paired-benchmark-list{grid-template-columns:1fr}
+}
+@media(max-width:590px){
+ .maal-premium .topbar{min-height:59px;padding:8px 11px}
+ .maal-premium .topbar .top-tag,.maal-premium .quick-open kbd,.maal-premium .quick-open span{display:none}
+ .maal-premium .quick-open{min-width:42px;min-height:43px;padding:7px}
+ .maal-premium .account-entry{min-height:44px;font-size:12px;padding:7px 10px}
+ .maal-premium .header-logout{min-height:44px;padding:7px 8px;font-size:11px}
+ .maal-premium main{padding:18px 12px}
+ .maal-premium .page-heading{gap:10px;align-items:flex-start}
+ .maal-premium .page-heading h1{font-size:27px}
+ .maal-premium .heading-status{justify-content:flex-start;flex-wrap:wrap}
+ .premium-hero{padding:21px 18px;border-radius:16px}
+ .premium-hero h2{font-size:28px}
+ .premium-hero p{font-size:14px}
+ .premium-hero .premium-actions{display:grid;grid-template-columns:1fr}
+ .premium-status-grid{grid-template-columns:1fr;gap:8px}
+ .premium-stat{padding:12px 16px;display:grid;grid-template-columns:1fr auto;gap:0 9px;align-items:center}
+ .premium-stat strong{font-size:26px;text-align:left}
+ .premium-stat small{grid-column:1/-1}
+ .premium-panel{padding:17px 14px}
+ .premium-featured h4{font-size:18px}
+ .premium-flow{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ .premium-flow li{min-height:80px;padding:11px}
+ .maal-premium .new-signal-workspace{padding:17px 14px}
+ .maal-premium .new-signal-analysis,.maal-premium #paired-benchmark-detail{grid-template-columns:1fr}
+ .maal-premium #paired-ai-benchmark{padding:14px}
+ .premium-decision-summary,.premium-timeline,.premium-reports-head{padding:17px 15px}
+ .premium-legacy-body{padding:2px 7px 13px}
+}
+@media(max-width:350px){
+ .premium-mobile-brand span{display:none}
+ .maal-premium .topbar{padding:7px 8px}
+ .maal-premium .topbar-side{gap:5px}
+ .maal-premium .account-entry{font-size:11px;padding:6px 7px;max-width:148px}
+ .maal-premium .header-logout{padding:6px}
+ .maal-premium .sidebar{padding:7px}
+ .maal-premium main{padding:13px 9px}
+}
+
+/* Accessible seven-section mobile navigation, no hidden horizontal strip. */
+.premium-navigation-toggle{display:none}
+.premium-navigation-backdrop[hidden]{display:none!important}
+@media(max-width:1040px){
+ .maal-premium .premium-navigation-toggle{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:none;
+  border-radius:10px;min-height:44px;min-width:44px;padding:8px 12px;
+  border:1px solid #C8D7D9;background:#F0F7F5;color:#173C49;
+  font-size:13px;font-weight:750;cursor:pointer;
+ }
+ .maal-premium .premium-navigation-toggle [aria-hidden]{font-size:19px;line-height:1}
+ .maal-premium .sidebar{
+  display:none;position:fixed;z-index:80;top:64px;right:0;left:auto;
+  width:min(340px,90vw);height:calc(100dvh - 64px);min-height:0;
+  overflow-y:auto;overscroll-behavior:contain;
+  box-shadow:-12px 10px 45px #061A2980;padding:17px 14px 25px;
+ }
+ .maal-premium .sidebar.premium-drawer-open{display:flex;flex-direction:column;gap:13px}
+ .maal-premium .sidebar .main-nav{display:grid;grid-template-columns:1fr;overflow:visible;gap:4px;padding:0;scroll-snap-type:none}
+ .maal-premium .sidebar .nav-link{
+  display:flex;justify-content:flex-start;align-items:center;width:100%;
+  min-height:48px;font-size:14px;padding:11px 13px;scroll-snap-align:none;
+ }
+ .premium-navigation-backdrop:not([hidden]){
+  display:block;position:fixed;z-index:79;inset:64px 0 0 0;
+  background:rgba(3,22,35,.55);border:0;padding:0;cursor:pointer;
+ }
+ .maal-premium .topbar{grid-area:top}
+ .maal-premium main{grid-area:main}
+ .maal-premium .global-foot{grid-area:foot}
+ .maal-premium .shell{grid-template-areas:"top" "main" "foot"}
+}
+@media(max-width:590px){
+ .maal-premium .premium-navigation-toggle span:last-child{display:none}
+ .maal-premium .premium-navigation-toggle{padding:7px;min-width:44px}
+ .maal-premium .topbar-side{min-width:0}
+ .maal-premium .account-entry{max-width:157px}
+ .maal-premium .sidebar{top:59px;height:calc(100dvh - 59px)}
+ .premium-navigation-backdrop:not([hidden]){top:59px}
+}
+@media(max-width:350px){
+ .maal-premium .topbar{gap:4px}
+ .maal-premium .account-entry{max-width:132px}
+ .maal-premium .premium-mobile-brand img{width:29px;height:29px}
+}

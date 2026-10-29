@@ -25,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 from maal.decision_contracts import Evidence
 from maal.operator_gateway import OperatorGateway
+from maal.competition_journey import assemble_agent_journey
 from maal.report_bundle_guard import inspect_bundle
 PROJECT = next((folder for folder in HERE.parents if folder.name.upper() == "MAAL"), None)
 if PROJECT is None:
@@ -35,7 +36,7 @@ CASE_DIR = PROJECT / "03_REPORTS_AND_REVIEW" / "MAAL_GATE_E_ACCEPTANCE_20261026"
 CASE_JSON = CASE_DIR / "MAAL-historical-signal-demo.json"
 CASE_IMAGE = CASE_DIR / "official-original.jpg"
 CASE_REPORT = CASE_DIR / "MAAL-historical-signal-demo.docx"
-MODEL_RUN=PROJECT/"04_HISTORICAL_QA"/"MAAL_GATE_H_E2E_20261027"/"fresh_model_run.json"
+MODEL_RUN=PROJECT/"04_HISTORICAL_QA"/"MAAL_COMPETITION_MVP_20261028"/"fresh_model_run.json"
 # Isolated demo state, NOT a Gmail/private-ledger database.
 OP_DB=PROJECT/"04_HISTORICAL_QA"/"MAAL_GATE_H_E2E_20261027"/"operator.sqlite"
 _GATEWAY=None
@@ -47,8 +48,17 @@ def gateway():
 STATIC = {
     "/": (HERE / "index.html", "text/html; charset=utf-8"),
     "/style.css": (HERE / "style.css", "text/css; charset=utf-8"),
+    "/premium-tokens.css": (HERE / "premium-tokens.css", "text/css; charset=utf-8"),
+    "/premium-executive.css": (HERE / "premium-executive.css", "text/css; charset=utf-8"),
+    "/premium-responsive.css": (HERE / "premium-responsive.css", "text/css; charset=utf-8"),
+    "/premium-experience.js": (HERE / "premium-experience.js", "text/javascript; charset=utf-8"),
     "/app.js": (HERE / "app.js", "text/javascript; charset=utf-8"),
     "/operator.js": (HERE / "operator.js", "text/javascript; charset=utf-8"),
+    "/agent-journey.js": (HERE / "agent-journey.js", "text/javascript; charset=utf-8"),
+    "/new-signals.js": (HERE / "new-signals.js", "text/javascript; charset=utf-8"),
+    "/business-value-study.js": (HERE / "business-value-study.js", "text/javascript; charset=utf-8"),
+    "/paired-benchmark.js": (HERE / "paired-benchmark.js", "text/javascript; charset=utf-8"),
+    "/two-stage-results.js": (HERE / "two-stage-results.js", "text/javascript; charset=utf-8"),
     "/product_report.json": (HERE / "product_report.json", "application/json; charset=utf-8"),
     # Explicitly named local owner-review files, not a dynamic user-provided path.
     "/reports/MAAL_Business_Intelligence_Round2_2026-10-27.pdf":
@@ -59,6 +69,7 @@ STATIC = {
         "MAAL_Business_Intelligence_Round2_2026-10-27.docx",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
     "/brand-symbol.png": (BRAND / "logo_mono_ivory_transparent.png", "image/png"),
+    "/brand-symbol-approved.png": (BRAND / "logo_symbol_only_dark.png", "image/png"),
     "/brand-logo.png": (BRAND / "logo_primary_reference.png", "image/png"),
 }
 
@@ -289,7 +300,23 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         try:
             if path == "/api/operator/state":
-                try:return self._json_response(200,gateway().dashboard(self._cookie()))
+                try:
+                    gate=gateway();token=self._cookie()
+                    state=gate.dashboard(token)
+                    actor=gate.require(token)
+                    from maal.competition_editorial_gate import require_draft_allowed
+                    for draft in state["drafts"]:
+                        eligible=False
+                        if draft["state"] in ("DRAFT","APPROVED"):
+                            try:
+                                require_draft_allowed(gate,actor,draft["draft_id"])
+                                eligible=True
+                            except (OSError,ValueError,TypeError,KeyError,PermissionError,RuntimeError):
+                                pass  # Fail closed; never infer editorial acceptance.
+                        draft["can_approve"]=eligible and draft["state"]=="DRAFT" and actor["role"]=="OWNER"
+                        draft["can_execute"]=eligible and draft["state"]=="APPROVED" and actor["role"]=="OWNER"
+                        draft["editorial_status"]="MODEL_SOURCE_RUBRIC_AND_HUMAN_REVIEW_VERIFIED" if eligible else "HOLD_OR_NOT_ACTIONABLE"
+                    return self._json_response(200,state)
                 except PermissionError:return self._json_response(401,{"error":"login_required"})
             if path == "/product_report.json" and os.environ.get("MAAL_HISTORICAL_SNAPSHOT_REVIEW") == "true":
                 return self._json_response(200,get_safe_staging_report())
@@ -309,6 +336,160 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/snapshot":
                 return self.reply(200, "application/json; charset=utf-8",
                                   json.dumps(get_snapshot(), ensure_ascii=False).encode("utf-8"))
+            if path == "/api/agent-journey":
+                # All visible claims derive from one unchanged original and
+                # one persisted, independently checked local model receipt.
+                who = None
+                try:
+                    who = gateway().dashboard(self._cookie())
+                except PermissionError:
+                    pass
+                case=get_case()
+                ai=get_local_ai_run()
+                journey=assemble_agent_journey(case,ai,who)
+                try:
+                    from maal.competition_report_bundle import read_bound_bundle
+                    manifest,_=read_bound_bundle(case,ai,MODEL_RUN.parent/"reports")
+                    journey["report"].update({
+                        "status":"SOURCE_LINKED_QWEN_WORD_PDF_QA",
+                        "ai_run_bound_word_pdf_available":True,
+                        "docx_url":"/api/agent-report.docx",
+                        "pdf_url":"/api/agent-report.pdf",
+                        "manifest_sha256_report":manifest["docx_sha256"],
+                    })
+                except (OSError,ValueError,KeyError):
+                    pass  # Never represent a stale/incomplete bundle as ready.
+                return self._json_response(200,journey)
+            if path in ("/api/agent-report.docx","/api/agent-report.pdf"):
+                # Pin both download bytes to the current original and model.
+                from maal.competition_report_bundle import read_bound_bundle
+                _,bundle=read_bound_bundle(get_case(),get_local_ai_run(),MODEL_RUN.parent/"reports")
+                kind="pdf" if path.endswith(".pdf") else "docx"
+                mime=("application/pdf" if kind=="pdf" else
+                      "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                return self.reply(200,mime,bundle[kind],
+                    filename="MAAL-Source-Linked-Qwen-Review."+kind)
+            if path == "/api/competition-demo.webm":
+                from hashlib import sha256
+                root=Path("E:/MAAL/03_REPORTS_AND_REVIEW/MAAL_COMPETITION_MVP_20261028/new_source_demo")
+                manifest=json.loads((root/"walkthrough_acceptance.json").read_text("utf8"))
+                if (manifest.get("status")!="CONTINUOUS_OWNER_REVIEW_DEMO_PASS" or
+                    manifest.get("new_approval_performed") is not False or
+                    manifest.get("new_task_executed") is not False or
+                    manifest.get("video_scope")!="SAVED_REAL_QWEN_INFERENCE_REPLAYED_FROM_VERIFIED_RECEIPT__NO_LIVE_INFERENCE_IN_TAPE"):
+                    raise ValueError("demo_acceptance_provenance_hold")
+                video=Path(manifest["video_path"]).resolve()
+                expected_dir=(root/"continuous_readonly_video").resolve()
+                if video.parent!=expected_dir or video.suffix.lower()!=".webm":
+                    raise ValueError("demo_path_not_authorized")
+                binary=video.read_bytes()
+                if (not 100000<=len(binary)<=150000000 or
+                    sha256(binary).hexdigest()!=manifest["video_sha256"]):
+                    raise ValueError("demo_integrity_hold")
+                return self.reply(200,"video/webm",binary,
+                      filename="MAAL_Real_Source_Qwen_to_Human_Review_ONLY.webm")
+            if path == "/api/two-stage-results":
+                # Only independently validated local Qwen receipts. No owner
+                # signing, task creation, external action or live-run claims.
+                from maal.competition_two_stage_public import read_results
+                return self._json_response(200,read_results())
+            if path == "/api/model-comparison":
+                # Source-backed LOCAL benchmark receipts; no unsupervised
+                # approval or claim that heuristic scores are editorial facts.
+                from maal.competition_run_paired import ROOT as BENCH_ROOT
+                from maal.competition_benchmark_v2 import VERSION,rubric
+                from maal.competition_new_source import ROOT as CAPTURE_ROOT,get_case_from_capture
+                runs=[]
+                if BENCH_ROOT.exists():
+                    for folder in BENCH_ROOT.iterdir():
+                        if not folder.is_dir() or not (folder/"receipt.json").is_file():
+                            continue
+                        try:
+                            b=json.loads((folder/"receipt.json").read_text("utf8"))
+                            if (b.get("schema")!="MAAL_PAIRED_QWEN_BENCH_V2" or
+                                b.get("rubric_version")!=VERSION or
+                                b.get("run_id")!=folder.name):continue
+                            case=get_case_from_capture(CAPTURE_ROOT/b["source_id"])
+                            if (case["evidence_digest"]!=b["source_sha256"] or
+                                case["original_url"]!=b["case_url"] or
+                                b.get("grade")!=rubric(case,b.get("response_json"),b.get("model_error"))):
+                                continue
+                            runs.append({
+                                k:b.get(k) for k in ("run_id","model_key","model","prompt_version",
+                                  "case","source_id","source_sha256","duration_seconds",
+                                  "model_usage","peak_sampled_working_set_mb",
+                                  "grade","response_json","recorded_at",
+                                  "model_error","iteration")
+                            })
+                        except (OSError,ValueError,TypeError,KeyError):continue
+                runs.sort(key=lambda r:r["recorded_at"],reverse=True)
+                return self._json_response(200,{
+                    "schema":"MAAL_INDEPENDENT_MODEL_BENCHMARK_V2",
+                    "rubric_version":VERSION,
+                    "company_type":"SYNTHETIC_EGYPT_DIGITAL_STUDIO",
+                    "model_generated":True,"editorial_approval":False,
+                    "no_human_action_automated":True,"items":runs})
+            if path == "/api/new-signals":
+                from maal.competition_new_source import verified_cases
+                from maal.competition_new_reasoning import verified_runs, COMPANY
+                captured=verified_cases()
+                runs=verified_runs()
+                # Private editorial review is independent from JSON schema
+                # validity and the owner approval ledger. Missing = HOLD.
+                editorial_path=Path("E:/MAAL/04_HISTORICAL_QA/MAAL_COMPETITION_MVP_20261028/editorial_quality_20261028.json")
+                try:
+                    editorial=json.loads(editorial_path.read_text("utf8"))
+                    if editorial.get("schema")!="MAAL_EDITORIAL_REVIEW_V1":
+                        raise ValueError("untrusted_editorial_review_schema")
+                    assessments=editorial["cases"]
+                except (OSError,ValueError,KeyError,TypeError):
+                    assessments={}
+                owner_drafts=[]
+                try:
+                    owner_drafts=gateway().dashboard(self._cookie())["drafts"]
+                except PermissionError:
+                    pass
+                entries=[]
+                for item in captured:
+                    selected=next((r for r in runs if r["evidence_id"]==item["evidence_id"]),None)
+                    entries.append({
+                        "case":{
+                            k:item[k] for k in ("evidence_id","publisher","headline",
+                                "original_url","published_day","date_precision",
+                                "observed_at","verification_status","evidence_digest",
+                                "evidence_image_url","sector_angle","proof_method","source_key")
+                        },
+                        "ai":None if not selected else {
+                            k:selected[k] for k in ("run_id","status","model",
+                                "elapsed_seconds","token_usage","analysis","error",
+                                "recorded_at","evidence_id")
+                        },
+                        "editorial_review": (
+                            assessments[item["evidence_id"]]
+                            if selected and
+                               assessments.get(item["evidence_id"],{}).get("run_id")==selected["run_id"]
+                            else {"status":"HOLD","reason":"لم تُعتمد المراجعة التحريرية لهذا التشغيل."}
+                        ),
+                        "owner_draft":next(({
+                            "draft_id":d["draft_id"],
+                            "state":d["state"],
+                            "task_id":d.get("task_id")
+                        } for d in owner_drafts if
+                            d["evidence_id"]==item["evidence_id"]),None)
+                    })
+                return self._json_response(200,{
+                    "schema":"MAAL_NEW_OFFICIAL_SIGNALS_V1",
+                    "scope":"OWNER_LOCAL_OFFICIAL_SOURCE_CAPTURE",
+                    "live_schedule":False,"company":COMPANY,
+                    "items":entries,"approval_requires_human":True})
+            if path.startswith("/api/new-signal/image/"):
+                from maal.competition_new_source import ROOT,get_case_from_capture
+                import re
+                ident=path.rsplit("/",1)[-1]
+                if not re.fullmatch(r"[0-9a-f]{24}",ident):
+                    return self._json_response(404,{"error":"invalid_source_id"})
+                record=get_case_from_capture(ROOT/ident)
+                return self.reply(200,"image/jpeg",(ROOT/ident/"publisher-page.jpeg").read_bytes())
             if path == "/api/ai-analysis":
                 return self._json_response(200,get_local_ai_run())
             if path == "/api/evidence":
@@ -360,7 +541,8 @@ class Handler(BaseHTTPRequestHandler):
         path=urlsplit(self.path).path
         actions={
             "/api/operator/login","/api/operator/logout",
-            "/api/operator/draft","/api/operator/approve","/api/operator/execute",
+            "/api/operator/draft","/api/operator/approve","/api/operator/reject","/api/operator/execute",
+            "/api/operator/editorial-signoff",
             "/api/ai/run"
         }
         if path not in actions:
@@ -397,22 +579,58 @@ class Handler(BaseHTTPRequestHandler):
                 from maal.demo_runtime import infer_to_local_receipt
                 result=infer_to_local_receipt(get_case(),MODEL_RUN)
                 return self._json_response(200,{"run":result,"analysis":get_local_ai_run()})
+            if path=="/api/operator/editorial-signoff":
+                from maal.competition_editorial_gate import sign_owner_editorial
+                result=sign_owner_editorial(gate,token,csrf,body.get("model_run_id"),
+                                             body.get("stepup_password",""))
+                return self._json_response(200,result)
             if path=="/api/operator/draft":
                 linked_run=body.get("model_run_id")
-                if linked_run is not None:
-                    live_result=get_local_ai_run()
-                    if (linked_run!=live_result["run_id"] or
-                        body.get("description")!=live_result["recommendation"]):
-                        raise ValueError("model_run_and_recommendation_mismatch")
-                result=gate.create(token,csrf,self._evidence_for_draft(),
+                fresh_evidence=body.get("new_evidence_id")
+                evidence=self._evidence_for_draft()
+                if fresh_evidence is not None:
+                    from maal.competition_new_source import ROOT,get_case_from_capture
+                    from maal.competition_new_reasoning import verified_runs
+                    import re
+                    if (not isinstance(fresh_evidence,str) or
+                            not re.fullmatch(r"[0-9a-f]{24}",fresh_evidence)):
+                        raise ValueError("new_evidence_invalid")
+                    # ONE GENERAL immutable editorial gate for ANY source or
+                    # draft. No run-specific/hardcoded FPT exception exists.
+                    from maal.competition_editorial_gate import check_run_binding
+                    case,verified_run,description=check_run_binding(gate.store,linked_run,actor)
+                    if (case["evidence_id"]!=fresh_evidence or
+                        body.get("description")!=description):
+                        raise ValueError("model_evidence_or_action_contract_hold")
+                    evidence=Evidence(case["evidence_id"],case["publisher"],
+                        case["original_url"],case["headline"],
+                        date.fromisoformat(case["published_day"]) if case["published_day"]
+                           else datetime.fromisoformat(case["observed_at"]).date(),
+                        datetime.fromisoformat(case["observed_at"]),
+                        case["evidence_digest"],case["verification_status"])
+                else:
+                    # Historical unbound owner drafts remain readable, but may
+                    # NOT be created/approved by this competition endpoint.
+                    raise ValueError("new_draft_requires_evidence_and_editorial_signoff")
+                result=gate.create(token,csrf,evidence,
                                    body.get("description",""),body.get("idempotency_key",""),
                                    model_run_id=linked_run)
-                return self._json_response(200,{"draft_id":result,"state":"DRAFT","source_model_run_id":linked_run})
+                return self._json_response(200,{"draft_id":result,"state":"DRAFT",
+                  "evidence_id":evidence.evidence_id,"source_model_run_id":linked_run})
             if path=="/api/operator/approve":
+                from maal.competition_editorial_gate import require_draft_allowed
+                require_draft_allowed(gate,actor,body.get("draft_id",""))
                 result=gate.approve(token,csrf,body.get("draft_id",""),
                                     body.get("stepup_password",""))
                 return self._json_response(200,result)
+            if path=="/api/operator/reject":
+                result=gate.reject(token,csrf,body.get("draft_id",""),
+                                   body.get("stepup_password",""),
+                                   body.get("reason","EDITORIAL_NOT_ACCEPTED"))
+                return self._json_response(200,result)
             if path=="/api/operator/execute":
+                from maal.competition_editorial_gate import require_draft_allowed
+                require_draft_allowed(gate,actor,body.get("draft_id",""))
                 result=gate.execute(token,csrf,body.get("draft_id",""))
                 return self._json_response(200,result)
         except PermissionError:

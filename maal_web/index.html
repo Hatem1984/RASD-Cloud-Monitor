@@ -7,8 +7,17 @@
   <meta name="description" content="مَآل — واجهة معاينة استخبارات الأعمال، من الإشارة إلى القرار.">
   <title>مَآل | مركز استخبارات الأعمال</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/premium-tokens.css">
+  <link rel="stylesheet" href="/premium-executive.css">
+  <link rel="stylesheet" href="/premium-responsive.css">
   <script src="/app.js" defer></script>
   <script src="/operator.js" defer></script>
+  <script src="/agent-journey.js" defer></script>
+  <script src="/new-signals.js" defer></script>
+  <script src="/business-value-study.js" defer></script>
+  <script src="/paired-benchmark.js" defer></script>
+  <script src="/two-stage-results.js" defer></script>
+  <script src="/premium-experience.js" defer></script>
 </head>
 <body>
 <svg class="icons-def" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -58,12 +67,60 @@
 <div class="workspace">
 <header class="topbar">
   <div class="crumbs"><span>مَآل / استخبارات الأعمال</span><svg class="icon"><use href="#i-arrow"/></svg><strong id="current-view-label">القيادة</strong></div>
-  <div class="topbar-side"><button type="button" class="quick-open" id="quick-open" title="بحث سريع وتنقل — Ctrl+K" aria-haspopup="dialog"><svg class="icon"><use href="#i-search"/></svg><span>بحث سريع</span><kbd>Ctrl K</kbd></button><span class="top-tag"><span class="status-dot"></span> LOCAL · PRIVATE</span><div class="avatar" aria-label="وضع تجربة المالك">M</div></div>
+  <div class="topbar-side"><button type="button" class="quick-open" id="quick-open" title="بحث سريع وتنقل — Ctrl+K" aria-haspopup="dialog"><svg class="icon"><use href="#i-search"/></svg><span>بحث سريع</span><kbd>Ctrl K</kbd></button><span class="top-tag"><span class="status-dot"></span> LOCAL · PRIVATE</span><div class="account-toolbar"><button type="button" id="account-entry" class="account-entry" aria-haspopup="dialog" aria-controls="login-dialog"><svg class="icon"><use href="#i-lock"/></svg><span id="account-entry-label">تسجيل الدخول</span></button><button type="button" id="header-logout" class="header-logout" hidden>خروج</button></div></div>
 </header>
 <main id="content" tabindex="-1">
   <div class="page-heading"><div><p class="eyebrow">INTELLIGENCE COMMAND CENTER</p><h1 id="current-heading">وضوح أكبر. <span class="gold">قرار أذكى.</span></h1><p id="current-subheading" class="heading-desc">استكشف كيف تتحول إشارة موثّقة إلى رؤية قابلة للمراجعة.</p></div><div class="heading-status"><span class="outline-tag">نسخة تجريبية غير إنتاجية</span><small id="snapshot-date">آخر جرد معتمد: جارٍ التحقق</small></div></div>
 
 <section id="view-overview" class="view" aria-label="نظرة عامة">
+
+ <section id="new-signal-workspace" class="content-card new-signal-workspace" aria-label="أدلة ناشرين رسميين محفوظة وتحليلات للمراجعة">
+  <p class="eyebrow">MA'AL / VERIFIED SIGNALS → GENERATIVE QWEN3</p>
+  <h2>أدلة رسمية محفوظة للتحقق والمراجعة</h2>
+  <p class="new-signal-intro">مَآل يلتقط صفحات ناشرين رسميين، ويحفظ صورة الصفحة وبصمتها، ثم يطلب من Qwen3 تحليل أثرها على شركة رقمية افتراضية. كل استنتاج هنا مسودة، وليس قرارًا معتمدًا أو خبرًا مباشرًا لحظة بلحظة.</p>
+  <div id="new-signal-state" role="status" aria-live="polite">جارٍ تحميل أدلة المصادر المستقلة…</div>
+  <div id="new-signal-choices" class="new-signal-choices"></div>
+  <div id="new-signal-evidence" class="new-signal-evidence" hidden></div>
+  <div id="new-signal-analysis" class="new-signal-analysis"></div>
+  <details id="paired-ai-benchmark" class="new-signal-section" style="margin:16px 0">
+    <summary><strong>مقارنة التفكير التجاري — Qwen3 1.7B مقابل 4B</strong></summary>
+    <p class="customer-scope">نفس الدليل والشركة والسؤال وعقد القرار، مع نتائج تشغيلات جديدة وأوقاتها الحقيقية. درجة AI ليست موافقة تحريرية، ولا قرارًا من المالك.</p>
+    <div id="paired-benchmark-state" role="status" aria-live="polite">جارٍ قراءة نتائج المقارنة…</div>
+    <div id="paired-benchmark-list"></div>
+    <div id="paired-benchmark-detail" class="new-signal-analysis"></div>
+  </details>
+  <button type="button" class="btn btn-primary" id="new-signal-draft" hidden>مراجعة التوصية وإعداد مسودة قرار</button>
+  <a class="btn btn-secondary" href="/api/competition-demo.webm" id="new-signal-demo-download">تحميل فيديو الرحلة المتصلة — قبل الموافقة البشرية</a>
+  <p class="customer-scope">الصور لقطات فعلية من مواقع الناشرين؛ أوقات النشر تُعرض فقط إذا أثبتها المصدر. لا يضغط الذكاء الاصطناعي اعتمادًا ولا ينفذ مهمة نيابة عن المالك.</p>
+  <details class="new-signal-section" id="business-value-study" style="margin-top:16px">
+   <summary>قياس فائدة مَآل — مقارنة بشرية حقيقية (اختياري)</summary>
+   <p class="customer-scope">المهمة نفسها في المسارين: تحقّق من خبر FPT الرسمي، وحدّد هل يستدعي خطوة متابعة داخلية لشركة رقمية صغيرة. ابدأ مؤقت المسار اليدوي قبل البحث والتحقق والكتابة، ثم ابدأ مؤقت مَآل قبل استخدامه. لا تضع كلمة مرور أو بيانات عملاء.</p>
+   <div class="customer-actions"><button id="value-manual-start" type="button" class="btn btn-secondary">بدء المسار اليدوي</button><button id="value-manual-stop" type="button" class="btn btn-secondary" disabled>إنهاء المسار اليدوي</button></div>
+   <label>نتيجة المسار اليدوي ومصدره<textarea id="value-manual-note" rows="2" maxlength="700" placeholder="اكتب القرار، سبب القرار، ورابط المصدر الذي تحققت منه."></textarea></label>
+   <div class="customer-actions"><button id="value-agent-start" type="button" class="btn btn-secondary" disabled>بدء مسار مَآل</button><button id="value-agent-stop" type="button" class="btn btn-secondary" disabled>إنهاء مسار مَآل</button></div>
+   <label>نتيجة مسار مَآل بعد المراجعة البشرية<textarea id="value-agent-note" rows="2" maxlength="700" placeholder="اكتب هل تقبل التوصية أو ترفضها ولماذا، وما الأخطاء التي اكتشفتها."></textarea></label>
+   <p id="value-benchmark-state" class="customer-scope" role="status" aria-live="polite">لم تُقَس أي مدة بشرية بعد. لا توجد نسبة توفير وقت مثبتة.</p>
+   <button id="value-benchmark-download" type="button" class="btn btn-primary" disabled>حفظ مقارنة الزمن والقرار JSON</button>
+  </details>
+
+ </section>
+
+
+ <section id="agent-journey-board" class="content-card" aria-label="رحلة الوكيل المتصلة">
+  <p class="eyebrow">MA'AL / AGENTIC BUSINESS JOURNEY · LOCAL QA</p>
+  <h2>من الدليل إلى القرار — مسار واحد</h2>
+  <p id="agent-journey-status" role="status" aria-live="polite">جارٍ التأكد من ارتباط المصدر ونتيجة Qwen3 وسجل قرارات المالك.</p>
+  <div id="agent-journey-steps" class="customer-answer-grid" aria-live="polite"></div>
+  <div id="agent-journey-details" class="customer-scope"></div>
+  <div class="customer-actions">
+   <button id="agent-journey-review" type="button" class="btn btn-primary">افتح مراجعة القرار المحمية</button>
+   <a href="/api/case-report" class="btn btn-secondary">ملف الدليل الأصلي Word</a>
+   <a id="agent-report-word" href="/api/agent-report.docx" class="btn btn-secondary" hidden>تقرير Qwen3 المرتبط بالدليل · Word</a>
+   <a id="agent-report-pdf" href="/api/agent-report.pdf" class="btn btn-secondary" hidden>نفس التقرير · PDF</a>
+  </div>
+  <p class="customer-scope">تجربة تقنية بدليل رسمي تاريخي وشركة افتراضية. الاعتماد البشري والمهمة الداخلية لا يُفترضان تلقائيًا. لا عرض لأخبار حية.</p>
+ </section>
+
  <section class="customer-brief content-card" aria-label="ملخص استخبارات الأعمال">
    <p class="eyebrow">MA'AL / OWNER BRIEFING · REVIEW ONLY</p>
    <h2>ماذا حدث؟ وما القرار الذي يستحق المراجعة؟</h2>
@@ -80,7 +137,7 @@
   <div class="hero-orbit hero-orbit-one"></div><div class="hero-orbit hero-orbit-two"></div>
   <div class="hero-body"><div class="hero-kicker"><span class="kicker-line"></span> AGENTIC BUSINESS & DECISION INTELLIGENCE</div>
    <h2>من ضجيج الإشارات <br>إلى <em>وضوح القرار.</em></h2>
-   <p>ارصد ما يهم، تحقق من الدليل، افهم التأثير، ثم اختر الإجراء المناسب. في هذه المعاينة نعرض <strong>حالة تاريخية موثّقة واحدة</strong> دون ادعاء تحليل حي أو تنفيذ مستقل.</p>
+   <p>ارصد ما يهم، تحقق من الدليل، افهم التأثير، ثم اختر الإجراء المناسب. معاينة الدليل التاريخي أدناه منفصلة عن <strong>حالات الناشرين الجديدة أعلاه</strong>؛ وكلها للتقييم المحلي وليست تيار أخبار لحظيًا.</p>
    <button type="button" class="btn btn-primary" data-go="evidence">استكشف الدليل الحقيقي <svg class="icon"><use href="#i-arrow"/></svg></button>
   </div>
   <div class="hero-graphic" aria-hidden="true"><div class="signal-ring sr1"></div><div class="signal-ring sr2"></div><div class="signal-ring sr3"></div><div class="pulse-core"><svg class="icon"><use href="#i-spark"/></svg></div><div class="micro-label">SIGNAL → DECISION</div></div>
@@ -183,7 +240,7 @@
  <div class="impact-triptych"><div><span class="mini-label">FACT / مثبت</span><h4>ماذا أعلن المصدر؟</h4><p id="case-fact">مناقشة رسمية لآلية ضمان تمويل مشروعات البنية التحتية.</p></div><div><span class="mini-label gold-text">INFERENCE / محتمل</span><h4>لماذا قد يهم النشاط؟</h4><p id="case-hypothesis">فرصة متابعة مشروطة بقرارات لاحقة وشروط أهلية واضحة.</p></div><div><span class="mini-label muted-text">UNKNOWN / غير مثبت</span><h4>ما الذي لا نعرفه؟</h4><ul id="case-unknowns" class="unknown-list"></ul></div></div>
  </div>
  <section class="content-card ai-result-lab" aria-label="تحليل نموذج AI محلي فعلي">
-   <div class="card-heading"><div><p class="eyebrow">GATE G3 / VERIFIED LOCAL MODEL RUN</p><h3>تحليل AI فعلي — للمراجعة البشرية</h3></div>
+   <div class="card-heading"><div><p class="eyebrow">VERIFIED MODEL RECORD · ADVANCED DETAILS</p><h3>تحليل AI فعلي — للمراجعة البشرية</h3></div>
      <span class="badge badge-gold" id="ai-run-badge">لم يتم اعتماد النتيجة</span></div>
    <p class="ai-run-note" id="ai-run-status">لا توجد نتيجة جديدة بعد؛ يمكن لصاحب حساب المختبر تشغيل Qwen3 فعليًا.</p>
    <button type="button" id="ai-fresh-run" class="btn btn-secondary">تشغيل تحليل Qwen3 جديد من الدليل الموثق (CPU محلي)</button>
@@ -207,7 +264,7 @@
 <section id="view-decisions" class="view hidden" aria-label="مركز القرارات">
  <section class="content-card customer-decisions">
   <h2>قراراتي المقترحة</h2>
-  <p class="customer-scope">توصيات للمراجعة فقط — لا مهام مُنفّذة، ولا موافقة إنتاجية.</p>
+  <p class="customer-scope">هذا القسم يضم توصيات محفوظة ومهام اختبارية معزولة. لا تُعد أي مسودة موافقة إنتاجية.</p>
   <div id="customer-decision-list"></div><p class="customer-scope">المسؤولون والمواعيد مقترحون للمتابعة فقط، ولا يعني ظهورها إنشاء مهام.</p>
  </section>
  <div class="content-card"><div class="card-heading"><div><p class="eyebrow">HUMAN-IN-THE-LOOP DECISIONS</p><h3>توصيات قابلة للفحص، لا أوامر تلقائية</h3></div><span class="badge badge-gold">بانتظار مراجعة بشرية</span></div>
@@ -216,10 +273,10 @@
  <label for="review-note" class="review-label">ملاحظاتك قبل اتخاذ القرار</label><textarea id="review-note" rows="3" maxlength="1600" placeholder="مثال: نحتاج متابعة إعلان شروط التمويل رسميًا قبل دراسة الأهلية…"></textarea>
  <div class="review-actions"><span id="review-local-note">خاص بهذه الجلسة فقط — لا يُرسل للخادم</span><button type="button" id="copy-review" class="btn btn-primary"><svg class="icon"><use href="#i-copy"/></svg> نسخ مذكرة المراجعة</button></div></div>
  <details class="advanced-technical" id="advanced-operator-review">
- <summary>للمشغّل فقط: مختبر المصادقة والاعتماد الداخلي التجريبي</summary>
+ <summary>المراجعة الداخلية المحمية — تفاصيل المالك</summary>
  <section id="operator-lab" class="operator-lab" aria-label="مختبر الموافقة البشرية الفعلية">
- <div class="operator-lab-heading"><div><p class="eyebrow">GATE H · AUTHENTICATED OWNER REVIEW (TEST ONLY)</p>
- <h3>مختبر الاعتماد البشري والمهمة الداخلية</h3>
+ <div class="operator-lab-heading"><div><p class="eyebrow">PRIVATE OWNER DECISIONS · LOCAL TEST</p>
+ <h3>مراجعة المسودات واتخاذ قرار المالك</h3>
  <p>معزول على هذا الكمبيوتر وعلى قرص E. لا تُرسل أي مهام خارجية أو بريد، ولا تُسجل موافقات إنتاج.</p></div>
  <span class="badge badge-gold">بيئة اختبار فقط</span></div>
  <section id="operator-guest-demo" class="content-card" aria-label="عرض نتائج مَآل بدون كلمة مرور">
@@ -227,22 +284,30 @@
   <h4>عرض النتائج الفعلية دون تسجيل دخول</h4>
   <p>وضع عرض تجريبي محلي على هذا الكمبيوتر: مشاهدة الدليل، تشغيل Qwen3 المُسجل، والتوصية وحالة المهمة. لا يمنح موافقة أو صلاحية تنفيذ.</p>
   <div id="operator-guest-summary" role="status" aria-live="polite">جارٍ تحميل نتائج الاختبار الفعلية…</div>
-  <button id="operator-show-login" type="button" class="btn btn-secondary">الدخول المحمي للاعتماد لاحقًا</button>
+  <button id="operator-show-login" type="button" class="btn btn-secondary">الدخول إلى حساب المالك</button>
  </section>
- <form id="operator-login" class="operator-form" hidden>
- <label>مستخدم الاختبار<input id="operator-username" autocomplete="username" required placeholder="حساب اختبار مالك"></label>
- <label>كلمة مرور الاختبار<input id="operator-password" type="password" autocomplete="current-password" required></label>
- <button type="submit" class="btn btn-secondary">تسجيل الدخول الآمن</button></form>
+
  <div id="operator-authenticated" hidden>
  <div class="operator-authbar"><span id="operator-whoami"></span><button type="button" id="operator-logout" class="btn btn-secondary">تسجيل الخروج</button></div>
  <label class="operator-action-label">وصف المهمة الداخلية
  <textarea id="operator-description" rows="2" maxlength="500" placeholder="مثال: متابعة البيان الرسمي المقبل وتحديث مذكرة القرار..."></textarea></label>
  <button id="operator-create" type="button" class="btn btn-secondary">إنشاء مسودة مهمة مرتبطة بالدليل</button>
+ <section id="operator-editorial-review" class="content-card" hidden aria-label="مراجعة تحريرية بشرية مستقلة">
+  <p class="eyebrow">OWNER EDITORIAL SIGNOFF · HUMAN ONLY</p>
+  <h4>قرار مستقل حول جودة توصية الوكيل</h4>
+  <p>المراجعة الآلية لا تكفي. بعد فحص المصدر والصلة التجارية والبدائل والمخرج، المالك وحده يؤكد جودة التحليل. بعدها فقط تُجهَّز مسودة منفصلة؛ الاعتماد والتنفيذ إجراءان آخران منفصلان.</p>
+  <div id="operator-editorial-summary"></div>
+  <input id="operator-editorial-run" type="hidden">
+  <label>كلمة مرور المالك لتأكيد المراجعة التحريرية<input id="operator-editorial-password" type="password" autocomplete="off" placeholder="لا تحفظ كلمة المرور داخل التقرير"></label>
+  <button type="button" id="operator-editorial-sign" class="btn btn-secondary">أقرّ بصلاحية التوصية للمراجعة بصفتي المالك</button>
+ </section>
  <div id="operator-drafts" class="operator-drafts" aria-live="polite"></div>
  <div class="operator-approval"><label for="operator-stepup">أعد كتابة كلمة المرور لتأكيد اعتماد المسودة المختارة</label>
  <input id="operator-stepup" type="password" autocomplete="off" placeholder="مطلوبة لكل موافقة فعلية">
  <div class="operator-actions"><button id="operator-approve" type="button" class="btn btn-secondary" disabled>اعتماد المسودة المختارة</button>
+ <button id="operator-reject" type="button" class="btn btn-secondary" disabled>رفض المسودة مع تسجيل السبب</button>
  <button id="operator-execute" type="button" class="btn btn-primary" disabled>تنفيذ المهمة الداخلية المعتمدة</button></div>
+ <p class="customer-scope">الرفض قرار بشري صحيح، لا ينشئ مهمة. يجب إدخال كلمة مرور المالك لتأكيد الاعتماد أو الرفض.</p>
  </div>
  <h4>سجل الأحداث الدائم</h4><div id="operator-audit" class="operator-audit"></div></div>
  <div id="operator-feedback" class="operator-feedback" role="status" aria-live="polite">سجّل دخولك بحساب اختبار مستقل لعرض سجل المهام.</div>
@@ -254,8 +319,8 @@
 
 <section id="view-operations" class="view hidden" aria-label="التشغيل والأمان">
  <div class="ops-grid">
-  <div class="content-card"><p class="eyebrow">SYSTEM BOUNDARIES</p><h3>ماذا يعمل الآن؟</h3><div class="op-row"><strong>محرك RASD</strong><span>بنية سحابية قائمة، منفصلة عن هذه الواجهة</span></div><div class="op-row"><strong>واجهة مَآل V0.2</strong><span>معاينة محلية على E: للقراءة فقط</span></div><div class="op-row"><strong>مسار دليل → توصية</strong><span>تجربة تاريخية موثّقة، لا عميل حقيقي</span></div><div class="op-row"><strong>إرسال البريد</strong><span>غير متاح من الواجهة؛ قبول SMTP سابق لا يثبت Inbox</span></div><div class="op-row"><strong>الجدولة الاحتياطية</strong><span>توجد مشكلة قديمة مفتوحة في رؤية سجل التسليم</span></div></div>
-  <div class="content-card"><p class="eyebrow">SECURE BY DEFAULT</p><h3>الحدود الآمنة</h3><ul class="guard-list"><li>الخادم مقيد بـ 127.0.0.1 على الكمبيوتر.</li><li>لا تسجيل دخول أو بيانات عملاء في المعاينة.</li><li>لا API لكتابة بيانات أو إرسال بريد.</li><li>ملفات الدليل محفوظة داخل E وتخضع للتحقق من SHA-256.</li><li>لا تغيير للـGitHub Actions أو أسرار الإنتاج.</li></ul></div>
+  <div class="content-card"><p class="eyebrow">SYSTEM BOUNDARIES</p><h3>ماذا يعمل الآن؟</h3><div class="op-row"><strong>محرك RASD</strong><span>بنية سحابية قائمة، منفصلة عن هذه الواجهة</span></div><div class="op-row"><strong>واجهة مَآل المحلية</strong><span>معاينة محلية على E: للقراءة فقط</span></div><div class="op-row"><strong>مسار دليل → توصية</strong><span>تجربة تاريخية موثّقة، لا عميل حقيقي</span></div><div class="op-row"><strong>إرسال البريد</strong><span>غير متاح من الواجهة؛ قبول SMTP سابق لا يثبت Inbox</span></div><div class="op-row"><strong>الجدولة الاحتياطية</strong><span>توجد مشكلة قديمة مفتوحة في رؤية سجل التسليم</span></div></div>
+  <div class="content-card"><p class="eyebrow">SECURE BY DEFAULT</p><h3>الحدود الآمنة</h3><ul class="guard-list"><li>الخادم مقيد بـ 127.0.0.1 على الكمبيوتر.</li><li>دخول تجريبي محلي محمي، ولا توجد حسابات عملاء منشورة.</li><li>توجد فقط واجهات مهمة داخلية محمية، ولا إرسال بريد.</li><li>ملفات الدليل محفوظة داخل E وتخضع للتحقق من SHA-256.</li><li>لا تغيير للـGitHub Actions أو أسرار الإنتاج.</li></ul></div>
  </div>
 </section>
 
@@ -263,6 +328,20 @@
 </main>
 </div>
 </div>
+<dialog id="login-dialog" class="app-dialog login-dialog" aria-labelledby="login-dialog-title" aria-describedby="login-dialog-summary">
+ <div class="login-dialog-head"><div class="login-mark" aria-hidden="true"><svg class="icon"><use href="#i-lock"/></svg></div><button type="button" id="login-close" class="dialog-close" aria-label="إغلاق تسجيل الدخول">×</button></div>
+ <p class="eyebrow">MA'AL / SECURE OWNER ACCESS</p>
+ <h2 id="login-dialog-title">أهلًا بيك في مَآل</h2>
+ <p id="login-dialog-summary" class="login-dialog-summary">سجّل دخولك علشان تراجع قراراتك وتتابع مهامك، من غير ما تدور في القوائم.</p>
+ <form id="operator-login" class="operator-form">
+  <label for="operator-username">اسم المستخدم<input id="operator-username" autocomplete="username" autocapitalize="none" spellcheck="false" required placeholder="اسم مستخدم الحساب" maxlength="80"></label>
+  <label for="operator-password">كلمة المرور<input id="operator-password" type="password" autocomplete="current-password" required placeholder="أدخل كلمة المرور" maxlength="180"></label>
+  <label class="login-show-password" for="login-reveal-password"><input id="login-reveal-password" type="checkbox"> إظهار كلمة المرور</label>
+  <button id="login-submit" type="submit" class="btn btn-primary">الدخول إلى مساحة قراراتي</button>
+ </form>
+ <div id="login-feedback" class="login-feedback" role="status" aria-live="polite" hidden></div>
+ <p class="login-dialog-note">هذا حساب مختبر محلي آمن. لا موافقة على القرارات أو تنفيذ للمهام بمجرد تسجيل الدخول.</p>
+</dialog>
 <dialog id="source-dialog" class="app-dialog" aria-labelledby="source-dialog-title"><div class="dialog-head"><div><p class="eyebrow">PUBLISHER CONFIGURATION</p><h3 id="source-dialog-title">تفاصيل المصدر</h3></div><button type="button" class="dialog-close" id="source-close" aria-label="إغلاق تفاصيل المصدر">×</button></div><div id="source-dialog-content"></div><div class="dialog-actions"><button type="button" class="btn btn-secondary" id="source-done">إغلاق</button></div></dialog>
 <dialog id="command-dialog" class="app-dialog command-dialog" aria-labelledby="command-dialog-title"><div class="dialog-head"><div><p class="eyebrow">QUICK NAVIGATION</p><h3 id="command-dialog-title">إلى أين نذهب؟</h3></div><button type="button" class="dialog-close" id="command-close" aria-label="إغلاق البحث السريع">×</button></div><label class="command-search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="command-query" placeholder="ابحث عن القسم أو المهمة" aria-label="البحث عن قسم في الواجهة" autocomplete="off"></label><div id="command-results" class="command-results"></div><p class="context-hint">البحث داخل أقسام الواجهة فقط؛ لا تبحث هذه النافذة في الإنترنت أو قواعد الإنتاج.</p></dialog>
 <div class="toast" role="status" aria-live="polite" id="toast" hidden></div>

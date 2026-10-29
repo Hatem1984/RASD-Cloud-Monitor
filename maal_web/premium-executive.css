@@ -1,0 +1,118 @@
+/* Executive first-screen and decision-oriented readable components. */
+.premium-executive{display:grid;gap:18px;margin-bottom:22px;color:#153347}
+.premium-hero{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(260px,.75fr);gap:20px;padding:29px 31px;background:#071B2B;color:#FFF;border:1px solid #274B5D;border-radius:20px;box-shadow:var(--p-shadow)}
+.premium-kicker{color:#88E0D8;font:700 11px/1.5 "Inter","Segoe UI",sans-serif;letter-spacing:.1em;margin:0 0 12px}
+.premium-hero h2{font-size:clamp(28px,3vw,42px);line-height:1.45;margin:0 0 10px;color:#F7F5EF}
+.premium-hero h2 span{color:#E3C89E}
+.premium-hero p{color:#D9E5E8;line-height:1.95;margin:0 0 17px;font-size:15px}
+.premium-hero .premium-actions{display:flex;flex-wrap:wrap;gap:10px}
+.premium-hero .premium-actions button{background:#1EC4B6;color:#071B2B;border:1px solid #41CEBE;border-radius:10px;padding:10px 17px;min-height:44px;font-size:14px;font-weight:800}
+.premium-hero .premium-actions button+button{background:#143C5A;border-color:#4A7285;color:#FFF}
+.premium-hero-aside{background:#113145;border:1px solid #30566C;padding:19px;border-radius:14px;display:flex;flex-direction:column;justify-content:space-between}
+.premium-hero-aside strong{color:#F3DEBF;font-size:14px}
+.premium-hero-aside p{font-size:13px;margin:9px 0 12px}
+.premium-hero-aside small{border-top:1px solid #315366;padding-top:10px;color:#B3CDCF;font-size:11px;line-height:1.7}
+.premium-status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.premium-stat{border:1px solid var(--p-line);border-radius:15px;background:#FFF;padding:17px 19px;min-width:0}
+.premium-stat span{font-size:13px;color:#58707A}
+.premium-stat strong{display:block;color:#071B2B;font:750 32px/1.5 "Inter","Segoe UI",sans-serif;margin-top:1px}
+.premium-stat small{display:block;color:#526D7A;font-size:12px;line-height:1.7}
+.premium-panel{background:#FFF;border:1px solid var(--p-line);border-radius:16px;padding:22px 23px}
+.premium-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.premium-panel h3{font-size:21px;color:#071B2B;line-height:1.5;margin:0}
+.premium-muted{color:#55707D;font-size:12px;line-height:1.75}
+.premium-pill{display:inline-flex;align-items:center;gap:6px;background:#F2F5F6;color:#3A5462;border:1px solid #D5E0E3;padding:7px 11px;border-radius:999px;font-size:12px;font-weight:750}
+.premium-pill[data-tone=hold]{color:#845121;background:#FFF2E3;border-color:#E6C6A2}
+.premium-pill[data-tone=verified]{color:#166C60;background:#E8F8F4;border-color:#A9DBD0}
+.premium-pill[data-tone=historical]{color:#556676;background:#F1F3F4;border-color:#CCD6DB}
+.premium-featured{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(245px,.7fr);gap:19px;align-items:center}
+.premium-featured h4{color:#153447;font-size:20px;line-height:1.55;margin:10px 0}
+.premium-featured p{color:#3F5D6D;font-size:14px;line-height:1.9;margin:0 0 12px}
+.premium-insight{background:#F2F9F6;border:1px solid #CEE7E1;border-radius:12px;padding:16px}
+.premium-insight strong{font-size:14px;color:#164F48}
+.premium-insight p{margin:8px 0 12px}
+.premium-insight button,.premium-decision-summary button{min-height:44px;border:1px solid #157B72;background:#157B72;color:#FFF;font:750 14px inherit;border-radius:10px;padding:9px 16px;cursor:pointer}
+.premium-flow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;list-style:none;margin:0;padding:0}
+.premium-flow li{min-width:0;border-radius:11px;background:#F7F9FA;border:1px solid #DCE5E8;padding:13px 10px;min-height:86px}
+.premium-flow li strong{font-size:13px;color:#203D4A;display:block}
+.premium-flow li small{display:block;color:#536E7A;font-size:11px;line-height:1.6;margin-top:8px}
+.premium-flow li[data-phase=done]{background:#EEF9F5;border-color:#ADDBD0}
+.premium-flow li[data-phase=hold]{background:#FFF7EB;border-color:#E7CAA7}
+.premium-legacy{background:#FFF;border:1px solid var(--p-line);border-radius:14px;margin-bottom:20px;color:#203E4C}
+.premium-legacy>summary{cursor:pointer;padding:14px 19px;min-height:48px;font-size:14px;font-weight:800}
+.premium-legacy-body{padding:2px 12px 18px;display:grid;gap:16px}
+.premium-mobile-brand{display:none}
+.premium-decision-summary,.premium-timeline,.premium-reports-head{background:#FFF;border:1px solid var(--p-line);border-radius:15px;padding:21px 23px;margin-bottom:18px;color:#183B4A}
+.premium-decision-summary h3,.premium-timeline h3,.premium-reports-head h3{color:#071B2B;font-size:21px;margin:0 0 9px}
+.premium-decision-summary p,.premium-reports-head p{color:#456472;font-size:14px;line-height:1.9}
+.premium-event{border-right:2px solid #CBDDDC;padding:0 19px 20px 0;margin-right:6px;position:relative}
+.premium-event::before{content:"";position:absolute;right:-7px;top:5px;width:10px;height:10px;background:#1E9D91;border-radius:50%;border:2px solid white;box-shadow:0 0 0 1px #80CFC4}
+.premium-event strong{display:block;color:#1A3E4D;font-size:14px}
+.premium-event small{color:#55707C;font-size:12px}
+.premium-event:last-child{border-color:transparent;padding-bottom:0}
+.premium-timeline .premium-muted{font-size:14px}
+.premium-reports-head .btn{background:#E9F3F1;color:#173E4D;border:1px solid #D0E4DE}
+
+/* Evidence and reasoning readability: verified source != editorial acceptance. */
+.maal-premium .new-signal-choice strong{display:block;font-size:14px;line-height:1.58;overflow-wrap:anywhere}
+.maal-premium .new-signal-choice small{display:block;color:#57717D;font-size:12px;line-height:1.6;margin:8px 0}
+.maal-premium .new-signal-choice .premium-pill{font-size:10px;padding:5px 9px;line-height:1.5}
+.maal-premium #new-signal-analysis .premium-disclosure{min-height:58px;align-self:start}
+.maal-premium #new-signal-analysis .premium-disclosure>summary{display:list-item;cursor:pointer;min-height:37px;padding:7px 0;color:#174A51;font-weight:800;font-size:14px;line-height:1.7}
+.maal-premium #new-signal-analysis .premium-disclosure>summary:hover{color:#0E7067}
+.maal-premium #new-signal-analysis .premium-disclosure[open]{border-color:#B7D9D4;background:#F1F9F7}
+.maal-premium #new-signal-analysis .premium-disclosure :is(p,li){font-size:14px;color:#304F60;line-height:1.95}
+.maal-premium #new-signal-analysis .premium-disclosure>p{margin-top:9px}
+.maal-premium .premium-event{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:9px 20px 17px 0;min-height:61px}
+.maal-premium .premium-event:not(:last-child){border-bottom:1px solid #ECF1F2}
+.maal-premium .premium-event strong{line-height:1.5}
+.maal-premium .premium-event small{white-space:nowrap;color:#637C89}
+.maal-premium .premium-event:last-child{padding-bottom:8px}
+.maal-premium .premium-insight button,.maal-premium .premium-decision-summary button{font-family:"Tajawal","Noto Sans Arabic","Segoe UI",Tahoma,sans-serif;font-weight:750}
+.maal-premium .premium-featured .premium-insight p{overflow-wrap:anywhere}
+@media(max-width:590px){
+ .maal-premium .premium-event{align-items:flex-start;flex-direction:column;gap:3px}
+ .maal-premium .new-signal-choice strong{font-size:13px}
+ .maal-premium .new-signal-choice{min-height:104px}
+}
+
+/* Clearly separate AI suggestion, editorial eligibility, human approval.
+   Owner-only buttons remain protected by the existing server-side API. */
+.maal-premium .premium-decision-states{display:flex;flex-wrap:wrap;gap:7px;margin:9px 0 10px}
+.maal-premium .premium-decision-stage{display:inline-flex;align-items:center;min-height:30px;padding:5px 10px;border-radius:99px;font-size:11px;font-weight:700;line-height:1.5;background:#153548;color:#DDEEF0;border:1px solid #4F7380}
+.maal-premium .premium-decision-stage[data-tone=hold]{background:#423224;border-color:#9C7348;color:#FFE1B9}
+.maal-premium .premium-decision-stage[data-tone=verified]{background:#124738;border-color:#358F7E;color:#D0FFF3}
+.maal-premium .operator-draft-info{min-width:0}
+.maal-premium .operator-draft-info strong{line-height:1.85}
+.maal-premium .operator-draft-item{min-height:88px}
+
+/* Owner-facing decision shell; legacy operator controls remain functional but
+   are intentionally progressive, not the first owner screen. */
+.maal-premium .premium-owner-console{background:#FFF;border:1px solid var(--p-line);border-radius:15px;margin:15px 0 22px;overflow:hidden}
+.maal-premium .premium-owner-console>summary{cursor:pointer;padding:18px 23px;font-size:16px;font-weight:800;color:#143A4B;min-height:55px;background:#F2F8F6}
+.maal-premium .premium-owner-console[open]>summary{border-bottom:1px solid var(--p-line)}
+.maal-premium .premium-owner-console #operator-lab{margin:18px;min-width:0}
+.maal-premium .premium-source-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:10px 0}
+.maal-premium .premium-source-field{display:grid;gap:3px;border:1px solid #DEE7E8;background:#F8FAFB;border-radius:10px;padding:9px 13px}
+.maal-premium .premium-source-field strong{font-size:12px;color:#3C5A66}
+.maal-premium .premium-source-field span{color:#193C4B;font-size:13px;overflow-wrap:anywhere}
+.maal-premium #new-signal-analysis .premium-disclosure:first-child{grid-column:1/-1}
+@media(max-width:590px){
+ .maal-premium .premium-owner-console>summary{font-size:14px;padding:13px}
+ .maal-premium .premium-owner-console #operator-lab{margin:9px}
+ .maal-premium .premium-source-fields{grid-template-columns:1fr}
+}
+
+.maal-premium .premium-owner-console #advanced-operator-review{display:block!important;border:0;background:transparent;margin:0;padding:0;box-shadow:none}
+.maal-premium .premium-owner-console #advanced-operator-review>summary{display:none}
+.maal-premium .premium-owner-console #operator-lab{margin:12px;max-width:100%}
+
+/* Two-stage model quality lab: customer-readable, explicitly unapproved. */
+.maal-premium .premium-two-stage{margin-bottom:19px}
+.maal-premium .premium-two-stage>h2{font-size:23px;line-height:1.4;color:#071B2B;margin:0 0 7px}
+.maal-premium #two-stage-status{padding:11px 15px;background:#EDF5F3;border:1px solid #CADEDA;border-radius:10px;color:#214F53;font-size:14px;line-height:1.8}
+.maal-premium #two-stage-entries{display:grid;gap:10px}
+.maal-premium .premium-two-stage-item{background:#F7FAFA;border:1px solid #D6E3E4;border-radius:12px;padding:12px 17px;color:#214250;min-width:0}
+.maal-premium .premium-two-stage-item>summary{font-size:15px;font-weight:800;cursor:pointer;min-height:42px}
+.maal-premium .premium-two-stage-item p{line-height:1.9;font-size:14px;overflow-wrap:anywhere}
+.maal-premium .premium-two-stage-item a{display:inline-flex;text-decoration:none}

@@ -3,7 +3,7 @@
    This browser never receives owner challenge secrets or raw SQLite files. */
 document.addEventListener("DOMContentLoaded", () => {
  const by=id=>document.getElementById(id);
- const app={csrf:"", selected:null,rows:[],actor:null,busy:false};
+ const app={csrf:"", selected:null,rows:[],actor:null,role:null,busy:false};
  const feedback=(message,ok=false)=>{let el=by("operator-feedback");el.textContent=message;el.dataset.ok=String(ok);};
  async function loadGuestPreview(){
    const root=by("operator-guest-summary");root.replaceChildren();
@@ -48,21 +48,65 @@ document.addEventListener("DOMContentLoaded", () => {
    }
  }
 
+ const dialog=by("login-dialog");
+ const accountButton=by("account-entry");
+ const accountLabel=by("account-entry-label");
+ const headerLogout=by("header-logout");
+ const loginFeedback=by("login-feedback");
+ function announceLogin(message,error=false){
+   loginFeedback.hidden=!message;
+   loginFeedback.textContent=message;
+   loginFeedback.dataset.error=String(error);
+ }
+ function showLogin(){
+   if(app.actor)return goToMyDecisions();
+   announceLogin("");
+   if(!dialog.open)dialog.showModal();
+   by("operator-username").focus();
+ }
+ function goToMyDecisions(){
+   const nav=document.querySelector('.nav-link[data-view="decisions"]');
+   if(nav)nav.click();
+   const advanced=by("advanced-operator-review");
+   if(advanced)advanced.open=true;
+   const target=by("operator-drafts");
+   if(target)target.scrollIntoView({behavior:"smooth",block:"center"});
+ }
+ function syncAccountHeader(){
+   const signedIn=Boolean(app.actor);
+   accountLabel.textContent=signedIn?"قراراتي"+(app.rows.filter(r=>r.state==="DRAFT").length?" ("+app.rows.filter(r=>r.state==="DRAFT").length+")":""):"تسجيل الدخول";
+   accountButton.classList.toggle("signed-in",signedIn);
+   accountButton.setAttribute("aria-haspopup",signedIn?"false":"dialog");
+   accountButton.setAttribute("aria-label",signedIn?"فتح قرارات حساب "+app.actor:"تسجيل الدخول إلى مَآل");
+   headerLogout.hidden=!signedIn;
+ }
  async function getState(){
-  try{
-   const r=await fetch("/api/operator/state",{cache:"no-store",credentials:"same-origin"});
-   if(!r.ok){loggedOut();return;}
-   const data=await r.json();
-   app.csrf=data.csrf;app.actor=data.operator;app.rows=data.drafts;
-   by("operator-login").hidden=true;by("operator-guest-demo").hidden=true;by("operator-authenticated").hidden=false;
-   by("operator-whoami").textContent="مستخدم: "+data.operator+" · بيئة: "+data.tenant+" · "+data.role;
-   renderDrafts();renderAudit(data.audit,data.audit_integrity);
-  }catch(e){feedback("تعذّر الاتصال بمخزن المهام التجريبي.");}
+   try{
+     const r=await fetch("/api/operator/state",{cache:"no-store",credentials:"same-origin"});
+     if(r.status===401){loggedOut();return false;}
+     if(!r.ok)throw new Error("state_unavailable");
+     const data=await r.json();
+     app.csrf=data.csrf;app.actor=data.operator;app.role=data.role;app.rows=data.drafts;
+     by("operator-guest-demo").hidden=true;
+     by("operator-authenticated").hidden=false;
+     by("operator-whoami").textContent="مستخدم: "+data.operator+" · بيئة: "+data.tenant+" · "+data.role;
+     syncAccountHeader();
+     renderDrafts();renderAudit(data.audit,data.audit_integrity);
+     window.dispatchEvent(new Event("maal:auth-changed"));
+     return true;
+   }catch(e){
+     feedback("تعذّر الاتصال بمخزن المهام التجريبي. لم نفترض نجاح الدخول.");
+     return false;
+   }
  }
  function loggedOut(){
-   app.csrf="";app.actor=null;app.selected=null;app.rows=[];
-   by("operator-login").hidden=true;by("operator-guest-demo").hidden=false;by("operator-authenticated").hidden=true;
+   app.csrf="";app.actor=null;app.role=null;app.selected=null;app.rows=[];
+   by("operator-guest-demo").hidden=false;by("operator-authenticated").hidden=true;
    by("operator-password").value="";by("operator-stepup").value="";
+   by("login-reveal-password").checked=false;
+   by("operator-password").type="password";
+   syncAccountHeader();
+   window.dispatchEvent(new Event("maal:auth-changed"));
  }
  async function post(path,data){
   const headers={"Content-Type":"application/json"};
@@ -82,6 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if(!app.rows.length){const p=document.createElement("p");p.className="operator-empty";p.textContent="لا توجد مهام داخلية لهذا المستخدم.";root.append(p);}
   app.rows.forEach(item=>{
     const btn=document.createElement("button");btn.type="button";btn.className="operator-draft-item";
+    btn.dataset.draftId=item.draft_id;
     btn.classList.toggle("chosen",app.selected===item.draft_id);
     btn.setAttribute("aria-pressed",String(app.selected===item.draft_id));
     btn.append(svgSvg());
@@ -89,13 +134,38 @@ document.addEventListener("DOMContentLoaded", () => {
     const title=document.createElement("strong");title.textContent=item.description;
     const meta=document.createElement("small");
     meta.textContent="معرّف المسودة: "+item.draft_id+" · الحالة: "+item.state+" · دليل: "+item.evidence_id+(item.approved_by?" · المعتمد: "+item.approved_by:"");
-    info.append(title,meta);btn.append(info);
+    const states=document.createElement("span");
+    states.className="premium-decision-states";
+    const addStage=(label,tone)=>{
+      const chip=document.createElement("span");chip.className="premium-decision-stage";
+      chip.dataset.tone=tone;chip.textContent=label;states.append(chip);
+    };
+    addStage(item.state==="EXECUTED"?"حالة تاريخية منفذة":"اقتراح للمراجعة","neutral");
+    addStage(item.state==="EXECUTED"?"مسار تاريخي بمعيار سابق":
+      item.can_approve===true || item.can_execute===true?
+      "مراجعة تحريرية مثبتة":"HOLD تحريري — غير مؤهل للاعتماد",
+      item.state==="EXECUTED"?"neutral":
+      item.can_approve===true || item.can_execute===true?"verified":"hold");
+    addStage(item.state==="DRAFT"?"ينتظر قرار المالك":
+      item.state==="EXECUTED"?"قرار بشري سابق وتنفيذ داخلي":
+      item.state==="REJECTED"?"رفضه المالك":item.state,
+      item.state==="EXECUTED"?"verified":"neutral");
+    info.append(title,states,meta);btn.append(info);
     btn.addEventListener("click",()=>{app.selected=item.draft_id;renderDrafts();feedback("المسودة المختارة: "+item.draft_id+" · الحالة: "+item.state,false);});
     root.append(btn);
   });
   const chosen=app.rows.find(r=>r.draft_id===app.selected);
-  by("operator-approve").disabled=!chosen||chosen.state!=="DRAFT";
-  by("operator-execute").disabled=!chosen||!["APPROVED","EXECUTED"].includes(chosen.state);
+  const isEditorialHold=Boolean(chosen&&chosen.state==="DRAFT"&&!chosen.can_approve);
+  if(isEditorialHold){
+    const banner=document.createElement("p");
+    banner.className="operator-audit-integrity";
+    banner.style.color="#f0b78b";
+    banner.textContent="HOLD تحريري: المسودة المختارة لم تحصل على قبول متطابق للمصدر وتشغيل النموذج وإصدار معيار الجودة ومراجعة المالك. يمكن رفضها؛ لا اعتماد أو تنفيذ قبل إكمال المراجعة.";
+    root.prepend(banner);
+  }
+  by("operator-approve").disabled=app.role!=="OWNER"||!chosen||chosen.can_approve!==true;
+  by("operator-reject").disabled=app.role!=="OWNER"||!chosen||chosen.state!=="DRAFT";
+  by("operator-execute").disabled=app.role!=="OWNER"||!chosen||chosen.can_execute!==true;
  }
  function renderAudit(audit,integrity){
   const root=by("operator-audit");root.replaceChildren();
@@ -111,34 +181,93 @@ document.addEventListener("DOMContentLoaded", () => {
     row.append(event,meta);root.append(row);
   });
  }
- by("operator-show-login").addEventListener("click",()=>{
-   by("operator-login").hidden=false;
-   by("operator-username").focus();
+ accountButton.addEventListener("click",()=>app.actor?goToMyDecisions():showLogin());
+ by("operator-show-login").addEventListener("click",showLogin);
+ by("login-close").addEventListener("click",()=>dialog.close());
+ dialog.addEventListener("close",()=>{
+   by("operator-password").value="";
+   by("login-reveal-password").checked=false;
+   by("operator-password").type="password";
+   announceLogin("");
+ });
+ by("login-reveal-password").addEventListener("change",()=>{
+   by("operator-password").type=by("login-reveal-password").checked?"text":"password";
  });
  by("operator-login").addEventListener("submit",async e=>{
-  e.preventDefault();
-  try {
-   await post("/api/operator/login",{login:by("operator-username").value.trim(),
-                                     password:by("operator-password").value});
-   feedback("تمت المصادقة مع حساب الاختبار.",true);
-   await getState();
-  }catch(e){feedback(e.message);}
-  finally{by("operator-password").value="";}
+   e.preventDefault();
+   if(app.busy)return;
+   const submit=by("login-submit");app.busy=true;submit.disabled=true;
+   submit.textContent="جارٍ التحقق من بياناتك…";
+   announceLogin("");
+   try{
+     await post("/api/operator/login",{
+       login:by("operator-username").value.trim(),
+       password:by("operator-password").value
+     });
+     const confirmed=await getState();
+     if(!confirmed)throw new Error("تعذر إثبات جلسة الدخول. جرّب مجددًا.");
+     dialog.close();
+     feedback("تم تسجيل الدخول. قراراتك ومسوداتك ظاهرة هنا.",true);
+     goToMyDecisions();
+   }catch(error){
+     announceLogin(error.message,true);
+     by("operator-password").focus();
+   }finally{
+     by("operator-password").value="";
+     submit.disabled=false;submit.textContent="الدخول إلى مساحة قراراتي";app.busy=false;
+   }
  });
- by("operator-logout").addEventListener("click",async()=>{
-  try{await post("/api/operator/logout",{});loggedOut();feedback("تم تسجيل الخروج.",true);}
-  catch(e){feedback(e.message);}
+ async function signOut(){
+   if(app.busy)return;
+   try{
+     await post("/api/operator/logout",{});
+     loggedOut();
+     if(dialog.open)dialog.close();
+     feedback("تم تسجيل الخروج بأمان.",true);
+   }catch(e){feedback("تعذر تأكيد تسجيل الخروج. لم نفترض إنهاء الجلسة.");}
+ }
+ // Independent owner editorial signoff, not the final approval of a draft.
+ window.addEventListener("maal:benchmark-review-selected",e=>{
+   const item=e.detail||{};
+   if(!/^maal-paired-[0-9a-f]{32}$/.test(item.run_id||""))return;
+   by("operator-editorial-review").hidden=false;
+   by("operator-editorial-run").value=item.run_id;
+   by("operator-editorial-summary").textContent=
+     "تشغيل "+item.run_id+" · "+item.model+" · دليل "+item.evidence_id+
+     " · نتيجة آلية "+item.score.score+"/"+item.score.max_score+
+     ". راجع الوقائع والمخاطر والبدائل وعقد المهمة بنفسك قبل الإقرار بصلاحيتها.";
  });
- by("operator-description").addEventListener("input",()=>{ delete by("operator-description").dataset.modelRunId; });
+ by("operator-editorial-sign").addEventListener("click",async()=>{
+   if(app.role!=="OWNER"){feedback("يجب تسجيل دخول حساب المالك لإتمام المراجعة التحريرية.");return;}
+   const runId=by("operator-editorial-run").value;
+   const password=by("operator-editorial-password").value;
+   if(!runId||!password){feedback("حدّد تشغيلًا مؤهلًا وأدخل كلمة مرور المالك أولًا.");return;}
+   if(!window.confirm("هل راجعت حقائق المصدر وصلة الأعمال وشروط الأثر والمخرج المطلوب، وترى أن هذه التوصية صالحة للمراجعة كمسودة مستقلة؟ لن تُعتمد المهمة بهذا الإجراء."))return;
+   by("operator-editorial-password").value="";
+   try{
+      const r=await post("/api/operator/editorial-signoff",
+         {model_run_id:runId,stepup_password:password});
+      by("operator-description").value=r.task_description;
+      by("operator-description").dataset.modelRunId=runId;
+      by("operator-description").dataset.newEvidenceId=r.evidence_id;
+      feedback("تم تسجيل مراجعة المالك التحريرية. يمكنك الآن إنشاء مسودة جديدة، ثم اتخاذ قرار مستقل بالاعتماد أو الرفض.",true);
+      by("operator-description").focus();
+   }catch(error){feedback(error.message);}
+ });
+ by("operator-logout").addEventListener("click",signOut);
+ headerLogout.addEventListener("click",signOut);
+ by("operator-description").addEventListener("input",()=>{ delete by("operator-description").dataset.modelRunId; delete by("operator-description").dataset.newEvidenceId; });
  by("operator-create").addEventListener("click",async()=>{
   const description=by("operator-description").value.trim();
   if(description.length<8){feedback("اكتب وصفًا للمهمة التجريبية أولًا.");return;}
   try{
    const linkedRun=by("operator-description").dataset.modelRunId||null;
+   const newEvidenceId=by("operator-description").dataset.newEvidenceId||null;
    const data=await post("/api/operator/draft",{
-      description,idempotency_key:crypto.randomUUID()+"|"+Date.now(),model_run_id:linkedRun});
+      description,idempotency_key:crypto.randomUUID()+"|"+Date.now(),model_run_id:linkedRun,new_evidence_id:newEvidenceId});
    app.selected=data.draft_id;by("operator-description").value="";
    delete by("operator-description").dataset.modelRunId;
+   delete by("operator-description").dataset.newEvidenceId;
    feedback("تم إنشاء مسودة مرتبطة بالدليل الموثّق فقط.",true);
    await getState();
   }catch(e){feedback(e.message);}
@@ -153,6 +282,24 @@ document.addEventListener("DOMContentLoaded", () => {
       draft_id:app.selected,stepup_password:secret});
    feedback("تم توثيق موافقة حساب الاختبار "+data.approved_by+" داخل بيئة E.",true);
    await getState();
+  }catch(e){feedback(e.message);}
+ });
+ by("operator-reject").addEventListener("click",async()=>{
+  if(!app.selected)return;
+  const choice=app.rows.find(r=>r.draft_id===app.selected);
+  if(!choice||choice.state!=="DRAFT")return;
+  if(!by("operator-stepup").value){
+    feedback("أدخل كلمة مرور المالك لتأكيد رفض المسودة.");return;
+  }
+  if(!window.confirm("هل تؤكد رفض المسودة المحددة؟ سيتم تسجيل قرار الرفض ولا تنشأ أي مهمة."))
+    return;
+  const secret=by("operator-stepup").value;
+  by("operator-stepup").value="";
+  try{
+    const data=await post("/api/operator/reject",{
+      draft_id:app.selected,stepup_password:secret,reason:"EDITORIAL_NOT_ACCEPTED"});
+    feedback("تم تسجيل رفض بشري موثق للمسودة، دون تنفيذ أي مهمة. · "+data.state,true);
+    await getState();
   }catch(e){feedback(e.message);}
  });
  by("operator-execute").addEventListener("click",async()=>{

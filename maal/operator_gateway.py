@@ -142,6 +142,17 @@ class OperatorGateway:
         return {"draft_id":draft_id,"state":"APPROVED_BY_AUTHENTICATED_TEST_OWNER",
                 "approved_by":actor["login"],"production_approval":False}
 
+    def reject(self,token,csrf,draft_id,stepup_password,reason):
+        actor=self.require(token,csrf)
+        if actor["role"]!="OWNER":raise PermissionError("rejection_restricted_to_owner")
+        self._owner_draft(actor,draft_id)
+        with self.store.db() as db:
+            verified=self._verify_password(db,actor["login"],stepup_password)
+        if not verified:raise PermissionError("stepup_authentication_failed")
+        return {"draft_id":draft_id,
+                "state":self.store.reject(draft_id,actor["login"],reason),
+                "approved_by":None,"task_created":False,"external_action":False}
+
     def execute(self,token,csrf,draft_id):
         actor=self.require(token,csrf)
         if actor["role"]!="OWNER":raise PermissionError("execute_restricted_to_owner")
@@ -167,6 +178,19 @@ class OperatorGateway:
                 WHERE o.login=? AND o.tenant=?
                 ORDER BY a.sequence DESC LIMIT 80
             """,(actor["login"],actor["tenant"]))]
+        # Editorial review is a distinct human decision; render its owner-
+        # scoped audit events alongside draft approval and execution events.
+        with self.store.db() as db:
+            exists=db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='editorial_signoffs'").fetchone()
+            if exists:
+                reviews=[dict(row) for row in db.execute("""
+                    SELECT a.sequence,a.timestamp,a.draft_id,a.event,a.actor
+                    FROM audit a JOIN editorial_signoffs s
+                      ON a.draft_id='editorial:'||s.model_run_id
+                    WHERE s.reviewer=? AND s.tenant=?
+                    ORDER BY a.sequence DESC LIMIT 40
+                """,(actor["login"],actor["tenant"]))]
+                events=sorted(events+reviews,key=lambda x:x["sequence"],reverse=True)[:80]
         return {"operator":actor["login"],"tenant":actor["tenant"],"role":actor["role"],
                 "csrf":actor["csrf"],"drafts":drafts,"audit":events,
                 "audit_integrity":self.store.verify_audit()["integrity"],
