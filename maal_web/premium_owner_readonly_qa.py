@@ -4,7 +4,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright,expect
 from maal_web.prepare_new_source_draft import DB,OLD,owner_account
 
-BASE="http://127.0.0.1:52344"
+BASE=__import__("os").environ.get("MAAL_QA_BASE","http://127.0.0.1:52344")
 OUT=Path("E:/MAAL/03_REPORTS_AND_REVIEW/MAAL_COMPETITION_MVP_20261028/premium_ui_qa")
 def state():
     db=sqlite3.connect("file:"+str(DB).replace("\\","/")+"?mode=ro",uri=True)
