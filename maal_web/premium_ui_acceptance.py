@@ -7,7 +7,7 @@ from playwright.sync_api import sync_playwright, expect
 import json
 
 OUT=Path("E:/MAAL/03_REPORTS_AND_REVIEW/MAAL_COMPETITION_MVP_20261028/premium_ui_qa")
-BASE="http://127.0.0.1:52344"
+BASE=__import__("os").environ.get("MAAL_QA_BASE","http://127.0.0.1:52344")
 def navigate(page,width,view):
     if width<=1040:
         toggle=page.locator("#premium-navigation-toggle")
