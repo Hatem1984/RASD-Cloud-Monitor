@@ -59,8 +59,11 @@ jobs:
           set -euo pipefail
           interval_exit=0
           python scheduled_rasd.py --mode interval || interval_exit=$?
+          # Read-only phase exit telemetry: no secrets, retries or delivery changes.
+          echo "RASD_INTERVAL_PHASE_EXIT=$interval_exit"
           rollup_exit=0
           python scheduled_rasd.py --mode rollup_recovery || rollup_exit=$?
+          echo "RASD_ROLLUP_RECOVERY_PHASE_EXIT=$rollup_exit"
           if [ "$interval_exit" -ne 0 ] || [ "$rollup_exit" -ne 0 ]; then
             echo 'RASD_CLOUDFLARE_INTERVAL_OR_ROLLUP_HOLD'
             exit 1
