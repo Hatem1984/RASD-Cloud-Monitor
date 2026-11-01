@@ -504,7 +504,7 @@ def send_one_word(word: Path, *, sender: str, recipient: str, password: str,
     msg["X-RASD-Delivery-ID"] = key
     msg.set_content(
         body_text if body_text is not None else
-        "تقرير مآل للمتابعة والتحليل. المرفق Word يحوي لقطات شاشة"
+        "تقرير رصد للمتابعة والتحليل. المرفق Word يحوي لقطات شاشة"
         " لصفحات الأخبار الأصلية، وعناوينها وتواريخها وروابطها.\n")
     msg.add_attachment(
         word.read_bytes(), maintype="application",
@@ -656,7 +656,7 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             "verified_links": count if row["status"] == "ok" else 0,
             "error_type": None if row["status"] == "ok" else "original_feed_unavailable",
         })
-    title = ("مآل | تقرير حالة المتابعة النصف ساعية | "
+    title = ("رصد | تقرير حالة المتابعة النصف ساعية | "
              + cairo_display_time(start))
     pending = held_articles + waiting_articles
     report = {
@@ -829,9 +829,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 print("::warning::RASD_VERIFIED_STORIES_BACKLOG_PENDING="
                       + str(waiting), flush=True)
                 stories = stories[:MAX_BATCH]
-            title = ("مآل | استدراك أخبار 23 أكتوبر بصور ناشريها الأصلية"
+            title = ("رصد | استدراك أخبار 23 أكتوبر بصور ناشريها الأصلية"
                      if mode == "interval_owner_once" else
-                     "مآل | أخبار جديدة من الفحص الدوري | " + cairo_display_time(start))
+                     "رصد | أخبار جديدة من الفحص الدوري | " + cairo_display_time(start))
             held_items = []
             try:
                 doc, delivered, held_count, limited = prepare_source_limited_verified_word(
@@ -897,7 +897,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 # daily operational fact. Deliver an explicitly labelled
                 # ZERO-news status Word, NOT a fabricated news report.
                 # No candidate or fake image is inserted.
-                title = "مآل | تقرير حالة المتابعة: لا أخبار مصوّرة مُسلّمة | " + day_label
+                title = "رصد | تقرير حالة المتابعة: لا أخبار مصوّرة مُسلّمة | " + day_label
                 report = {
                     "title": title,
                     "display_window_start": "الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
@@ -925,7 +925,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     raise RuntimeError("daily_status_word_integrity_hold")
                 no_news = True
             else:
-                title = "مآل | التقرير المجمع للأخبار المرسلة | " + day_label
+                title = "رصد | التقرير المجمع للأخبار المرسلة | " + day_label
                 try:
                     if os.environ.get("RASD_DAILY_SENT_ARCHIVE_ENABLED") == "true":
                         # Production daily report is ONE consolidated copy
@@ -952,7 +952,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     # accepted stories or turn any integrity error into success.
                     if str(exc) != "publisher_screenshot_hold":
                         raise
-                    title = ("مآل | تقرير حالة: أخبار مُرسلة وصورها غير متاحة"
+                    title = ("رصد | تقرير حالة: أخبار مُرسلة وصورها غير متاحة"
                              " لإعادة الالتقاط | " + day_label)
                     report = {
                         "title": title,

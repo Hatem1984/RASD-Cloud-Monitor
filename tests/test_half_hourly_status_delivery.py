@@ -44,7 +44,7 @@ class HalfHourlyWordStatus(unittest.TestCase):
         self.assertTrue(r["smtp_accepted"])
         args = send.call_args
         self.assertTrue(args.kwargs["subject"].startswith(
-            "مآل | تقرير حالة المتابعة النصف ساعية"))
+            "رصد | تقرير حالة المتابعة النصف ساعية"))
         expected = rasd.digest_key("interval-status:" + self.window)
         self.assertEqual(args.kwargs["key"], expected)
         doc = Document(args.args[0])
