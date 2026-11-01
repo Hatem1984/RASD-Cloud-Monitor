@@ -431,14 +431,15 @@ def render_docx(report: dict, destination: Path) -> None:
     # a near-empty third page without shrinking authentic screenshots.
     if report["sources"]:
         source_names = {"hapi": "جريدة حابي", "almasryalyoum": "المصري اليوم",
-                        "shorouk": "بوابة الشروق", "alborsa": "جريدة البورصة", "masrawy": "مصراوي", "almessa": "المساء", "elbalad": "صدى البلد", "vetogate": "فيتو", "dailynewsegypt": "ديلي نيوز إيجيبت", "egyptindependent": "إيجيبت إندبندنت", "enterpriseam": "إنتربرايز مصر", "egyptianstreets": "إيجيبشن ستريتس", "skynewsarabia": "سكاي نيوز عربية", "inp_official": "معهد التخطيط القومي"}
+                        "shorouk": "بوابة الشروق", "alborsa": "جريدة البورصة", "masrawy": "مصراوي", "almessa": "المساء", "elbalad": "صدى البلد", "vetogate": "فيتو", "dailynewsegypt": "ديلي نيوز إيجيبت", "egyptindependent": "إيجيبت إندبندنت", "enterpriseam": "إنتربرايز مصر", "egyptianstreets": "إيجيبشن ستريتس", "skynewsarabia": "سكاي نيوز عربية", "inp_official": "معهد التخطيط القومي", "mped-official-original-NewsList-page-1": "موقع وزارة التخطيط — قائمة الأخبار الرسمية"}
         source_statuses = []
         for feed in report["sources"]:
             name = source_names.get(feed["feed_id"], feed["feed_id"])
             status = "متاح" if feed["status"] == "ok" else "تعذّر الوصول"
             count = str(feed["verified_links"])
             error = "، سبب: " + str(feed["error_type"]) if feed["error_type"] else ""
-            source_statuses.append(f"{name}: {status} ({count} روابط{error})")
+            unit = "صفحة موثقة" if feed["feed_id"] == "mped-official-original-NewsList-page-1" else "روابط"
+            source_statuses.append(f"{name}: {status} ({count} {unit}{error})")
         p = doc.add_paragraph()
         _rtl(p)
         p.add_run(" | ".join(source_statuses))
