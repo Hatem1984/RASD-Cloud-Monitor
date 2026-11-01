@@ -1,4 +1,4 @@
-"""MAAL public naming without rewriting private RASD transport or historical evidence.
+"""RASD official display naming, preserving transport IDs and immutable evidence.
 
 Offline; never sends mail, changes idempotency ledger or opens original websites.
 """
@@ -11,18 +11,18 @@ from docx import Document
 from daily_report import render_docx
 
 
-class MaalBrandTransition(unittest.TestCase):
-    def test_all_current_scheduled_subjects_use_maal(self):
+class RasdBrandIsolation(unittest.TestCase):
+    def test_all_current_scheduled_subjects_use_rasd(self):
         s = Path("scheduled_rasd.py").read_text(encoding="utf-8")
-        self.assertNotIn("رصد |", s)
-        self.assertIn("مآل | أخبار جديدة من الفحص الدوري", s)
-        self.assertIn("مآل | التقرير المجمع للأخبار المرسلة", s)
-        self.assertIn("مآل | تقرير حالة المتابعة النصف ساعية", s)
-        self.assertIn("تقرير مآل للمتابعة والتحليل", s)
+        self.assertNotIn("مآل |", s)
+        self.assertIn("رصد | أخبار جديدة من الفحص الدوري", s)
+        self.assertIn("رصد | التقرير المجمع للأخبار المرسلة", s)
+        self.assertIn("رصد | تقرير حالة المتابعة النصف ساعية", s)
+        self.assertIn("تقرير رصد للمتابعة والتحليل", s)
 
     def test_report_word_contains_new_brand_without_fake_evidence(self):
         report = {
-            "title": "مآل | تقرير حالة المتابعة",
+            "title": "رصد | تقرير حالة المتابعة",
             "display_window_start": "٢٦ أكتوبر الساعة ١٤:٠٠",
             "display_window_end": "٢٦ أكتوبر الساعة ١٤:٣٠",
             "coverage": "NO_VERIFIED_NEW_DELIVERY",
@@ -30,10 +30,10 @@ class MaalBrandTransition(unittest.TestCase):
             "limitations": "لا يتم اختلاق أخبار أو صور عند عدم وجود دليل.",
         }
         with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "MAAL-Report.docx"
+            path = Path(folder) / "RASD-Report.docx"
             render_docx(report, path)
             doc = Document(path)
-            self.assertIn("مآل | تقرير حالة المتابعة", doc.paragraphs[0].text)
+            self.assertIn("رصد | تقرير حالة المتابعة", doc.paragraphs[0].text)
             self.assertEqual(len(doc.inline_shapes), 0)
 
     def test_brand_not_applied_to_private_cas_or_gmail_headers(self):
