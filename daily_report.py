@@ -18,6 +18,8 @@ from monitor import inspect, read_feed
 
 COVERAGE_LABELS = {
     "HEALTHY": "أخبار موثقة بالصور من المصادر المتاحة",
+    "OFFICIAL_SOURCE_ONLY": "تقرير محدود من الموقع الرسمي للوزارة",
+    "SOURCE_LIMITED_OFFICIAL_PILOT": "عينة تاريخية محدودة من موقع الوزارة",
     "SOURCE_LIMITED": "تغطية جزئية مع مواد غير مستوفية",
     "ORIGINAL_IMAGE_HOLD_NO_VERIFIED_DELIVERY": "لا أخبار جديدة مستوفية؛ توجد مواد معلقة",
     "SOURCE_LIMITED_NO_VERIFIED_NEW_DELIVERY": "لا تسليم جديد؛ بعض المصادر غير متاحة",
@@ -287,6 +289,9 @@ def render_docx(report: dict, destination: Path) -> None:
     if coverage == "CONSOLIDATED_PREVIOUSLY_SENT_ORIGINALS":
         count_label = "روابط الأخبار المسلّمة"
         article_label = "أخبار مجمّعة من التسليم السابق"
+    elif coverage in {"OFFICIAL_SOURCE_ONLY", "SOURCE_LIMITED_OFFICIAL_PILOT"}:
+        count_label = "صفحات أخبار رسمية تم التحقق منها"
+        article_label = "أخبار رسمية موثقة بالصور"
     else:
         count_label = "روابط RSS التي أمكن فحصها"
         article_label = "أخبار مصورة مستوفية"
@@ -357,9 +362,19 @@ def render_docx(report: dict, destination: Path) -> None:
                 summary.add_run(article["publisher_excerpt"])
             note = doc.add_paragraph()
             _rtl(note)
-            note.add_run("تحليل تحريري مرتبط بموضوع الخبر: ").bold = True
-            note.add_run(editorial_caution(
-                article["headline"], article.get("publisher_excerpt", "")))
+            if coverage in {"OFFICIAL_SOURCE_ONLY", "SOURCE_LIMITED_OFFICIAL_PILOT"}:
+                # No publisher article-body text has been transcribed by this
+                # capture path. Never present a headline-based inference as
+                # verified article content in a Ministry handover sample.
+                note.add_run("حدود النص المنقول: ").bold = True
+                note.add_run(
+                    "تتضمن هذه العينة عنوان الناشر وتاريخ النشر المعلن والرابط "
+                    "وصورة من صفحة الخبر الأصلية. لا تتضمن نقلًا نصيًا كاملًا "
+                    "لمتن الخبر، ولا تثبت أي قرار تنفيذي غير منشور بالمصدر.")
+            else:
+                note.add_run("تحليل تحريري مرتبط بموضوع الخبر: ").bold = True
+                note.add_run(editorial_caution(
+                    article["headline"], article.get("publisher_excerpt", "")))
             if article.get("evidence_image_path"):
                 evidence_note = doc.add_paragraph()
                 _rtl(evidence_note)
@@ -416,14 +431,15 @@ def render_docx(report: dict, destination: Path) -> None:
     # a near-empty third page without shrinking authentic screenshots.
     if report["sources"]:
         source_names = {"hapi": "جريدة حابي", "almasryalyoum": "المصري اليوم",
-                        "shorouk": "بوابة الشروق", "alborsa": "جريدة البورصة", "masrawy": "مصراوي", "almessa": "المساء", "elbalad": "صدى البلد", "vetogate": "فيتو", "dailynewsegypt": "ديلي نيوز إيجيبت", "egyptindependent": "إيجيبت إندبندنت", "enterpriseam": "إنتربرايز مصر", "egyptianstreets": "إيجيبشن ستريتس", "skynewsarabia": "سكاي نيوز عربية", "inp_official": "معهد التخطيط القومي"}
+                        "shorouk": "بوابة الشروق", "alborsa": "جريدة البورصة", "masrawy": "مصراوي", "almessa": "المساء", "elbalad": "صدى البلد", "vetogate": "فيتو", "dailynewsegypt": "ديلي نيوز إيجيبت", "egyptindependent": "إيجيبت إندبندنت", "enterpriseam": "إنتربرايز مصر", "egyptianstreets": "إيجيبشن ستريتس", "skynewsarabia": "سكاي نيوز عربية", "inp_official": "معهد التخطيط القومي", "mped-official-original-NewsList-page-1": "موقع وزارة التخطيط — قائمة الأخبار الرسمية"}
         source_statuses = []
         for feed in report["sources"]:
             name = source_names.get(feed["feed_id"], feed["feed_id"])
             status = "متاح" if feed["status"] == "ok" else "تعذّر الوصول"
             count = str(feed["verified_links"])
             error = "، سبب: " + str(feed["error_type"]) if feed["error_type"] else ""
-            source_statuses.append(f"{name}: {status} ({count} روابط{error})")
+            unit = "صفحة موثقة" if feed["feed_id"] == "mped-official-original-NewsList-page-1" else "روابط"
+            source_statuses.append(f"{name}: {status} ({count} {unit}{error})")
         p = doc.add_paragraph()
         _rtl(p)
         p.add_run(" | ".join(source_statuses))
