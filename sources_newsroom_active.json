@@ -104,9 +104,10 @@
     {
       "id": "dailynewsegypt",
       "name": "Daily News Egypt native RSS",
-      "url": "https://www.dailynewsegypt.com/feed/",
+      "url": "https://dailynewsegypt.com/feed/",
       "allowed_article_hosts": [
-        "www.dailynewsegypt.com"
+        "www.dailynewsegypt.com",
+        "dailynewsegypt.com"
       ]
     },
     {
