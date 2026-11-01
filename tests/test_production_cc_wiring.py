@@ -11,18 +11,24 @@ class ProductionCcWiring(unittest.TestCase):
         self.assertIn("protected-cloudflare-interval:", source)
         self.assertIn("protected-cloudflare-cairo-daily:", source)
         self.assertEqual(source.count("RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}"), 2)
-        self.assertEqual(source.count("RASD_REPORT_CC: ${{ vars.RASD_REPORT_CC }}"), 2)
+        self.assertEqual(source.count("RASD_REPORT_CC: ${{ secrets.RASD_REPORT_CC }}"), 2)
         for block in source.split("RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}")[1:]:
-            self.assertIn("RASD_REPORT_CC: ${{ vars.RASD_REPORT_CC }}", block[:160])
+            self.assertIn("RASD_REPORT_CC: ${{ secrets.RASD_REPORT_CC }}", block[:160])
+        self.assertEqual(source.count("RASD_REPORT_CC_REQUIRED: 'true'"), 2)
+        self.assertEqual(source.count("run: python rasd_recipient_preflight.py"), 2)
+        self.assertNotIn("vars.RASD_REPORT_CC", source)
 
     def test_backup_and_main_live_scheduler_pass_same_second_recipient(self):
         for path in (".github/workflows/rasd-schedule-backup.yml",
                      ".github/workflows/rasd-scheduled.yml"):
             with self.subTest(path=path):
                 source = Path(path).read_text(encoding="utf-8")
-                self.assertIn("RASD_REPORT_CC: ${{ vars.RASD_REPORT_CC }}", source)
+                self.assertIn("RASD_REPORT_CC: ${{ secrets.RASD_REPORT_CC }}", source)
                 self.assertIn("RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}", source)
                 self.assertIn("RASD_PRIVATE_LEDGER_TOKEN:", source)
+                self.assertIn("RASD_REPORT_CC_REQUIRED: 'true'", source)
+                self.assertIn("run: python rasd_recipient_preflight.py", source)
+                self.assertNotIn("vars.RASD_REPORT_CC", source)
 
     def test_second_recipient_is_pinned_by_digest_in_delivery_code(self):
         source = Path("scheduled_rasd.py").read_text(encoding="utf-8")
