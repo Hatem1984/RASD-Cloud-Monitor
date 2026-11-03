@@ -1,4 +1,4 @@
-name: RASD owner protected settings QA - READ ONLY NO SEND
+name: RASD owner QA contract - OFFLINE NO SEND
 
 on:
   push:
@@ -15,30 +15,36 @@ permissions:
   contents: read
 
 concurrency:
-  group: rasd-owner-settings-protected-qa-readonly
+  group: rasd-owner-contract-qa-offline
   cancel-in-progress: false
 
 jobs:
-  private-qa-readonly:
+  qa-contract-no-secrets:
     if: github.repository == 'Hatem1984/RASD-Cloud-Monitor' && github.ref == 'refs/heads/qa/owner-halfhour-cloud-review-20261103'
     runs-on: ubuntu-latest
-    timeout-minutes: 7
-    environment: rasd-production
+    timeout-minutes: 6
     env:
-      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
       RASD_OWNER_SETTINGS_ENABLED: 'false'
       RASD_AUTOMATION_ENABLED: 'false'
     steps:
-      - name: Checkout exact QA branch (not main)
+      - name: Checkout QA code with no persisted credentials
         uses: actions/checkout@v4
-      - name: Setup Python for READ-ONLY proof
+        with:
+          persist-credentials: false
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Read private QA configuration and validate only (NO SMTP/GMAIL/WRITE)
+      - name: Install existing offline unit test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Validate private-settings reader contract with mocked API (NO NETWORK, NO SMTP)
         shell: bash
         run: |
           set -euo pipefail
-          python rasd_protected_settings_preflight.py
-      - name: QA-only result
-        run: echo 'RASD_OWNER_PROTECTED_NO_SEND=COMPLETE'
+          python -m unittest discover -s tests -p test_owner_protected_settings_preflight_qa.py -q
+          python -m unittest discover -s tests -p test_owner_settings_bridge_qa.py -q
+      - name: Confirm safe separation from production secret environment
+        run: |
+          echo 'RASD_PUBLIC_QA_CONTRACT=PASS'
+          echo 'RASD_PRIVATE_QA_RUNTIME=TESTED_IN_RASD_PILOT_PRIVATE_REPOSITORY'
+          echo 'RASD_SMTP_SENT=false'
