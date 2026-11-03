@@ -30,6 +30,18 @@ APPROVED_PUBLISHERS = {
 # An official Ministry programme may be named without the word "planning".
 # These exact topics preserve the narrow ministry brief and exclude generic economy news.
 PLANNING_TOPIC_NAMES = (
+    "وزير التخطيط",
+    "الدكتور أحمد رستم",
+    "أحمد رستم",
+    "Ahmed Rostom",
+    "وزارة التخطيط",
+    "خطة التنمية الاقتصادية",
+    "بنك الاستثمار القومي",
+    "معدل النمو",
+    "معدل نمو الاقتصاد المصري",
+    "البرنامج الوطني للتحول الاقتصادي",
+    "تقرير الفقر",
+    "الجهاز المركزي للتعبئة العامة والإحصاء",
     "وزارة التخطيط", "وزير التخطيط", "وزيرة التخطيط",
     "التخطيط والتنمية الاقتصادية", "معهد التخطيط القومي",
     "Ministry of Planning", "Planning Ministry",

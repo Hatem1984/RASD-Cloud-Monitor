@@ -470,9 +470,21 @@ def prepare_first_verified_word(candidates: list[dict], config: dict, output: Pa
 
 
 def reserve_stories(ledger: PrivateGitHubLedger, stories: list[dict],
-                    report_day: str) -> None:
-    """One private compare-and-swap write BEFORE any SMTP attempt."""
+                    report_day: str, *, slot_key: str | None = None) -> None:
+    """One private compare-and-swap write BEFORE any SMTP attempt.
+
+    When owner half-hour policy is approved, include the period reservation
+    in the SAME transaction as all article IDs; retries cannot send twice.
+    """
     state, sha = ledger.read()
+    if slot_key is not None:
+        if slot_key in state["entries"]:
+            raise RuntimeError("interval_slot_already_reserved_or_sent")
+        state, action = reserve_entry(state, slot_key, now_iso())
+        if action != "reserved":
+            raise RuntimeError("interval_slot_reservation_failed")
+        state["entries"][slot_key].update({"kind":"interval_slot",
+            "day_cairo":report_day,"article_ids":[x["id"] for x in stories]})
     for item in stories:
         if item["id"] in state["entries"]:
             raise RuntimeError("news_already_reserved_or_sent")
@@ -563,6 +575,31 @@ def news_for_rollup(state: dict, day: str, config: dict) -> list[dict]:
     # archive attachment verification. Fresh future intervals are filtered
     # for cross-publisher duplicates BEFORE sending and private reservation.
     return sorted(news, key=lambda x: (x["published_at_cairo"], x["id"]))
+
+def news_for_owner_calendar_rollup(state: dict, day: str, baseline_config: dict) -> list[dict]:
+    """Same Cairo calendar day [00:00,22:00], by publisher publication time.
+
+    Only actual SMTP-accepted half-hour articles enter the digest. Previously
+    accepted stories survive changes to owner keywords; an unapproved publisher
+    fails closed, never silently drops from the delivered-news record.
+    """
+    from rasd_halfhour_policy_qa import published_in_cairo
+    target = date.fromisoformat(day)
+    items = []
+    for key, entry in state["entries"].items():
+        if entry.get("kind") != "interval_item" or entry.get("status") != "smtp_accepted":
+            continue
+        story = entry.get("news")
+        if not isinstance(story, dict) or story.get("id") != key:
+            raise RuntimeError("private_sent_news_corrupted")
+        validate_story(story, baseline_config)
+        published = published_in_cairo(story)
+        if published.date() == target and time(0, 0) <= published.time().replace(tzinfo=None) <= time(22, 0):
+            items.append(story)
+    if len(items) > MAX_ROLLUP:
+        raise RuntimeError("rollup_exceeds_60_verified_items_manual_review")
+    return sorted(items, key=lambda item: (item["published_at_cairo"], item["id"]))
+
 
 def smart_interval_no_mail(*, config: dict, health: list[dict],
                            window: str, held_articles: int = 0,
@@ -778,7 +815,10 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     if mode != phase and not (recovery and phase in ("interval", "skip")) and not owner_oneoff:
         raise RuntimeError("scheduled_mode_cron_mismatch")
     sender, recipient, password, ledger = protected_credentials()
-    config = json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
+    baseline_config = json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
+    from rasd_cloud_settings import load_owner_active_config
+    config, owner_manifest = load_owner_active_config(baseline_config)
+    owner_settings = owner_manifest["settings"] if owner_manifest else None
     window, day, start = cairo_window(now)
     if recovery:
         local = now.astimezone(CAIRO)
@@ -786,6 +826,12 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                        else local.date() - timedelta(days=1))
         day = target_date.isoformat()
     state, _ = ledger.read()
+    slot_key = digest_key("interval-slot:" + window) if owner_settings and mode == "interval" else None
+    if owner_settings and mode == "interval":
+        if now.astimezone(CAIRO).hour >= 22:
+            return {"status":"owner_after_daily_cutoff_no_interval_mail","smtp_accepted":False}
+        if slot_key in state["entries"]:
+            return {"status":"interval_slot_already_reserved_or_sent","smtp_accepted":False}
     with tempfile.TemporaryDirectory(prefix="rasd-scheduled-") as folder:
         output = Path(folder)
         if mode in ("interval", "interval_owner_once"):
@@ -793,6 +839,13 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             available = discover_interval_news(
                 config, now, allow_degraded=True, source_records=health,
                 **({"age_hours":48} if mode == "interval_owner_once" else {}))
+            if owner_settings and mode == "interval":
+                from rasd_halfhour_policy_qa import in_owner_day, matched_owner_topics, published_in_cairo
+                active_day = now.astimezone(CAIRO).date()
+                available = [item for item in available
+                             if in_owner_day(item, active_day, now)
+                             and owner_settings["start"] <= published_in_cairo(item).strftime("%H:%M") <= owner_settings["end"]
+                             and matched_owner_topics(item, owner_settings)]
             if mode == "interval_owner_once":
                 # Retrospective only: strictly Oct23 publisher timestamps.
                 available = [a for a in available
@@ -811,7 +864,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             if not stories:
                 if mode == "interval_owner_once":
                     return {"status": "no_new_verified_news", "smtp_accepted": False}
-                if os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true":
+                if owner_settings or os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true":
                     return smart_interval_no_mail(
                         config=config, health=health, window=window)
                 return send_empty_interval_status(
@@ -860,7 +913,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         "smtp_accepted": False,
                         "coverage_status": "SOURCE_ACCESS_HOLD_NO_DELIVERY",
                     }
-                if os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true":
+                if owner_settings or os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true":
                     return smart_interval_no_mail(
                         config=config, health=health, window=window,
                         held_articles=len(stories), waiting_articles=waiting)
@@ -872,7 +925,10 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     held_items=held_items)
             # Only successfully captured/embedded originals enter private CAS.
             # Blocked items remain unsent, so later scheduled scans can retry.
-            reserve_stories(ledger, delivered, day)
+            if slot_key:
+                reserve_stories(ledger, delivered, day, slot_key=slot_key)
+            else:
+                reserve_stories(ledger, delivered, day)
             message_key = digest_key("interval:" + window + ":" + ",".join(x["id"] for x in delivered))
             subject = title + (" [تغطية جزئية/متأخرة]" if limited or waiting else "")
             receipt = send_one_word(doc, sender=sender, recipient=recipient,
@@ -880,8 +936,12 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             # SMTP accepts exactly one Word message containing N stories.
             # Persist all N receipts together in ONE private CAS commit, not
             # N separate writes that can leave a half-accepted daily rollup.
-            ledger.mark_smtp_accepted_many(
-                [article["id"] for article in delivered], receipt)
+            if slot_key:
+                ledger.mark_smtp_accepted_many(
+                    [article["id"] for article in delivered], receipt, slot_key=slot_key)
+            else:
+                ledger.mark_smtp_accepted_many(
+                    [article["id"] for article in delivered], receipt)
             return {"status": "smtp_accepted_unconfirmed_inbox",
                     "items": len(delivered), "source_limited": bool(limited or waiting),
                     "original_screenshots_held": held_count,
@@ -890,8 +950,14 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             rollup_key = digest_key("rollup:" + day)
             if rollup_key in state["entries"]:
                 return {"status": "rollup_already_reserved_or_sent", "smtp_accepted": False}
-            stories = news_for_rollup(state, day, config)
+            if owner_settings:
+                stories = news_for_owner_calendar_rollup(state, day, baseline_config)
+            else:
+                stories = news_for_rollup(state, day, config)
             day_label, end_label = cairo_rollup_label(day)
+            if owner_settings and not stories:
+                return {"status":"owner_daily_no_verified_news_no_email",
+                        "items":0,"smtp_accepted":False,"rollup_date":day}
             if not stories:
                 # No accepted verified newsroom items is itself a genuine
                 # daily operational fact. Deliver an explicitly labelled
