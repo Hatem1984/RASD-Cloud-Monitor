@@ -1,0 +1,44 @@
+name: RASD owner protected settings QA - READ ONLY NO SEND
+
+on:
+  push:
+    branches:
+      - 'qa/owner-halfhour-cloud-review-20261103'
+    paths:
+      - '.github/workflows/rasd-owner-protected-readonly-qa.yml'
+      - 'rasd_protected_settings_preflight.py'
+      - 'rasd_settings_bridge_qa.py'
+      - 'sources_owner_daily_qa.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-owner-settings-protected-qa-readonly
+  cancel-in-progress: false
+
+jobs:
+  private-qa-readonly:
+    if: github.repository == 'Hatem1984/RASD-Cloud-Monitor' && github.ref == 'refs/heads/qa/owner-halfhour-cloud-review-20261103'
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    environment: rasd-production
+    env:
+      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+      RASD_OWNER_SETTINGS_ENABLED: 'false'
+      RASD_AUTOMATION_ENABLED: 'false'
+    steps:
+      - name: Checkout exact QA branch (not main)
+        uses: actions/checkout@v4
+      - name: Setup Python for READ-ONLY proof
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Read private QA configuration and validate only (NO SMTP/GMAIL/WRITE)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python rasd_protected_settings_preflight.py
+      - name: QA-only result
+        run: echo 'RASD_OWNER_PROTECTED_NO_SEND=COMPLETE'

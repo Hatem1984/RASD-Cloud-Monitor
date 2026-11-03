@@ -12,9 +12,11 @@ from daily_report import render_docx
 
 
 class MaalBrandTransition(unittest.TestCase):
-    def test_all_current_scheduled_subjects_use_maal(self):
+    def test_legacy_subjects_unchanged_but_owner_rasd_mode_is_separate(self):
         s = Path("scheduled_rasd.py").read_text(encoding="utf-8")
-        self.assertNotIn("رصد |", s)
+        # Existing historical fixtures stay intact, while new owner mode
+        # must use the standalone RASD identity (not the old MAAL brand).
+        self.assertIn('subject=f"رصد | التقرير المجمع — {day}"', s)
         self.assertIn("مآل | أخبار جديدة من الفحص الدوري", s)
         self.assertIn("مآل | التقرير المجمع للأخبار المرسلة", s)
         self.assertIn("مآل | تقرير حالة المتابعة النصف ساعية", s)

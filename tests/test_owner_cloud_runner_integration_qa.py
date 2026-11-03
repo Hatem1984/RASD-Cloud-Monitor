@@ -62,13 +62,15 @@ class OwnerRunner(unittest.TestCase):
         def prepare(stories,cfg,out,**kwargs):
             return Path(out)/"QA-test-only.docx",stories,0,False
         env={"GITHUB_EVENT_NAME":"schedule","RASD_JOB_CRON":run.HALF_HOUR_CRON,
-             "RASD_SMART_NO_EMPTY_INTERVAL_EMAIL":"true"}
+             "RASD_SMART_NO_EMPTY_INTERVAL_EMAIL":"true",
+             "RASD_PRIVATE_LEDGER_TOKEN":"x"*40}
         with (patch.object(run,"require_github_scheduler"),
               patch.object(run,"protected_credentials",return_value=("sender@gmail.com","ministry@example.com","test-not-used",ledger)),
               patch.object(run,"scheduled_phase",return_value="interval" if mode=="interval" else "rollup"),
               patch.object(run,"discover_interval_news",side_effect=discover),
               patch.object(run,"prepare_source_limited_verified_word",side_effect=prepare) as images,
               patch.object(run,"reserve_stories") as reserve,
+              patch("rasd_owner_evidence_journal.PrivateDayJournal.record",return_value={}),
               patch.object(run,"send_one_word",return_value=MAIL) as send,
               patch.object(cloud,"load_owner_active_config",return_value=(cfg,MANIFEST)),
               patch.dict(run.os.environ,env,clear=False)):
@@ -105,11 +107,14 @@ class OwnerRunner(unittest.TestCase):
               patch.object(run,"protected_credentials",return_value=("sender@gmail.com","ministry@example.com","test",ledger)),
               patch.object(run,"scheduled_phase",return_value="rollup"),
               patch.object(run,"news_for_owner_calendar_rollup",return_value=[]),
+              patch("rasd_owner_evidence_journal.PrivateDayJournal.read",return_value=({"slots":{}},None)),
+              patch("rasd_owner_daily_closeout.prepare_owner_closeout",return_value={"status":"NO_NEW_VERIFIED_NEWS_NO_DAILY_EMAIL"}),
               patch.object(run,"send_one_word") as send,
               patch.object(cloud,"load_owner_active_config",return_value=(SOURCE,MANIFEST)),
-              patch.dict(run.os.environ,{"GITHUB_EVENT_NAME":"schedule","RASD_JOB_CRON":run.DAILY_CRON},clear=False)):
+              patch.dict(run.os.environ,{"GITHUB_EVENT_NAME":"schedule","RASD_JOB_CRON":run.DAILY_CRON,
+                      "RASD_PRIVATE_LEDGER_TOKEN":"x"*40},clear=False)):
             result=run.run_scheduled("rollup",datetime(2026,11,3,22,8,tzinfo=run.CAIRO))
-        self.assertEqual(result["status"],"owner_daily_no_verified_news_no_email")
+        self.assertEqual(result["status"],"NO_NEW_VERIFIED_NEWS_NO_DAILY_EMAIL")
         send.assert_not_called()
         ledger.reserve.assert_not_called()
     def test_atomic_period_reservation_is_written_with_article(self):

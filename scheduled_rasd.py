@@ -846,6 +846,12 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                              if in_owner_day(item, active_day, now)
                              and owner_settings["start"] <= published_in_cairo(item).strftime("%H:%M") <= owner_settings["end"]
                              and matched_owner_topics(item, owner_settings)]
+            if owner_settings and mode == "interval":
+                from rasd_owner_evidence_journal import PrivateDayJournal
+                PrivateDayJournal(os.environ.get("RASD_PRIVATE_LEDGER_TOKEN","")).record(
+                    now=now,source_health=health,candidate_stories=available,
+                    expected_source_ids=[f["id"] for f in config["feeds"]],
+                    config_version=owner_manifest["active_version"])
             if mode == "interval_owner_once":
                 # Retrospective only: strictly Oct23 publisher timestamps.
                 available = [a for a in available
@@ -950,6 +956,33 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             rollup_key = digest_key("rollup:" + day)
             if rollup_key in state["entries"]:
                 return {"status": "rollup_already_reserved_or_sent", "smtp_accepted": False}
+            if owner_settings and mode in ("rollup", "rollup_recovery"):
+                from rasd_owner_evidence_journal import PrivateDayJournal
+                from rasd_owner_daily_closeout import prepare_owner_closeout
+                owner_day=date.fromisoformat(day)
+                private_journal,_=PrivateDayJournal(os.environ.get(
+                    "RASD_PRIVATE_LEDGER_TOKEN","")).read(owner_day)
+                prepared=prepare_owner_closeout(
+                    config=config,baseline_config=baseline_config,
+                    owner_settings=owner_settings,
+                    config_version=owner_manifest["active_version"],
+                    day=owner_day,now=now,ledger_state=state,
+                    private_journal=private_journal,output=output,
+                    sender=sender,recipient=recipient,password=password,
+                    approved_copy=approved_report_copy(sender,recipient))
+                if prepared["status"]!="READY_VERIFIED_DAILY_QA_NO_SEND":
+                    return {"status":prepared["status"],"smtp_accepted":False,
+                            "coverage_verified":False}
+                action=ledger.reserve(rollup_key,recipient)
+                if action!="reserved":
+                    return {"status":"rollup_already_reserved_or_sent","smtp_accepted":False}
+                message_id=send_one_word(Path(prepared["word"]),sender=sender,
+                    recipient=recipient,password=password,
+                    subject=f"رصد | التقرير المجمع — {day}",key=rollup_key)
+                ledger.mark_smtp_accepted(rollup_key,message_id)
+                return {"status":"owner_daily_smtp_accepted_unconfirmed_inbox",
+                        "items":prepared["count"],"smtp_accepted":True,
+                        "inbox_delivery_verified":False}
             if owner_settings:
                 stories = news_for_owner_calendar_rollup(state, day, baseline_config)
             else:
