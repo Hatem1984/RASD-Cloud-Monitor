@@ -38,7 +38,7 @@ class ActiveNewsroomProfile(unittest.TestCase):
                            "almasryalyoum.com", "www.almasryalyoum.com",
                            "www.shorouknews.com", "www.alborsaanews.com",
                            "alborsaanews.com", "masrawy.com",
-                           "www.masrawy.com", "almessa.gomhuriaonline.com", "www.elbalad.news", "www.vetogate.com", "www.dailynewsegypt.com", "www.egyptindependent.com", "enterpriseam.com", "egyptianstreets.com", "www.skynewsarabia.com", "inp.edu.eg"}
+                           "www.masrawy.com", "almessa.gomhuriaonline.com", "www.elbalad.news", "www.vetogate.com", "dailynewsegypt.com", "www.dailynewsegypt.com", "www.egyptindependent.com", "enterpriseam.com", "egyptianstreets.com", "www.skynewsarabia.com", "inp.edu.eg"}
                 for domain in item["allowed_article_hosts"]))
 
     def test_original_shorouk_page_is_an_approved_newsroom_publisher(self):
