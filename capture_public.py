@@ -117,16 +117,26 @@ def suspicious_flat_lead_media(photo: Image.Image) -> bool:
     width, height = photo.size
     if width < 900 or height < 700:
         return False
-    lead = photo.convert("RGB").crop((
-        int(width * 0.05), int(height * 0.42),
-        int(width * 0.63), int(height * 0.78),
-    ))
-    lead.thumbnail((160, 100))
-    stats = ImageStat.Stat(lead)
-    means, deviations = stats.mean, stats.stddev
-    return (230 <= min(means) and max(means) <= 252
-            and max(means) - min(means) <= 2.8
-            and max(deviations) <= 2.4)
+    rgb = photo.convert("RGB")
+    # Both LEFT and RIGHT article-column layouts occur in real Arabic sites.
+    # Previously only the left crop was inspected: a Nov-2026 Shorouk
+    # screenshot had a readable H1 but a large perfectly flat article area
+    # on the RIGHT, which passed whole-frame variance and was misleading.
+    candidates = (
+        ((0.05, 0.42, 0.63, 0.78), 2.8),
+        ((0.46, 0.33, 0.94, 0.62), 10.0),
+    )
+    for (x0, y0, x1, y1), max_tint in candidates:
+        lead = rgb.crop((int(width*x0), int(height*y0),
+                         int(width*x1), int(height*y1)))
+        lead.thumbnail((160, 100))
+        stats = ImageStat.Stat(lead)
+        means, deviations = stats.mean, stats.stddev
+        if (222 <= min(means) and max(means) <= 253
+                and max(means) - min(means) <= max_tint
+                and max(deviations) <= 2.4):
+            return True
+    return False
 
 
 def image_quality(path: Path) -> dict:

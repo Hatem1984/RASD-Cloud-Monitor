@@ -41,6 +41,31 @@ APPROVED_FEED_URLS = frozenset({
 })
 
 
+# Only fixed, code-owned reason codes enter QA health receipts. Never expose
+# raw publisher error bodies, arbitrary exception text, or credentials.
+SAFE_SOURCE_FAILURE_CODES = frozenset({
+    "feed_redirect_blocked", "feed_http_or_redirect_error",
+    "rss_size_limit_exceeded", "feed_endpoint_not_reviewed",
+    "rss_channel_unverifiable", "rss_original_item_identity_unverifiable",
+    "rss_original_item_date_unverifiable", "rss_original_duplicate_conflict",
+    "not_rss", "DTD_or_entity_forbidden", "invalid_rss",
+})
+
+def safe_source_failure_code(error: Exception) -> str:
+    if isinstance(error, ET.ParseError):
+        return "rss_invalid_xml"
+    if isinstance(error, HTTPError):
+        return ("publisher_rate_limited" if error.code == 429 else
+                "publisher_access_refused" if error.code in (401,403) else
+                "publisher_unavailable" if 500 <= error.code <= 599 else
+                "publisher_http_hold")
+    if isinstance(error, (URLError, TimeoutError)):
+        return "source_transport_unavailable"
+    if type(error) in (ValueError, RuntimeError) and str(error) in SAFE_SOURCE_FAILURE_CODES:
+        return str(error)
+    return "unclassified_source_failure"
+
+
 class RejectRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
         raise RuntimeError("feed_redirect_blocked")
@@ -266,6 +291,7 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
                         for row in matches),
                 )
                 record.pop("error", None)
+                record.pop("failure_code", None)
                 for entry in matches:
                     if entry["id"] not in ids:
                         discovered.append(entry)
@@ -275,6 +301,7 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
                 # Report only bounded machine-readable diagnostics; never
                 # propagate server body, URL parameters or exception text.
                 record["error"] = type(exc).__name__
+                record["failure_code"] = safe_source_failure_code(exc)
                 if isinstance(exc, ET.ParseError) and isinstance(data, bytes):
                     # Numeric Expat error code/position and two-read digest
                     # equality are safe diagnostics. NEVER include raw XML,
