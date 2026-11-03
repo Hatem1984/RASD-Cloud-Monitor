@@ -53,10 +53,21 @@ def validate_journal(doc,day:date):
                        for v in record["candidate_ids"])
                 or len(record["candidate_ids"])!=len(set(record["candidate_ids"]))
                 or any(x not in doc["articles"] for x in record["candidate_ids"])
-                or not isinstance(record["config_version"],int)
+                or type(record["config_version"]) is not int
+                or record["config_version"] < 1
                 or not isinstance(record["observed_at_utc"],str)
+                or not record["sources"]
                 or any(v not in ("ok","failed") for v in record["sources"].values())):
             raise ValueError("journal_entry_hold")
+        try:
+            observed_at=datetime.fromisoformat(record["observed_at_utc"])
+            if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+                raise ValueError("journal_observed_at_naive")
+            local=observed_at.astimezone(CAIRO)
+            if local.date()!=day or slot_name(local)!=slot:
+                raise ValueError("journal_observation_wrong_slot")
+        except (ValueError,TypeError):
+            raise ValueError("journal_observation_clock_hold") from None
     return doc
 
 def add_observation(doc,*,now:datetime,source_health:list[dict],candidate_stories:list[dict],
