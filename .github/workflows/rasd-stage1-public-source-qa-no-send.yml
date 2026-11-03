@@ -7,6 +7,8 @@ on:
     paths:
       - '.github/workflows/rasd-stage1-public-source-qa-no-send.yml'
       - 'qa_stage1_cloud_feeds_no_send.py'
+      - 'qa_stage1_cloud_all_sources_no_send.py'
+      - 'sources_owner_daily_qa.json'
   workflow_dispatch:
 
 permissions:
@@ -16,7 +18,7 @@ jobs:
   publisher-health-qa:
     if: github.repository == 'Hatem1984/RASD-Cloud-Monitor' && github.ref == 'refs/heads/qa/owner-halfhour-cloud-review-20261103'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 7
     env:
       RASD_AUTOMATION_ENABLED: 'false'
       RASD_OWNER_SETTINGS_ENABLED: 'false'
@@ -32,4 +34,5 @@ jobs:
         run: |
           set -euo pipefail
           python qa_stage1_cloud_feeds_no_send.py
+          python qa_stage1_cloud_all_sources_no_send.py
           echo 'RASD_QA_SMTP_SENT=false'
