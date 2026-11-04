@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request,urlopen,build_opener,HTTPRedirectHandler
 from rasd_stage2_observer_qa import audit_records,load_config
+from rasd_stage2_provenance_qa import validate_scheduled_artifact
 REPO="Hatem1984/RASD-Pilot"
 BASE="https://api.github.com/repos/"+REPO
 MAX_ZIP=256000
@@ -74,6 +75,14 @@ def read_private_artifacts(token,target_day):
                 receipt=json.loads(archive.read("observation.json").decode("utf-8"))
             if str(receipt.get("github_run_id"))!=str(row["workflow_run"].get("id")):
                 raise RuntimeError("qa_artifact_run_identity_hold")
+            # Independently verify REAL scheduled-run provenance from GitHub's
+            # run metadata. A manual smoke or fabricated ZIP cannot cover a
+            # halfhour slot, regardless of JSON fields inside the receipt.
+            run=json.loads(_get("/actions/runs/"+str(row["workflow_run"]["id"]),token))
+            try:
+                validate_scheduled_artifact(receipt,row,run)
+            except (ValueError,TypeError,KeyError):
+                raise RuntimeError("qa_scheduled_run_provenance_hold") from None
             out.append(receipt)
             if len(out)>MAX_RECORDS:raise RuntimeError("qa_artifacts_over_limit")
         if len(records)<100:
