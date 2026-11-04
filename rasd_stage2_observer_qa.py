@@ -233,6 +233,12 @@ def main():
     print("RASD_STAGE2_SOURCE_OK="+str(sum(x["status"]=="ok" for x in receipt["sources"]))+"/13",flush=True)
     print("RASD_STAGE2_CANDIDATES="+str(len(receipt["candidates"])),flush=True)
     print("RASD_NO_SMTP=true",flush=True)
-    if receipt["status"]=="HOLD_SCAN_INCOMPLETE":raise SystemExit(3)
+    if receipt["status"]=="HOLD_SCAN_INCOMPLETE":
+        # The scheduled job must preserve a truthful HOLD artifact for the
+        # daily reviewer, not silently disappear as an unspecified failed job.
+        # A failed source does NOT count as an audited healthy slot.
+        print("::warning::RASD_QA_SOURCE_SCAN_INCOMPLETE_HOLD",flush=True)
+        if args.mode=="probe":
+            raise SystemExit(3)
 
 if __name__=="__main__":main()
