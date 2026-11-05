@@ -57,6 +57,24 @@ class HourlyExpansionQA(unittest.TestCase):
         b=story("https://two.eg/report",headline=title,kind="report")
         c=story("https://three.eg/analysis",headline=title,kind="analysis")
         self.assertEqual(len(deduplicate_publisher_stories([a,b,c])),3)
+    def test_similar_cross_publisher_titles_are_flagged_not_silently_deleted(self):
+        from rasd_hourly_expansion_qa import require_crosspublisher_review_closed
+        a=story("https://one.eg/news/a",
+                headline="وزارة التخطيط تبحث مشروعات تنمية المحافظات وتطوير البنية الأساسية")
+        b=story("https://two.eg/news/b",
+                headline="وزارة التخطيط تبحث مشروعات تنمية المحافظات وتطوير البنية الأساسية الجديدة")
+        clusters=deduplicate_publisher_stories([a,b])
+        self.assertEqual(len(clusters),2)
+        self.assertEqual(len(clusters[0]["possible_duplicate_story_keys"]),1)
+        with self.assertRaisesRegex(ValueError,"possible_crosspublisher_duplicate_requires_review"):
+            require_crosspublisher_review_closed(clusters)
+    def test_unrelated_titles_do_not_flag_potential_duplicates(self):
+        from rasd_hourly_expansion_qa import require_crosspublisher_review_closed
+        a=story("https://one.eg/a")
+        b=story("https://two.eg/b",
+                headline="وزارة المالية تعلن تطورات إيرادات الضرائب على الدخل")
+        self.assertTrue(require_crosspublisher_review_closed(
+            deduplicate_publisher_stories([a,b])))
     def test_unapproved_content_type_rejected(self):
         with self.assertRaisesRegex(ValueError,"content_kind"):
             deduplicate_publisher_stories([story("https://one.eg/a",kind="social")])

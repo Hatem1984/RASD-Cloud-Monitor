@@ -107,10 +107,34 @@ def deduplicate_publisher_stories(stories):
              "content_kind":s.get("content_kind","news")})
         if cluster["originals"][-1]["content_kind"] not in ALLOWED_KINDS:
             raise ValueError("unapproved_article_content_kind")
-    # Duplicates are retained as source references, but not as repeated
-    # top-level report stories. Potentially similar but nonidentical titles
-    # are never auto-merged because they might contain new factual claims.
-    return list(clusters.values())
+    # Exact duplicate publisher editions are grouped while retaining every
+    # original source. Similar but nonidentical titles are never removed:
+    # mark them HOLD for human comparison, especially ahead of social inputs.
+    output=list(clusters.values())
+    for cluster in output:
+        cluster["story_key"]=hashlib.sha256((
+            cluster["day_cairo"]+"|"+cluster["content_kind"]+"|"+
+            _title_key(cluster["headline"])).encode("utf-8")).hexdigest()[:20]
+        cluster["possible_duplicate_story_keys"]=[]
+    for i,left in enumerate(output):
+        lt=set(_title_key(left["headline"]).split())
+        for right in output[i+1:]:
+            if (left["day_cairo"]!=right["day_cairo"] or
+                    left["content_kind"]!=right["content_kind"]):
+                continue
+            rt=set(_title_key(right["headline"]).split())
+            if (len(lt)<5 or len(rt)<5 or
+                    len(lt & rt)<5 or len(lt & rt)/len(lt | rt)<0.76):
+                continue
+            left["possible_duplicate_story_keys"].append(right["story_key"])
+            right["possible_duplicate_story_keys"].append(left["story_key"])
+    return output
+
+def require_crosspublisher_review_closed(clusters):
+    """Fail closed when near-duplicate stories still require editorial review."""
+    if any(x.get("possible_duplicate_story_keys") for x in clusters):
+        raise ValueError("possible_crosspublisher_duplicate_requires_review")
+    return True
 
 def proposed_catalog_status(validated_feeds, researched_sources, target=100):
     if target!=MAX_REQUESTED_SOURCES:
