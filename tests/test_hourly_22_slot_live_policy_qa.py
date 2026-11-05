@@ -45,11 +45,18 @@ class HourlyScheduleAcceptance(unittest.TestCase):
     def test_current_owner_manifest_can_migrate_to_hourly_without_losing_sources(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/"m.json";b=Path(d)/"baseline.json"
-            original=json.loads((ROOT/"_PRIVATE_QA_MANIFEST_V28_PENDING.json").read_text("utf-8"))
-            original["settings"]["scan_minutes"]=60
-            original["active_version"]=29
+            # Synthetic settings only. Never require a private QA manifest
+            # file or owner data that does not exist on GitHub CI runners.
+            settings={"sources":[{"id":f["id"],"name":f["name"],
+                         "url":f["url"],"enabled":True} for f in B["feeds"]],
+                     "topics":[{"enabled":True,"match":"any",
+                                "aliases":["وزارة التخطيط"]} for _ in range(10)],
+                     "start":"00:00","end":"22:00",
+                     "scan_minutes":60,"send_at":"22:00"}
             from rasd_stage2_observer_qa import settings_digest
-            original["sha256"]=settings_digest(original["settings"])
+            original={"schema_version":1,"scope":"QA_PREVIEW_NO_SEND",
+                      "active_version":29,"settings":settings,
+                      "sha256":settings_digest(settings)}
             p.write_text(json.dumps(original,ensure_ascii=False),encoding="utf-8")
             b.write_text(json.dumps(B,ensure_ascii=False),encoding="utf-8")
             cfg,manifest=load_config(p,b)
