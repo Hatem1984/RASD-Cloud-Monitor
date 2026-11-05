@@ -51,6 +51,12 @@ class HourlyExpansionQA(unittest.TestCase):
         groups=deduplicate_publisher_stories([a,b,c])
         self.assertEqual(len(groups),3)
         self.assertTrue(all(r["must_capture_original_each"] for r in groups))
+    def test_report_and_analysis_are_not_hidden_by_same_title_news(self):
+        title="وزارة التخطيط تراجع أثر برنامج التنمية في المحافظات"
+        a=story("https://one.eg/news",headline=title,kind="news")
+        b=story("https://two.eg/report",headline=title,kind="report")
+        c=story("https://three.eg/analysis",headline=title,kind="analysis")
+        self.assertEqual(len(deduplicate_publisher_stories([a,b,c])),3)
     def test_unapproved_content_type_rejected(self):
         with self.assertRaisesRegex(ValueError,"content_kind"):
             deduplicate_publisher_stories([story("https://one.eg/a",kind="social")])

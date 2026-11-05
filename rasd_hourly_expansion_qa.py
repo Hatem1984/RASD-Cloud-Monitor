@@ -94,8 +94,13 @@ def deduplicate_publisher_stories(stories):
                 raise ValueError("duplicate_original_conflicting_identity")
             continue
         seen_original[identity]=(day,title)
-        key=(day,title)
+        kind=s.get("content_kind","news")
+        if kind not in ALLOWED_KINDS:raise ValueError("unapproved_article_content_kind")
+        # A report or analysis may contain distinct evidence despite the
+        # same headline as a breaking news item. Never merge across genres.
+        key=(day,title,kind)
         cluster=clusters.setdefault(key,{"day_cairo":day,"headline":s["headline"],
+              "content_kind":kind,
               "originals":[],"must_capture_original_each":True})
         cluster["originals"].append({"url":url,
              "publisher_host":publisher,"source":s.get("source"),
