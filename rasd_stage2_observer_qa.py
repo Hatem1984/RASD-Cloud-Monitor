@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 CAIRO=ZoneInfo("Africa/Cairo")
 CODE_SHA="4d0217a2b1c0b15e3949c3e075fae31b9cb3e896"
 EXPECTED_CRON="7,37 0-21 * * *"
+HOURLY_CRON="7 0-21 * * *"
 REPO="Hatem1984/RASD-Pilot"
 MAX_CANDIDATES=200
 
@@ -52,22 +53,24 @@ def load_config(manifest_path,baseline_path):
             not all(isinstance(x,str) and len(x)>1 for x in topic["aliases"])):
             raise ValueError("topic_contract_invalid")
     if (s.get("start")!="00:00" or s.get("end")!="22:00"
-        or s.get("scan_minutes")!=30 or s.get("send_at")!="22:00"):
+        or s.get("scan_minutes") not in (30,60) or s.get("send_at")!="22:00"):
         raise ValueError("owner_time_window_changed")
     kw=list(dict.fromkeys(alias for t in topics if t["enabled"]
                           for alias in t["aliases"]))
     if not kw:raise ValueError("no_approved_topics_enabled")
-    return {**b,"keywords":kw},m
+    return {**b,"keywords":kw,"scan_minutes":s["scan_minutes"]},m
 
-def slot_for(now):
+def slot_for(now,scan_minutes=30):
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("timezone_aware_clock_required")
+    if scan_minutes not in (30,60):raise ValueError("owner_scan_interval_unapproved")
     local=now.astimezone(CAIRO)
     if local.hour>=22:return None
-    return f"{local.hour:02d}:{(local.minute//30)*30:02d}"
+    return f"{local.hour:02d}:{(local.minute//scan_minutes)*scan_minutes:02d}"
 
-def expected_slots():
-    return [f"{h:02d}:{m:02d}" for h in range(22) for m in (0,30)]
+def expected_slots(scan_minutes=30):
+    if scan_minutes not in (30,60):raise ValueError("owner_scan_interval_unapproved")
+    return [f"{h:02d}:{m:02d}" for h in range(22) for m in range(0,60,scan_minutes)]
 
 def match_topics(item,setting,term_match):
     value=item["headline"]+" "+item.get("publisher_excerpt","")
@@ -94,6 +97,7 @@ def candidate(item,setting,now,monitor):
     return {k:item.get(k,"") for k in
             ("id","source","headline","url","publisher_excerpt")} | {
            "published_at_cairo":local.strftime("%Y-%m-%d %H:%M %Z"),
+           "published_at_utc":stamped.astimezone(timezone.utc).isoformat(timespec="seconds"),
            "published_display_cairo":local.strftime("%Y-%m-%d %H:%M")}
 
 def observe(*,mode,now,config,manifest,monitor,inspector=None,env=None):
@@ -103,9 +107,11 @@ def observe(*,mode,now,config,manifest,monitor,inspector=None,env=None):
         if (env.get("GITHUB_REPOSITORY")!=REPO or
             env.get("GITHUB_REF")!="refs/heads/main" or
             env.get("GITHUB_EVENT_NAME")!="schedule" or
-            env.get("GITHUB_EVENT_SCHEDULE")!=EXPECTED_CRON):
+            env.get("GITHUB_EVENT_SCHEDULE")!=(
+                HOURLY_CRON if config.get("scan_minutes",30)==60 else EXPECTED_CRON)):
             raise ValueError("untrusted_schedule_event")
-        if slot_for(now) is None:raise ValueError("outside_owner_window")
+        if slot_for(now,config.get("scan_minutes",30)) is None:
+            raise ValueError("outside_owner_window")
     sources=[f["id"] for f in config["feeds"]]
     if len(sources)!=13 or len(set(sources))!=13:
         raise ValueError("source_inventory_invalid")
@@ -113,7 +119,8 @@ def observe(*,mode,now,config,manifest,monitor,inspector=None,env=None):
         "kind":"QA_REAL_SLOT_OBSERVATION" if mode=="scheduled"
                 else "QA_SMOKE_NO_COVERAGE",
         "day_cairo":now.astimezone(CAIRO).date().isoformat(),
-        "slot_cairo":slot_for(now),
+        "slot_cairo":slot_for(now,config.get("scan_minutes",30)),
+        "scan_minutes":config.get("scan_minutes",30),
         "observed_at_utc":now.astimezone(timezone.utc).isoformat(timespec="seconds"),
         "finished_at_utc":None,
         "config_version":manifest["active_version"],
@@ -172,14 +179,14 @@ def observe(*,mode,now,config,manifest,monitor,inspector=None,env=None):
     finished=datetime.now(timezone.utc)
     receipt["finished_at_utc"]=finished.isoformat(timespec="seconds")
     if mode=="scheduled" and (
-        slot_for(finished)!=slot_for(now) or
-        now.astimezone(CAIRO).minute%30>24):
+        slot_for(finished,config.get("scan_minutes",30))!=slot_for(now,config.get("scan_minutes",30)) or
+        now.astimezone(CAIRO).minute%config.get("scan_minutes",30)>24):
         receipt["status"]="HOLD_MISSED_OR_CROSSED_WINDOW"
     return receipt
 
-def audit_records(records,day,source_ids,config_version,expected_code_sha=CODE_SHA,expected_config_sha256=None):
+def audit_records(records,day,source_ids,config_version,expected_code_sha=CODE_SHA,expected_config_sha256=None,scan_minutes=30):
     if isinstance(day,str):day=date.fromisoformat(day)
-    slots={x:[] for x in expected_slots()}
+    slots={x:[] for x in expected_slots(scan_minutes)}
     rejected=0
     for r in records:
         if not isinstance(r,dict) or r.get("kind")!="QA_REAL_SLOT_OBSERVATION":
@@ -187,13 +194,14 @@ def audit_records(records,day,source_ids,config_version,expected_code_sha=CODE_S
         try:
             started=datetime.fromisoformat(r["observed_at_utc"])
             finished=datetime.fromisoformat(r["finished_at_utc"])
-            slot=slot_for(started)
+            slot=slot_for(started,scan_minutes)
             if (r.get("schema_version")!=1 or r["day_cairo"]!=day.isoformat()
                 or started.astimezone(CAIRO).date()!=day
                 or finished.astimezone(CAIRO).date()!=day
                 or slot is None or r["slot_cairo"]!=slot
-                or slot_for(finished)!=slot
-                or started.astimezone(CAIRO).minute%30>24
+                or slot_for(finished,scan_minutes)!=slot
+                or started.astimezone(CAIRO).minute%scan_minutes>24
+                or r.get("scan_minutes",30)!=scan_minutes
                 or r.get("config_version")!=config_version
                 or (expected_config_sha256 is not None and
                     r.get("config_sha256")!=expected_config_sha256)
@@ -227,11 +235,12 @@ def audit_records(records,day,source_ids,config_version,expected_code_sha=CODE_S
     healthy=len(slots)-len(missing)-len(failed)
     candidate_ids=sorted({x["id"] for values in slots.values()
                          for r in values for x in r["candidates"]})
-    complete=healthy==44 and rejected==0 and not missing and not failed
+    complete=healthy==len(slots) and rejected==0 and not missing and not failed
     return {"status":"PASS_44_REAL_RSS_WINDOWS" if complete
                 else "HOLD_GAPS_OR_FAILED_SOURCES",
        "day_cairo":day.isoformat(),"complete":complete,
-       "expected_slots":44,"observed_slots":44-len(missing),
+       "expected_slots":len(slots),"observed_slots":len(slots)-len(missing),
+       "scan_minutes":scan_minutes,
        "healthy_slots":healthy,"missing_slots":missing,"failed_slots":failed,
        "rejected_records":rejected,
        "duplicate_attempts":sum(max(0,len(x)-1) for x in slots.values()),

@@ -58,7 +58,9 @@ def read_private_artifacts(token,target_day):
         for row in records:
             if (not isinstance(row.get("created_at"),str) or
                 row["created_at"][:10] not in
-                (target_day.isoformat(),(target_day-__import__("datetime").timedelta(days=1)).isoformat())):
+                ((target_day-__import__("datetime").timedelta(days=1)).isoformat(),
+                 target_day.isoformat(),
+                 (target_day+__import__("datetime").timedelta(days=1)).isoformat())):
                 continue
             if (row.get("name")!="rasd-stage2-observation"
                 or row.get("expired") is not False
@@ -127,7 +129,8 @@ def main():
     report=audit_records(selected,day,
        [f["id"] for f in config["feeds"]],manifest["active_version"],
        expected_code_sha=os.environ.get("RASD_QA_PUBLIC_COMMIT","4d0217a2b1c0b15e3949c3e075fae31b9cb3e896"),
-       expected_config_sha256=manifest["sha256"])
+       expected_config_sha256=manifest["sha256"],
+       scan_minutes=config["scan_minutes"])
     report["receipt_count"]=len(selected)
     report["rejected_provenance_artifacts"]=len(provenance_rejections)
     if provenance_rejections:

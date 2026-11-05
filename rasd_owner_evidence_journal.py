@@ -17,25 +17,27 @@ from delivery_bridge import NoGitHubRedirect,PRIVATE_REPO,PRIVATE_BRANCH
 
 from daily_report import CAIRO
 
-def slot_name(now:datetime):
+def slot_name(now:datetime,scan_minutes=30):
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("owner_journal_timezone_required")
     local=now.astimezone(CAIRO)
-    return f"{local.hour:02}:{(local.minute//30)*30:02}"
+    if scan_minutes not in (30,60):raise ValueError("journal_scan_interval_unapproved")
+    return f"{local.hour:02}:{(local.minute//scan_minutes)*scan_minutes:02}"
 
-def complete_slot_names():
-    return [f"{hour:02}:{minute:02}" for hour in range(22) for minute in (0,30)]
+def complete_slot_names(scan_minutes=30):
+    if scan_minutes not in (30,60):raise ValueError("journal_scan_interval_unapproved")
+    return [f"{hour:02}:{minute:02}" for hour in range(22) for minute in range(0,60,scan_minutes)]
 
 def new_day(day:date):
     return {"schema_version":1,"day_cairo":day.isoformat(),"slots":{},"articles":{}}
 
-def validate_journal(doc,day:date):
+def validate_journal(doc,day:date,scan_minutes=30):
     if (not isinstance(doc,dict) or set(doc)!={"schema_version","day_cairo","slots","articles"}
             or doc["schema_version"]!=1 or doc["day_cairo"]!=day.isoformat()
             or not isinstance(doc["slots"],dict) or len(doc["slots"])>44
             or not isinstance(doc["articles"],dict) or len(doc["articles"])>200):
         raise ValueError("journal_shape_hold")
-    valid_slots=set(complete_slot_names())
+    valid_slots=set(complete_slot_names(scan_minutes))
     from monitor import article_id
     for key,article in doc["articles"].items():
         if (not isinstance(key,str) or not re.fullmatch(r"[a-f0-9]{24}",key)
@@ -64,19 +66,19 @@ def validate_journal(doc,day:date):
             if observed_at.tzinfo is None or observed_at.utcoffset() is None:
                 raise ValueError("journal_observed_at_naive")
             local=observed_at.astimezone(CAIRO)
-            if local.date()!=day or slot_name(local)!=slot:
+            if local.date()!=day or slot_name(local,scan_minutes)!=slot:
                 raise ValueError("journal_observation_wrong_slot")
         except (ValueError,TypeError):
             raise ValueError("journal_observation_clock_hold") from None
     return doc
 
 def add_observation(doc,*,now:datetime,source_health:list[dict],candidate_stories:list[dict],
-                    expected_source_ids:list[str],config_version:int):
+                    expected_source_ids:list[str],config_version:int,scan_minutes:int=30):
     local=now.astimezone(CAIRO)
     day=local.date()
     if not time(0,0)<=local.time()<time(22,0):
         raise ValueError("journal_outside_owner_scan_period")
-    out=json.loads(json.dumps(validate_journal(doc,day)))
+    out=json.loads(json.dumps(validate_journal(doc,day,scan_minutes)))
     if ([row.get("feed_id") for row in source_health]!=expected_source_ids
             or len(set(expected_source_ids))!=len(expected_source_ids)
             or not expected_source_ids):
@@ -97,7 +99,7 @@ def add_observation(doc,*,now:datetime,source_health:list[dict],candidate_storie
             raise ValueError("journal_changed_story_identity_hold")
         out["articles"][story["id"]]=selected
     candidate_ids=[x["id"] for x in candidate_stories]
-    slot=slot_name(now)
+    slot=slot_name(now,scan_minutes)
     observed=now.astimezone(timezone.utc).isoformat(timespec="seconds")
     if slot in out["slots"]:
         old=out["slots"][slot]
@@ -110,16 +112,16 @@ def add_observation(doc,*,now:datetime,source_health:list[dict],candidate_storie
         candidate_ids=list(sorted(set(candidate_ids)))
     out["slots"][slot]={"sources":statuses,"candidate_ids":candidate_ids,
                          "observed_at_utc":observed,"config_version":config_version}
-    validate_journal(out,day)
+    validate_journal(out,day,scan_minutes)
     return out
 
-def audit_day(doc,day:date,expected_source_ids:list[str]):
+def audit_day(doc,day:date,expected_source_ids:list[str],scan_minutes=30):
     try:
-        validate_journal(doc,day)
+        validate_journal(doc,day,scan_minutes)
     except (ValueError,TypeError):
         return {"status":"HOLD_JOURNAL_INVALID","complete":False}
     slots=set(doc["slots"])
-    missing=sorted(set(complete_slot_names())-slots)
+    missing=sorted(set(complete_slot_names(scan_minutes))-slots)
     failure=[slot for slot,x in doc["slots"].items()
              if set(x["sources"])!=set(expected_source_ids)
              or any(x["sources"].get(k)!="ok" for k in expected_source_ids)]
@@ -133,7 +135,7 @@ def audit_day(doc,day:date,expected_source_ids:list[str]):
             "missing_slots":missing,"failed_slots":sorted(failure),
             "observed_candidate_ids":observed,
             "articles":[doc["articles"][k] for k in observed],
-            "expected_slots":len(complete_slot_names())}
+            "expected_slots":len(complete_slot_names(scan_minutes))}
 
 class PrivateDayJournal:
     """Single-file bounded GitHub Contents CAS, no secrets exposed in errors."""

@@ -25,9 +25,10 @@ def _clock(value):
     return instant.astimezone(timezone.utc)
 
 
-def _slot(instant):
+def _slot(instant,scan_minutes=30):
+    if scan_minutes not in (30,60):raise ValueError("unapproved_provenance_interval")
     local = instant.astimezone(CAIRO)
-    return local.date().isoformat(), f"{local.hour:02d}:{(local.minute // 30) * 30:02d}"
+    return local.date().isoformat(), f"{local.hour:02d}:{(local.minute // scan_minutes) * scan_minutes:02d}"
 
 
 def validate_scheduled_artifact(receipt: dict, artifact: dict, run: dict) -> bool:
@@ -77,7 +78,8 @@ def validate_scheduled_artifact(receipt: dict, artifact: dict, run: dict) -> boo
         raise ValueError("qa_provenance_out_of_order")
     # A workflow delayed past the actual scheduled slot cannot replace a
     # missing preceding slot, even if RSS happened to be fetched later.
-    if (_slot(created) != _slot(started)
-            or _slot(started) != (receipt.get("day_cairo"), receipt.get("slot_cairo"))):
+    scan_minutes=receipt.get("scan_minutes",30)
+    if (_slot(created,scan_minutes) != _slot(started,scan_minutes)
+            or _slot(started,scan_minutes) != (receipt.get("day_cairo"), receipt.get("slot_cairo"))):
         raise ValueError("qa_provenance_late_slot")
     return True

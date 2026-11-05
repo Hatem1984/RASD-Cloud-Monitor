@@ -67,6 +67,22 @@ class PrivateArtifactResilience(unittest.TestCase):
             valid,rejected=audit.read_private_artifacts("a"*20,DAY)
         self.assertEqual(valid,[])
         self.assertEqual(rejected,[511])
+    def test_after_midnight_utc_artifact_still_eligible_for_previous_cairo_day(self):
+        late=record(15)
+        late["created_at"]="2026-11-06T00:20:00Z"
+        def response(path,token):
+            if path.startswith("/actions/artifacts?"):
+                return json.dumps({"artifacts":[late]}).encode()
+            if path.endswith("/zip"):
+                return zip_receipt(15)
+            return b'{"id":15}'
+        with patch.object(audit,"_get",side_effect=response),patch.object(audit,
+            "validate_scheduled_artifact",return_value=True):
+            # Fake API run data is not correct; only the date filtering
+            # behavior is under test, and separate provenance tests cover it.
+            valid,rejected=audit.read_private_artifacts("a"*20,DAY)
+        self.assertEqual(rejected,[])
+        self.assertEqual(len(valid),1)
     def test_no_artifacts_keeps_no_evidence(self):
         with patch.object(audit,"_get",return_value=b'{"artifacts":[]}'):
             valid,rejected=audit.read_private_artifacts("a"*20,DAY)
