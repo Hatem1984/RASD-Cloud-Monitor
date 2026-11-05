@@ -51,6 +51,23 @@ SAFE_SOURCE_FAILURE_CODES = frozenset({
     "not_rss", "DTD_or_entity_forbidden", "invalid_rss",
 })
 
+# A fixed publisher-owned diagnostic code is safe to retain. It is NEVER an
+# alternative publication timestamp; missing/contradictory publisher metadata
+# still makes the source HOLD and prevents a certified complete day.
+MASRAWY_DATE_REASON_CODES = frozenset({
+    "masrawy_rss_title_invalid", "masrawy_rss_timestamp_invalid",
+    "masrawy_rss_timestamp_unrecognized",
+    "masrawy_original_url_not_approved",
+    "masrawy_original_page_redirect_forbidden",
+    "masrawy_original_page_unavailable",
+    "masrawy_original_page_size_hold",
+    "masrawy_original_page_request_hold",
+    "masrawy_original_html_invalid",
+    "masrawy_publisher_publication_date_unverified",
+    "masrawy_original_date_unknown_hold",
+})
+
+
 def safe_source_failure_code(error: Exception) -> str:
     if isinstance(error, ET.ParseError):
         return "rss_invalid_xml"
@@ -152,6 +169,42 @@ def _publisher_timestamp(node) -> tuple[datetime, str] | None:
     return timestamp, format_datetime(timestamp)
 
 
+_ILLEGAL_XML_AMP = re.compile(
+    rb"&(?!amp;|lt;|gt;|quot;|apos;|#[0-9]+;|#x[0-9a-fA-F]+;)"
+)
+_XML_LITERAL_BLOCK = re.compile(rb"<!\[CDATA\[.*?\]\]>|<!--.*?-->", re.S)
+
+
+def _recover_native_rss_amp_escapes(data: bytes) -> tuple[bytes, int] | None:
+    """Minimal XML *encoding* repair, never news-text repair or article synthesis.
+
+    Only bare ampersands outside CDATA and comments are escaped so a strict
+    XML parser reads the SAME literal '&' in the publisher's text or links.
+    Reject unbalanced literal blocks, DTD/ENTITY, zero or >4 substitutions.
+    Original bytes are never overwritten, archived or silently replaced.
+    """
+    if (not isinstance(data, bytes)
+            or b"<!DOCTYPE" in data.upper()
+            or b"<!ENTITY" in data.upper()
+            or data.count(b"<![CDATA[") != data.count(b"]]>")
+            or data.count(b"<!--") != data.count(b"-->")):
+        return None
+    pieces = []
+    start = 0
+    count = 0
+    for match in _XML_LITERAL_BLOCK.finditer(data):
+        before, n = _ILLEGAL_XML_AMP.subn(b"&amp;", data[start:match.start()])
+        pieces.extend((before, match.group()))
+        count += n
+        start = match.end()
+    after, n = _ILLEGAL_XML_AMP.subn(b"&amp;", data[start:])
+    pieces.append(after)
+    count += n
+    if not 1 <= count <= 4:
+        return None
+    return b"".join(pieces), count
+
+
 def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hours=72, *, require_complete_items=False) -> tuple[int, list[dict]]:
     """Match saved Ministry phrases in native publisher title OR excerpt.
 
@@ -164,6 +217,7 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
     if root.tag.rsplit("}", 1)[-1] != "rss":
         raise ValueError("not_rss")
     verified_dates = {}
+    masrawy_failure_codes = {}
     def publisher_timestamp(node):
         # Existing RSS sources still MUST have timezone-aware publisher
         # timestamps. Masrawy alone omits zone in RSS; corroborate EVERY
@@ -179,7 +233,11 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
                     (node.findtext("link") or "").strip(),
                     (node.findtext("title") or "").strip(),
                     (node.findtext("pubDate") or "").strip())
-            except (ValueError, RuntimeError):
+            except (ValueError, RuntimeError) as error:
+                reason = str(error)
+                masrawy_failure_codes[node] = (
+                    reason if reason in MASRAWY_DATE_REASON_CODES
+                    else "masrawy_original_date_unknown_hold")
                 dated = None
         verified_dates[node] = dated
         return dated
@@ -198,7 +256,11 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
                 raise ValueError("rss_original_item_identity_unverifiable")
             dated = publisher_timestamp(item)
             if dated is None:
-                raise ValueError("rss_original_item_date_unverifiable")
+                failure = ValueError("rss_original_item_date_unverifiable")
+                if feed.get("id") == "masrawy":
+                    failure.publisher_reason = masrawy_failure_codes.get(
+                        item, "masrawy_original_date_unknown_hold")
+                raise failure
             # Conflicting duplicate URLs cannot be silently resolved by
             # relevance filtering or first-wins deduplication.
             key = canonical_url(link)
@@ -280,9 +342,29 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
             data = None
             try:
                 data = fetch(feed["url"], config["max_feed_bytes"])
-                count, matches = parse_rss(data, feed, config["keywords"], checked,
-                                           config["recent_hours"],
-                                           require_complete_items=require_complete_items)
+                recovered_count = 0
+                try:
+                    count, matches = parse_rss(
+                        data, feed, config["keywords"], checked,
+                        config["recent_hours"],
+                        require_complete_items=require_complete_items)
+                except ET.ParseError as original_error:
+                    # Egyptian newspaper RSS has at times contained 1-2 bare
+                    # XML ampersands. Recover literal '&' encoding ONLY for
+                    # this original publisher and only in strict full-item
+                    # verification. No forgiving parser or skipped articles.
+                    if (feed.get("id") != "almasryalyoum"
+                            or not require_complete_items
+                            or original_error.code != 4):
+                        raise
+                    recovery = _recover_native_rss_amp_escapes(data)
+                    if (recovery is None or
+                            len(recovery[0]) > config["max_feed_bytes"]):
+                        raise
+                    count, matches = parse_rss(
+                        recovery[0], feed, config["keywords"], checked,
+                        config["recent_hours"], require_complete_items=True)
+                    recovered_count = recovery[1]
                 record.update(
                     status="ok", verified_links=count,
                     headline_matches=len(matches),
@@ -292,6 +374,17 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
                 )
                 record.pop("error", None)
                 record.pop("failure_code", None)
+                record.pop("publisher_date_reason", None)
+                for stale in ("xml_error_code", "xml_error_line",
+                              "xml_error_column", "malformed_rss_length",
+                              "xml_input_looked_like_html",
+                              "xml_input_looked_like_rss",
+                              "identical_bad_xml_on_retry", "http_status"):
+                    record.pop(stale, None)
+                if recovered_count:
+                    record["rss_xml_ampersand_recovery_count"] = recovered_count
+                else:
+                    record.pop("rss_xml_ampersand_recovery_count", None)
                 for entry in matches:
                     if entry["id"] not in ids:
                         discovered.append(entry)
@@ -302,6 +395,9 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
                 # propagate server body, URL parameters or exception text.
                 record["error"] = type(exc).__name__
                 record["failure_code"] = safe_source_failure_code(exc)
+                reason = getattr(exc, "publisher_reason", None)
+                if feed["id"] == "masrawy" and reason in MASRAWY_DATE_REASON_CODES:
+                    record["publisher_date_reason"] = reason
                 if isinstance(exc, ET.ParseError) and isinstance(data, bytes):
                     # Numeric Expat error code/position and two-read digest
                     # equality are safe diagnostics. NEVER include raw XML,
