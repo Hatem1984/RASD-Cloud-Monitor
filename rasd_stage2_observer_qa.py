@@ -130,9 +130,34 @@ def observe(*,mode,now,config,manifest,monitor,inspector=None,env=None):
         if ([x["feed_id"] for x in rows]!=sources or
             scan.get("matched_article_pool_truncated")):
             raise ValueError("source_list_or_candidate_pool_incomplete")
-        receipt["sources"]=[{"id":r["feed_id"],"status":r["status"],
-            "verified_links":r.get("verified_links",0),
-            "failure_code":r.get("failure_code")} for r in rows]
+        receipt["sources"]=[]
+        # Preserve only allowlisted numerical/boolean diagnostics: the current
+        # XML failures must be explainable without exposing raw publisher
+        # content, tokens, response bodies or original article text.
+        safe_diagnostics=(
+            "xml_error_code", "xml_error_line", "xml_error_column",
+            "malformed_rss_length", "xml_input_looked_like_html",
+            "xml_input_looked_like_rss", "identical_bad_xml_on_retry",
+            "rss_parse_retry_delayed", "http_status",
+        )
+        for source in rows:
+            row={"id":source["feed_id"],"status":source["status"],
+                 "verified_links":source.get("verified_links",0),
+                 "failure_code":source.get("failure_code")}
+            if (source["feed_id"]=="almasryalyoum" and
+                    type(source.get("rss_xml_ampersand_recovery_count")) is int and
+                    1 <= source["rss_xml_ampersand_recovery_count"] <= 4):
+                row["rss_xml_ampersand_recovery_count"] = (
+                    source["rss_xml_ampersand_recovery_count"])
+            if source["status"]!="ok":
+                for key in safe_diagnostics:
+                    if type(source.get(key)) in (int,bool):
+                        row[key]=source[key]
+                if (source["feed_id"]=="masrawy" and
+                        source.get("publisher_date_reason") in
+                        monitor.MASRAWY_DATE_REASON_CODES):
+                    row["publisher_date_reason"]=source["publisher_date_reason"]
+            receipt["sources"].append(row)
         match=[candidate(x,manifest["settings"],now,monitor)
                for x in scan["matched_public_articles"]]
         items=[x for x in match if x is not None]
@@ -233,12 +258,12 @@ def main():
     print("RASD_STAGE2_SOURCE_OK="+str(sum(x["status"]=="ok" for x in receipt["sources"]))+"/13",flush=True)
     print("RASD_STAGE2_CANDIDATES="+str(len(receipt["candidates"])),flush=True)
     print("RASD_NO_SMTP=true",flush=True)
-    if receipt["status"]=="HOLD_SCAN_INCOMPLETE":
-        # The scheduled job must preserve a truthful HOLD artifact for the
-        # daily reviewer, not silently disappear as an unspecified failed job.
-        # A failed source does NOT count as an audited healthy slot.
-        print("::warning::RASD_QA_SOURCE_SCAN_INCOMPLETE_HOLD",flush=True)
-        if args.mode=="probe":
-            raise SystemExit(3)
+    if receipt["status"]!="OBSERVED_RSS_ALL_SOURCES":
+        # The receipt is written BEFORE exiting. The private workflow's
+        # upload-artifact step runs with if:always(), so GitHub itself becomes
+        # RED when a source fails, while the exact HOLD evidence remains
+        # available to the daily independent auditor.
+        print("::error::RASD_QA_COVERAGE_HOLD_"+receipt["status"],flush=True)
+        raise SystemExit(4 if args.mode=="scheduled" else 3)
 
 if __name__=="__main__":main()

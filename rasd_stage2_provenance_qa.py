@@ -56,10 +56,18 @@ def validate_scheduled_artifact(receipt: dict, artifact: dict, run: dict) -> boo
             or run.get("head_branch") != "main"
             or run.get("run_attempt") != 1
             or run.get("status") != "completed"
-            or run.get("conclusion") != "success"
+            or run.get("conclusion") not in ("success", "failure")
             or not isinstance(owner, dict)
             or owner.get("full_name") != PRIVATE_REPO):
         raise ValueError("qa_provenance_run_not_approved_schedule")
+    # Source failures must appear as failed Actions runs, while retaining
+    # their original HOLD evidence for the daily audit. Historical false-green
+    # runs with a HOLD receipt remain HOLD, never become healthy coverage.
+    if (run["conclusion"] == "failure"
+            and receipt.get("status") not in (
+                "HOLD_SOURCE_FAILURE", "HOLD_SCAN_INCOMPLETE",
+                "HOLD_MISSED_OR_CROSSED_WINDOW")):
+        raise ValueError("qa_provenance_failed_run_without_hold_receipt")
     created = _clock(run.get("created_at"))
     started = _clock(receipt.get("observed_at_utc"))
     finished = _clock(receipt.get("finished_at_utc"))
