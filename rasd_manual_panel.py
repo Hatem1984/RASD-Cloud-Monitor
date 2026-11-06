@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -44,11 +45,15 @@ def main() -> None:
         status.set("جارٍ تشغيل البحث اليدوي...")
         def work() -> None:
             try:
+                child_env = os.environ.copy()
+                if mode == "web":
+                    # The web process never needs the Facebook Page credential.
+                    child_env.pop("RASD_FB_PAGE_TOKEN", None)
                 result = subprocess.run(
                     [sys.executable, str(ROOT / ACTIONS[mode][0]),
                      *ACTIONS[mode][1:]],
                     cwd=ROOT, capture_output=True, text=True, timeout=180,
-                    check=False)
+                    env=child_env, check=False)
                 payload = json.loads(result.stdout.strip().splitlines()[-1])
                 if result.returncode == 0:
                     message = (payload.get("status", "تم")
