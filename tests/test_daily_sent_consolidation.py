@@ -69,7 +69,7 @@ class MergeActualDeliveredWord(unittest.TestCase):
             "publisher_excerpt": "منشور من الناشر الأصلي رقم " + str(index),
         }
 
-    def sample_doc(self, output, group):
+    def sample_doc(self, output, group, *, held_candidates=None):
         out = Path(output)
         articles = []
         hashes = {}
@@ -93,6 +93,8 @@ class MergeActualDeliveredWord(unittest.TestCase):
             "display_window_end": "2026-10-23 14:30 Cairo",
             "coverage": "HEALTHY", "verified_links": len(articles),
             "articles": articles, "sources": [],
+            "scope_note": "نطاق الرصد المستقل لهذا الاختبار",
+            "held_candidates": held_candidates or [],
             "limitations": "صور أصلية موثقة في اختبار محلي فقط",
         }
         doc = out / ("interval-" + group[0]["id"] + ".docx")
@@ -155,6 +157,73 @@ class MergeActualDeliveredWord(unittest.TestCase):
             self.assertEqual(len(imap.searched),2)
             self.assertTrue(imap.selected_readonly)
             self.assertEqual(imap.logout_count,1)
+
+    def test_numbered_held_stories_are_not_accepted_daily_news(self):
+        """Regression: real interval Word numbers both accepted and HOLD items."""
+        with tempfile.TemporaryDirectory() as directory:
+            news = self.source_news(1)
+            pending = [{
+                "headline": "خبر معلق لا صورة ناشر له " + str(index),
+                "source": "Alborsa native Egyptian Economy RSS",
+                "url": "https://www.alborsaanews.com/held/" + str(index),
+                "reason": "publisher_access_refused",
+                "published_display_cairo": "23 أكتوبر 2026",
+            } for index in (1, 2)]
+            original, hashes = self.sample_doc(
+                directory, [news], held_candidates=pending)
+            message_id = "<rasd-" + ("f"*24) + "@gmail.com>"
+            state = {"entries": {news["id"]: {
+                "status": "smtp_accepted", "kind": "interval_item",
+                "news": news, "message_id": message_id,
+            }}}
+            imap = FakeSent({message_id: self.mail(message_id, original)})
+            word, proofs = consolidate_sent_words(
+                [news], state, Path(directory) / "combined",
+                sender=SENDER, recipient=RECIPIENT,
+                app_password="offline-only",
+                title="رصد | التقرير اليومي",
+                start="22:00 أمس", end="22:00 اليوم",
+                config={"feeds": [{"id": "alborsa"}]},
+                client_factory=lambda: imap,
+            )
+            merged = Document(word)
+            text = "\n".join(p.text for p in merged.paragraphs)
+            self.assertEqual(len(merged.inline_shapes), 1)
+            self.assertIn(news["headline"], text)
+            self.assertNotIn("خبر معلق", text)
+            self.assertEqual([p["sha256"] for p in proofs],
+                             [hashes[news["id"]]])
+            self.assertTrue(word_images_match_capture_digests(word, proofs))
+            self.assertTrue(imap.selected_readonly)
+
+    def test_held_title_cannot_replace_a_missing_accepted_title(self):
+        """A HOLD candidate matching the ledger cannot masquerade as sent."""
+        with tempfile.TemporaryDirectory() as directory:
+            expected = self.source_news(1)
+            different = self.source_news(2)
+            pending = [{
+                "headline": expected["headline"],
+                "source": expected["source"], "url": expected["url"],
+                "reason": "publisher_access_refused",
+                "published_display_cairo": "23 أكتوبر 2026",
+            }]
+            original, _ = self.sample_doc(
+                directory, [different], held_candidates=pending)
+            message_id = "<rasd-" + ("f"*24) + "@gmail.com>"
+            state = {"entries": {expected["id"]: {
+                "status": "smtp_accepted", "kind": "interval_item",
+                "news": expected, "message_id": message_id,
+            }}}
+            with self.assertRaisesRegex(
+                    RuntimeError, "daily_sent_original_headlines_hold"):
+                consolidate_sent_words(
+                    [expected], state, Path(directory) / "combined",
+                    sender=SENDER, recipient=RECIPIENT,
+                    app_password="offline-only",
+                    title="رصد | لا تسليم", start="22:00 أمس",
+                    end="22:00 اليوم", config={"feeds": [{"id": "alborsa"}]},
+                    client_factory=lambda: FakeSent({
+                        message_id: self.mail(message_id, original)}))
 
     def test_invalid_sender_is_a_hard_hold_before_daily_send(self):
         with tempfile.TemporaryDirectory() as directory:
