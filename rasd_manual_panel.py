@@ -68,6 +68,34 @@ def main() -> None:
             events.put(message)
         threading.Thread(target=work, daemon=True).start()
 
+    def web_choices() -> None:
+        popup = tk.Toplevel(window)
+        popup.title("رصد | الويب")
+        popup.geometry("490x175")
+        ttk.Label(popup, text="اختار طريقة بحث الويب:",
+                  font=("Tahoma", 11, "bold")).pack(pady=12)
+
+        def rss_preview() -> None:
+            popup.destroy()
+            launch("web")
+
+        def expanded_manual() -> None:
+            popup.destroy()
+            child_env = os.environ.copy()
+            child_env.pop("RASD_FB_PAGE_TOKEN", None)
+            try:
+                subprocess.Popen(
+                    [sys.executable, str(ROOT / "rasd_expanded_web_manual.py")],
+                    cwd=ROOT, env=child_env)
+                status.set("تم فتح استكشاف مصادر الويب الـ50 يدويًا.")
+            except OSError:
+                status.set("تعذر فتح نافذة استكشاف مصادر الويب.")
+
+        ttk.Button(popup, text="إنشاء مسودة RSS من المصادر الـ13",
+                   command=rss_preview).pack(pady=5)
+        ttk.Button(popup, text="البحث اليدوي في سجل المصادر الـ50",
+                   command=expanded_manual).pack(pady=5)
+
     def facebook_choices() -> None:
         popup = tk.Toplevel(window)
         popup.title("رصد | فيسبوك")
@@ -99,7 +127,7 @@ def main() -> None:
     controls = ttk.Frame(window)
     controls.pack(pady=18)
     web_button = ttk.Button(controls, text="بحث الويب", width=23,
-                            command=lambda: launch("web"))
+                            command=web_choices)
     web_button.pack(side="left", padx=10)
     buttons.append(web_button)
     fb_button = ttk.Button(controls, text="بحث فيسبوك", width=23,

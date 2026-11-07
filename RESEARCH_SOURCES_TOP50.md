@@ -44,3 +44,30 @@ This source inventory itself must not modify active RSS, `monitor.py`, private R
 On authorized Windows (read-only feed checks, no redirects) eight further first-party RSS profiles returned HTTP 200, fully parsed as XML/RSS, exposed original-publisher article links and explicit timezone-aware publication dates. Their exact endpoints are in sources_newsroom_active.json; each article must still pass the original browser screenshot and identity QA or it remains unsent HOLD. Only the National Planning Institute sample passed a genuine original-page visual capture in this qualification session. Remaining screenshots, production cron and recipient Word visual acceptance for the eight newly onboarded feeds remain open; 36 catalog origins are not active feeds. No added Gmail or storage permissions.
 
 Operational smoke scan on 25 October 2026 with strict complete original RSS item checks: 13/14 candidate feeds passed, 217 first-party RSS links counted and six keyword matches. Enterprise Egypt native feed failed the strict check with ValueError, so it is NOT activated (candidate-only) pending diagnosis. No email or ledger writes during this QA.
+
+
+## 7 November 2026: web research expansion — manual only
+
+The independent local RASD review UI now offers **two** web choices:
+the existing 13-source RSS Word preview, or a 50-origin site-scoped
+research browser. The second choice opens a standard external search
+page per selected exact publisher and saved Ministry term. Search engine
+snippets are never admitted as publisher evidence, and the 37 candidate
+origins remain outside active feeds. It produces **no automated report**
+for these candidates. No private credentials, schedules or email changes.
+
+Read-only HTTPS checks from the authorized Windows test device on
+7 November 2026, with redirects blocked:
+- Akhbar El Yom candidate \`akhbarelyom.com/rss/getsectionrss?journalId=1\`:
+  HTTP 403; HOLD; exact original feed unverified.
+- Al Ahram candidate \`gate.ahram.org.eg/rss\`: HTTP 200, **not parseable
+  XML RSS**, therefore HOLD.
+- Al Watan candidate \`www.elwatannews.com/rss\`: HTTP 404, HOLD.
+- Cairo 24 candidate \`www.cairo24.com/rss\`: HTTP 404, HOLD.
+- Youm7 reports RSS candidate: local check failed (no valid feed accepted);
+  HOLD, consistent with earlier malformed XML and redirect problems.
+- Other probe exceptions do **not** establish a valid endpoint.
+
+These are endpoint-scoped outcomes, not blanket claims that those publishers
+have no news or no possible API. No candidate was added to active sources,
+and no proof screenshots, Word attachments or emails were sent in QA.
