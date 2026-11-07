@@ -68,13 +68,44 @@ def main() -> None:
             events.put(message)
         threading.Thread(target=work, daemon=True).start()
 
+    def facebook_choices() -> None:
+        popup = tk.Toplevel(window)
+        popup.title("رصد | فيسبوك")
+        popup.geometry("490x185")
+        ttk.Label(popup, text="اختار طريقة متابعة فيسبوك:",
+                  font=("Tahoma", 11, "bold")).pack(pady=12)
+
+        def manual_capture() -> None:
+            popup.destroy()
+            child_env = os.environ.copy()
+            child_env.pop("RASD_FB_PAGE_TOKEN", None)
+            try:
+                subprocess.Popen(
+                    [sys.executable, str(ROOT / "facebook_manual_evidence.py")],
+                    cwd=ROOT, env=child_env)
+                status.set("تم فتح نافذة توثيق لقطات فيسبوك يدويًا.")
+            except OSError:
+                status.set("تعذر فتح نافذة توثيق فيسبوك.")
+
+        def approved_api() -> None:
+            popup.destroy()
+            launch("facebook")
+
+        ttk.Button(popup, text="توثيق لقطات شاشة من نتائج بحثك",
+                   command=manual_capture).pack(pady=5)
+        ttk.Button(popup, text="بحث API في صفحات معتمدة فقط",
+                   command=approved_api).pack(pady=5)
+
     controls = ttk.Frame(window)
     controls.pack(pady=18)
-    for text, mode in (("بحث الويب", "web"), ("بحث فيسبوك", "facebook")):
-        button = ttk.Button(controls, text=text, width=23,
-                            command=lambda value=mode: launch(value))
-        button.pack(side="left", padx=10)
-        buttons.append(button)
+    web_button = ttk.Button(controls, text="بحث الويب", width=23,
+                            command=lambda: launch("web"))
+    web_button.pack(side="left", padx=10)
+    buttons.append(web_button)
+    fb_button = ttk.Button(controls, text="بحث فيسبوك", width=23,
+                          command=facebook_choices)
+    fb_button.pack(side="left", padx=10)
+    buttons.append(fb_button)
     ttk.Label(window, textvariable=status, wraplength=585,
               justify="center", font=("Tahoma", 10)).pack(pady=12)
 
