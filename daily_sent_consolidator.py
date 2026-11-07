@@ -96,9 +96,25 @@ def extract_sent_originals(word_bytes: bytes, expected: list[dict],
     filename.write_bytes(word_bytes)
     try:
         document = Document(filename)
+        # The interval Word also numbers HELD stories in a separate section.
+        # Only numbered headlines inside the verified news section may match
+        # the private accepted ledger; never mistake HOLD candidates for sent.
+        paragraphs = document.paragraphs
+        headings = [i for i, p in enumerate(paragraphs)
+                    if p.text.strip() == "الأخبار المطابقة"]
+        if len(headings) != 1:
+            raise RuntimeError("daily_sent_original_headlines_hold")
+        first = headings[0] + 1
+        boundaries = [i for i in range(first, len(paragraphs))
+                      if paragraphs[i].text.strip().startswith((
+                          "نطاق التغطية:", "مواد اكتُشفت لكنها معلّقة",
+                          "حالة المصادر"))]
+        if not boundaries:
+            raise RuntimeError("daily_sent_original_headlines_hold")
+        section_end = boundaries[0]
         pairs = []
-        for i, paragraph in enumerate(document.paragraphs):
-            match = re.fullmatch(r"([1-9][0-9]?)\. (.+)", paragraph.text.strip())
+        for i in range(first, section_end):
+            match = re.fullmatch(r"([1-9][0-9]?)\. (.+)", paragraphs[i].text.strip())
             if match:
                 pairs.append((i, int(match.group(1)), match.group(2)))
         if ([n for _, n, _ in pairs] != list(range(1, len(expected) + 1))
@@ -124,7 +140,7 @@ def extract_sent_originals(word_bytes: bytes, expected: list[dict],
         result = []
         for i, (paragraph_index, blob) in enumerate(pictures):
             begin = pairs[i][0]
-            end = pairs[i+1][0] if i+1 < len(pairs) else len(document.paragraphs)
+            end = pairs[i+1][0] if i+1 < len(pairs) else section_end
             if not begin < paragraph_index < end:
                 raise RuntimeError("daily_sent_image_order_hold")
             if len(blob) < 8000 or not blob.startswith(b"\xff\xd8"):
