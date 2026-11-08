@@ -4,6 +4,8 @@
   "activation": "HOLD_OWNER_APPROVED_SOURCES_AND_PLATFORM_PERMISSIONS",
   "original_post_browser_capture_approved": false,
   "facebook": {
+    "access_mode": "public_ppca",
+    "ppca_granted": false,
     "approved": false,
     "access_confirmed": false,
     "pages": [],
