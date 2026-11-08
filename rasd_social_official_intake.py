@@ -505,7 +505,15 @@ def collect_social(*, live: bool = False,
         if not live or scope.get("approved") is not True:
             continue
         if platform == "facebook":
-            token = env.get("RASD_META_PAGE_ACCESS_TOKEN", "")
+            mode = scope.get("access_mode", "managed_page")
+            if mode not in ("managed_page", "public_ppca"):
+                raise ValueError("facebook_access_mode_invalid_hold")
+            if mode == "public_ppca":
+                token = env.get("RASD_META_PPCA_ACCESS_TOKEN", "")
+                if scope.get("ppca_granted") is not True:
+                    continue
+            else:
+                token = env.get("RASD_META_PAGE_ACCESS_TOKEN", "")
             if (scope.get("access_confirmed") is not True or not token):
                 continue
             results[platform] = collect_approved_facebook(
