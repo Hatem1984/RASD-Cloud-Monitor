@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "updated_at": "2026-11-08",
+  "purpose": "RASD Ministry of Planning Facebook research candidates only; NOT approved Page IDs and NOT production schedule",
+  "approval_status": "NOT_APPROVED",
+  "candidates": [
+    {
+      "name": "وزارة التخطيط والتنمية الاقتصادية - مصر",
+      "priority": 1,
+      "page_url": "https://www.facebook.com/MPEDEGYPT/",
+      "page_id": null,
+      "status": "HOLD_CURRENT_IDENTITY_AND_ACTIVITY",
+      "evidence": "https://alborsaanews.com/2021/02/25/1421207",
+      "caution": "Historical 2021 evidence references MPEDEGYPT; verify current verified page identity and posts"
+    },
+    {
+      "name": "الجهاز المركزي للتعبئة العامة والإحصاء",
+      "priority": 2,
+      "page_url": null,
+      "page_id": null,
+      "status": "HOLD_EXACT_OFFICIAL_PAGE_LINK",
+      "evidence": "https://capmas.gov.eg/new",
+      "caution": "Official website embeds Facebook panel but exact page URL not established"
+    },
+    {
+      "name": "معهد التخطيط القومي",
+      "priority": 3,
+      "page_url": null,
+      "page_id": null,
+      "status": "HOLD_EXACT_OFFICIAL_PAGE_LINK",
+      "evidence": "https://pgp.inp.edu.eg/",
+      "caution": "Institutional identity established but first-party Facebook permalink missing"
+    },
+    {
+      "name": "رئاسة مجلس الوزراء المصري",
+      "priority": 4,
+      "page_url": "https://www.facebook.com/EgyptianCabinet/",
+      "page_id": null,
+      "status": "HOLD_CURRENT_IDENTITY_AND_ACTIVITY",
+      "evidence": "https://www.elwatannews.com/news/details/4652729",
+      "caution": "2020 government statement names this page; reconfirm current identity before monitoring"
+    },
+    {
+      "name": "وزارة المالية - جمهورية مصر العربية",
+      "priority": 5,
+      "page_url": "https://www.facebook.com/MOF.Egypt/",
+      "page_id": null,
+      "status": "HOLD_CURRENT_IDENTITY_AND_ACTIVITY",
+      "evidence": "https://www.elwatannews.com/news/details/6019255",
+      "caution": "2022 ministry statement identifies this page; reassess current identity"
+    },
+    {
+      "name": "الهيئة العامة للاستثمار والمناطق الحرة",
+      "priority": 6,
+      "page_url": "https://www.facebook.com/GAFIEG/",
+      "page_id": null,
+      "status": "HOLD_CURRENT_IDENTITY_AND_ACTIVITY",
+      "evidence": "https://mediadr.sis.gov.eg/bitstream/handle/123456789/9108/GAFI20220223_1720.pdf?isAllowed=y&sequence=1",
+      "caution": "Historical government media monitoring quotes Facebook GAFIEG permalink; reassess source ownership and relevance"
+    }
+  ]
+}

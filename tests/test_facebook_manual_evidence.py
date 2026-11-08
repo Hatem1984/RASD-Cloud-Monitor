@@ -30,6 +30,8 @@ class ManualFacebookEvidenceTests(unittest.TestCase):
             "https://www.facebook.com/123/posts/456"))
         self.assertTrue(is_facebook_post_url(
             "https://m.facebook.com/story.php?story_fbid=123&id=456"))
+        self.assertFalse(is_facebook_post_url("https://www.facebook.com/"))
+        self.assertFalse(is_facebook_post_url("https://www.facebook.com/page-only"))
         for candidate in (
             "http://facebook.com/post/1",
             "https://facebook.com.evil.example/post/1",
@@ -52,6 +54,8 @@ class ManualFacebookEvidenceTests(unittest.TestCase):
             digest = hashlib.sha256(raw).hexdigest()
             entry = {"url": "https://www.facebook.com/123/posts/456",
                      "source": "صفحة منشورة", "screenshot": str(image),
+                     "published_at": "2026-11-07T10:00:00+02:00",
+                     "privacy_checked": True,
                      "note": "ملاحظة للمراجعة"}
             result = build_manual_facebook_report(
                 [entry], root / "report-output" / "facebook",
@@ -67,6 +71,8 @@ class ManualFacebookEvidenceTests(unittest.TestCase):
             self.assertIn("غير متحقق منها آليًا", text)
             self.assertIn("لم تُلتقط آليًا", text)
             self.assertIn(digest, text)
+            self.assertIn("2026-11-07T10:00:00+02:00", text)
+            self.assertIn("غير متحقق آليًا", text)
             self.assertNotIn("مآل", text)
             with ZipFile(word) as archive:
                 media = [archive.read(p) for p in archive.namelist()
@@ -81,7 +87,9 @@ class ManualFacebookEvidenceTests(unittest.TestCase):
             good = root / "image.png"
             Image.new("RGB", (80, 80), "blue").save(good)
             one = {"url": "https://facebook.com/posts/1",
-                   "screenshot": str(good)}
+                   "source": "مصدر تجريبي", "screenshot": str(good),
+                   "published_at": "2026-11-07T10:00:00+02:00",
+                   "privacy_checked": True}
             with self.assertRaises(ValueError):
                 build_manual_facebook_report(
                     [{**one, "screenshot": str(bad)}], root / "out")

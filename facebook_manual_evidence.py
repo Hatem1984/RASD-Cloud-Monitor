@@ -19,6 +19,10 @@ from docx.shared import Inches, Pt
 from PIL import Image, UnidentifiedImageError
 
 from daily_report import _rtl, _word_hyperlink
+from facebook_manual_validation import (
+    post_identity, identity_digest, parse_operator_post_time,
+    read_local_index, write_local_index,
+)
 
 MAX_ENTRIES = 20
 MAX_IMAGE_BYTES = 12_000_000
@@ -42,6 +46,7 @@ def is_facebook_post_url(raw: str) -> bool:
                 and parsed.username is None
                 and parsed.password is None
                 and bool(parsed.path.strip("/"))
+                and post_identity(raw) is not None
                 and not any(x in query_keys or any(x in k for k in query_keys)
                             for x in _SENSITIVE_KEYS))
     except ValueError:
@@ -78,27 +83,35 @@ def _read_image(path: Path) -> tuple[bytes, str]:
     return raw, hashlib.sha256(raw).hexdigest()
 
 
-def _validated_entries(entries: list[dict]) -> list[dict]:
+def _validated_entries(entries: list[dict], *, now: datetime | None = None) -> list[dict]:
     if not isinstance(entries, list) or not 1 <= len(entries) <= MAX_ENTRIES:
         raise ValueError("facebook_evidence_count_hold")
     verified, seen = [], set()
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None or current.utcoffset() is None:
+        raise ValueError("report_clock_hold")
     for entry in entries:
         if not isinstance(entry, dict) or not is_facebook_post_url(entry.get("url")):
             raise ValueError("facebook_permalink_hold")
-        if entry["url"] in seen:
+        post_key = identity_digest(entry["url"])
+        if post_key in seen:
             raise ValueError("facebook_duplicate_link_hold")
-        seen.add(entry["url"])
+        seen.add(post_key)
         source = str(entry.get("source", "")).strip()
         note = str(entry.get("note", "")).strip()
-        if len(source) > 150 or len(note) > 1000:
-            raise ValueError("facebook_metadata_too_long")
+        if not source or len(source) > 150 or len(note) > 1000:
+            raise ValueError("facebook_metadata_hold")
+        published = parse_operator_post_time(entry.get("published_at"), now=current)
+        if entry.get("privacy_checked") is not True:
+            raise ValueError("facebook_privacy_review_hold")
         path = entry.get("screenshot")
         if not isinstance(path, (str, Path)):
             raise ValueError("screenshot_path_hold")
         raw, digest = _read_image(Path(path))
         verified.append({
-            "url": entry["url"], "source": source or "الناشر غير محدد",
+            "url": entry["url"], "source": source,
             "note": note, "image": raw, "sha256": digest,
+            "published_at": published.isoformat(), "identity": post_key,
         })
     return verified
 
@@ -106,10 +119,15 @@ def _validated_entries(entries: list[dict]) -> list[dict]:
 def build_manual_facebook_report(entries: list[dict], output_dir: Path,
                                  *, now: datetime | None = None) -> dict:
     """Evidence of *operator-provided screenshots*, NOT original-page proof."""
-    validated = _validated_entries(entries)
     current = now or datetime.now(timezone.utc)
     if current.tzinfo is None or current.utcoffset() is None:
         raise ValueError("report_clock_hold")
+    validated = _validated_entries(entries, now=current)
+    # Local-only, best-effort cross-report de-duplication. No private CAS.
+    seen_in_previous_reports = read_local_index(output_dir)
+    current_ids = {item["identity"] for item in validated}
+    if current_ids & seen_in_previous_reports:
+        raise ValueError("facebook_duplicate_prior_report_hold")
     doc = Document()
     doc.styles["Normal"].font.name = "DejaVu Sans"
     doc.styles["Normal"].font.size = Pt(10)
@@ -123,6 +141,7 @@ def build_manual_facebook_report(entries: list[dict], output_dir: Path,
         "التصنيف: أدلة قدمها المشغل يدويًا — غير متحقق منها آليًا.",
         "عدد المنشورات: " + str(len(validated))
         + " | تاريخ إعداد التقرير: " + current.strftime("%Y-%m-%d %H:%M UTC"),
+        "تواريخ النشر وأسماء الصفحات أدخلها المشغّل؛ لم يتم التحقق منها عبر Meta.",
         "تنبيه: الصورة من اختيار المشغل؛ لم تُلتقط آليًا من فيسبوك. "
         "يجب مقارنة الصورة بالمنشور الأصلي والتحقق من تاريخ النشر وهوية الصفحة "
         "وإزالة أي بيانات شخصية غير لازمة قبل مشاركة التقرير.",
@@ -136,6 +155,10 @@ def build_manual_facebook_report(entries: list[dict], output_dir: Path,
         p = doc.add_paragraph()
         _rtl(p)
         p.add_run(f"{index}. " + item["source"]).bold = True
+        p = doc.add_paragraph()
+        _rtl(p)
+        p.add_run("تاريخ النشر حسب إدخال المشغّل (غير متحقق آليًا): "
+                  + item["published_at"])
         p = doc.add_paragraph()
         _rtl(p)
         _word_hyperlink(p, item["url"], "رابط منشور فيسبوك الذي أدخله المشغل")
@@ -164,6 +187,11 @@ def build_manual_facebook_report(entries: list[dict], output_dir: Path,
     if any(item["sha256"] not in embedded_digests for item in validated):
         dest.unlink(missing_ok=True)
         raise ValueError("screenshot_embedded_digest_mismatch")
+    try:
+        write_local_index(output_dir, seen_in_previous_reports | current_ids)
+    except (OSError, ValueError):
+        dest.unlink(missing_ok=True)
+        raise ValueError("facebook_index_update_hold") from None
     return {"status": "MANUAL_FACEBOOK_EVIDENCE_UNVERIFIED",
             "word": str(dest), "items": len(validated),
             "email_sent": False, "network_requests": False}
@@ -182,6 +210,7 @@ def main() -> None:
     ttk.Label(root, text="رصد | توثيق لقطات فيسبوك",
               font=("Tahoma", 15, "bold")).pack(pady=15)
     ttk.Label(root, text="لا يتم البحث الآلي أو الدخول إلى حسابك. "
+              "مطلوب رابط منشور أصلي وتاريخ نشر واضح ومراجعة خصوصية. "
               "المنشورات تحتاج مراجعة قبل اعتمادها.",
               wraplength=640).pack(pady=4)
 
@@ -219,16 +248,37 @@ def main() -> None:
         link = simpledialog.askstring("المنشور الأصلي", "رابط المنشور (https):")
         if not link:
             return
-        name = simpledialog.askstring("المصدر", "اسم الصفحة أو صاحب المنشور (اختياري):") or ""
-        note = simpledialog.askstring("ملاحظة", "ملخص أو ملاحظة للمراجعة (اختياري):") or ""
+        name = simpledialog.askstring(
+            "المصدر", "اسم الصفحة الأصلية كما يظهر على المنشور (إجباري):")
+        if not name:
+            return
+        published_at = simpledialog.askstring(
+            "تاريخ النشر",
+            "أدخل تاريخ النشر الظاهر على المنشور مع المنطقة الزمنية:\n"
+            "مثال: 2026-11-08T11:30:00+02:00\n"
+            "الوقت المُدخل سيُصنّف غير متحقق منه آليًا.")
+        if not published_at:
+            return
+        note = simpledialog.askstring(
+            "ملاحظة", "مقتطف أو ملاحظة المشغّل (غير متحققة، اختيارية):") or ""
+        privacy_checked = messagebox.askyesno(
+            "مراجعة الخصوصية",
+            "هل راجعت الصورة يدويًا وتأكدت من عدم وجود بيانات شخصية "
+            "غير ضرورية قبل إضافتها للتقرير؟\n"
+            "التأكيد لا يعني إثبات أصالة المنشور.")
+        if not privacy_checked:
+            return
         candidate = {"url": link.strip(), "source": name,
+                     "published_at": published_at.strip(),
+                     "privacy_checked": True,
                      "note": note, "screenshot": filename}
         try:
             _validated_entries([candidate])
         except (ValueError, OSError):
             messagebox.showerror("رصد", "الرابط أو الصورة غير صالحين للتقرير.")
             return
-        if any(previous["url"] == candidate["url"] for previous in items):
+        if any(identity_digest(previous["url"]) ==
+               identity_digest(candidate["url"]) for previous in items):
             messagebox.showwarning("رصد", "هذا المنشور أُضيف بالفعل.")
             return
         items.append(candidate)
@@ -241,8 +291,15 @@ def main() -> None:
         try:
             report = build_manual_facebook_report(
                 items, Path(__file__).resolve().parent / "report-output" / "facebook")
-        except (ValueError, OSError):
-            messagebox.showerror("رصد", "تعذر التحقق من اللقطات؛ لم يُنشأ تقرير.")
+        except (ValueError, OSError) as exc:
+            if "duplicate_prior_report" in str(exc):
+                messagebox.showerror(
+                    "رصد", "المنشور أُدرج من قبل في تقرير محلي سابق؛ "
+                    "لم يتم إنشاء تقرير مكرر.")
+            else:
+                messagebox.showerror(
+                    "رصد", "التواريخ أو الصور أو سجل التكرار غير صالح؛ "
+                    "لم يتم إنشاء تقرير.")
             return
         status.set("تم إنشاء تقرير محلي للمراجعة: " + report["word"])
         messagebox.showinfo("تم", "تم إنشاء Word محلي للمراجعة فقط.\n" + report["word"])
