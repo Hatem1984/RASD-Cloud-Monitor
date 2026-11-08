@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -69,6 +70,30 @@ SOURCE_LABELS = {
     "Masrawy native Egypt news RSS": "مصراوي",
 }
 ARABIC_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
+
+
+def display_rss_excerpt(raw: str, headline: str, source: str) -> str:
+    """Remove only known publisher-feed boilerplate from the Word display.
+
+    The immutable article record, original RSS evidence and source image
+    remain unchanged. Never summarize, invent or rewrite article facts.
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        return ""
+    value = raw.strip()
+    publisher = SOURCE_LABELS.get(source, source)
+    trailer = publisher + " : المصدر " + headline
+    if value.endswith(trailer):
+        value = value[:-len(trailer)].rstrip(" ؛،:-")
+    # WordPress inserts this *after* its excerpt, often preceded by […]
+    # and followed by the repeated complete headline and publisher name.
+    wordpress_footer = re.search(
+        r"\bThe post\b.*?\bappeared first on\b", value,
+        flags=re.IGNORECASE | re.DOTALL)
+    if wordpress_footer:
+        value = re.sub(r"\s*\[[^\]]{1,8}\]\s*$", "",
+                       value[:wordpress_footer.start()]).strip()
+    return value.strip() or raw.strip()
 
 
 def editorial_caution(headline: str, excerpt: str = "") -> str:
@@ -353,17 +378,21 @@ def render_docx(report: dict, destination: Path) -> None:
             if article.get("publisher_excerpt"):
                 summary = doc.add_paragraph()
                 _rtl(summary)
-                summary.add_run("ملخص كما أورده الناشر في موجز RSS: ").bold = True
-                summary.add_run(article["publisher_excerpt"])
+                summary.add_run("ملخص كما أورده الناشر في موجز RSS (بدون تذييلات الموقع): ").bold = True
+                summary.add_run(display_rss_excerpt(
+                    article["publisher_excerpt"], article["headline"],
+                    article["source"]))
             note = doc.add_paragraph()
             _rtl(note)
-            note.add_run("تحليل تحريري مرتبط بموضوع الخبر: ").bold = True
+            note.add_run("ملاحظة تحريرية آلية — تحتاج مراجعة: ").bold = True
             note.add_run(editorial_caution(
                 article["headline"], article.get("publisher_excerpt", "")))
             if article.get("evidence_image_path"):
                 evidence_note = doc.add_paragraph()
                 _rtl(evidence_note)
                 evidence_note.add_run("لقطة موثقة من صفحة الناشر الأصلية").italic = True
+                # Never leave the evidence label orphaned on the previous page.
+                evidence_note.paragraph_format.keep_with_next = True
                 # A genuine publisher full-page JPEG may be very tall. An
                 # unconstrained 5.6-inch-wide image can exceed the printable
                 # page height and become clipped in Word/LibreOffice. Preserve
@@ -399,7 +428,6 @@ def render_docx(report: dict, destination: Path) -> None:
                 "المصدر: " + SOURCE_LABELS.get(item["source"], item["source"])
                 + " | سبب التعليق: "
                 + HOLD_REASON_LABELS.get(item["reason"], "تعذّر فحص الدليل الأصلي")
-                + " [" + item["reason"] + "]"
                 + " | تاريخ الناشر: " + item["published_display_cairo"])
             link_para = doc.add_paragraph()
             _rtl(link_para)
@@ -409,12 +437,12 @@ def render_docx(report: dict, destination: Path) -> None:
             _rtl(p)
             p.add_run("مواد معلقة أخرى غير معروضة في هذا الملخص: "
                       + str(len(held_candidates) - 12))
-    p = doc.add_paragraph()
-    _rtl(p)
-    p.add_run("حالة المصادر").bold = True
-    # Keep all source statuses in a compact paragraph: this avoids
-    # a near-empty third page without shrinking authentic screenshots.
+    # A daily consolidated report has no source-health rows; never display
+    # an orphaned empty "حالة المصادر" heading in the ministry Word.
     if report["sources"]:
+        p = doc.add_paragraph()
+        _rtl(p)
+        p.add_run("حالة المصادر").bold = True
         source_names = {"hapi": "جريدة حابي", "almasryalyoum": "المصري اليوم",
                         "shorouk": "بوابة الشروق", "alborsa": "جريدة البورصة", "masrawy": "مصراوي", "almessa": "المساء", "elbalad": "صدى البلد", "vetogate": "فيتو", "dailynewsegypt": "ديلي نيوز إيجيبت", "egyptindependent": "إيجيبت إندبندنت", "enterpriseam": "إنتربرايز مصر", "egyptianstreets": "إيجيبشن ستريتس", "skynewsarabia": "سكاي نيوز عربية", "inp_official": "معهد التخطيط القومي"}
         source_statuses = []
@@ -422,7 +450,8 @@ def render_docx(report: dict, destination: Path) -> None:
             name = source_names.get(feed["feed_id"], feed["feed_id"])
             status = "متاح" if feed["status"] == "ok" else "تعذّر الوصول"
             count = str(feed["verified_links"])
-            error = "، سبب: " + str(feed["error_type"]) if feed["error_type"] else ""
+            error = ("، السبب: تعذّر جلب موجز الناشر"
+                     if feed.get("error_type") else "")
             source_statuses.append(f"{name}: {status} ({count} روابط{error})")
         p = doc.add_paragraph()
         _rtl(p)
