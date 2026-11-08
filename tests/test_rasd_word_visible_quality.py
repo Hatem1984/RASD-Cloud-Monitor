@@ -82,8 +82,13 @@ class RasdWordVisibleQualityTests(unittest.TestCase):
             self.assertNotIn("original_feed_unavailable", body)
             self.assertIn("مصراوي", body)
             self.assertIn("صدى البلد: متاح", body)
+            self.assertIn("المصدر: صدى البلد | النشر: ٨ نوفمبر ٢٠٢٦", body)
             self.assertIn("مصراوي: تعذّر الوصول", body)
-            self.assertIn("ملاحظة تحريرية آلية", body)
+            self.assertNotIn("ملاحظة تحريرية آلية", body)
+            self.assertNotIn("تحليل تحريري مرتبط", body)
+            self.assertEqual(doc.styles["Title"].font.size.pt, 11.5)
+            self.assertLessEqual(doc.sections[0].top_margin.inches, 0.43)
+            self.assertLessEqual(doc.sections[0].bottom_margin.inches, 0.35)
             self.assertEqual(len(doc.inline_shapes), 1)
             evidence_labels = [p for p in doc.paragraphs if
                                p.text == "لقطة موثقة من صفحة الناشر الأصلية"]

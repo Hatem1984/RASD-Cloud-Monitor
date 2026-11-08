@@ -278,11 +278,11 @@ def render_docx(report: dict, destination: Path) -> None:
     doc = Document()
     section = doc.sections[0]
     if any(row.get("evidence_image_path") for row in report.get("articles", [])):
-        # Two-source original-photo bulletins formerly leaked the 2-line
-        # methodological note to an almost empty third page. Tighter but
-        # still comfortably printable margins preserve exact JPEG bytes.
-        section.top_margin = Inches(0.52)
-        section.bottom_margin = Inches(0.50)
+        # Evidence-backed reports: reclaim space for all per-source statuses
+        # and full JPEG screenshot without clipping or an orphan final page.
+        # Verified against a genuine one-story / 13-source Word from Nov 8.
+        section.top_margin = Inches(0.42)
+        section.bottom_margin = Inches(0.34)
         section.left_margin = Inches(0.67)
         section.right_margin = Inches(0.67)
         compact_evidence = True
@@ -297,7 +297,7 @@ def render_docx(report: dict, destination: Path) -> None:
     styles["Normal"].font.size = Pt(9.5 if compact_evidence else 10)
     styles["Normal"].font.color.rgb = RGBColor(36, 52, 69)
     styles["Title"].font.name = "DejaVu Sans"
-    styles["Title"].font.size = Pt(14 if compact_evidence else 14.5)
+    styles["Title"].font.size = Pt(11.5 if compact_evidence else 14.5)
     styles["Title"].font.color.rgb = RGBColor(8, 106, 128)
 
     p = doc.add_paragraph(style="Title")
@@ -382,11 +382,9 @@ def render_docx(report: dict, destination: Path) -> None:
                 summary.add_run(display_rss_excerpt(
                     article["publisher_excerpt"], article["headline"],
                     article["source"]))
-            note = doc.add_paragraph()
-            _rtl(note)
-            note.add_run("ملاحظة تحريرية آلية — تحتاج مراجعة: ").bold = True
-            note.add_run(editorial_caution(
-                article["headline"], article.get("publisher_excerpt", "")))
+            # RASD Word is an evidence-backed monitoring report, not an
+            # automated policy analysis. No generic speculative editorial
+            # commentary is inserted between a verified article and image.
             if article.get("evidence_image_path"):
                 evidence_note = doc.add_paragraph()
                 _rtl(evidence_note)

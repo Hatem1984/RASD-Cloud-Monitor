@@ -63,7 +63,8 @@ class Gate26StrictWordTests(unittest.TestCase):
             self.assertIn("w:keepNext",body)
             self.assertIn("ملخص كما أورده الناشر",body)
             self.assertIn("مناقشة التعاون",body)
-            self.assertIn("تقييمًا أو تصريحًا إيجابيًا",body)
+            # Monitoring reports must not insert speculative analysis as fact.
+            self.assertNotIn("تقييمًا أو تصريحًا إيجابيًا",body)
             self.assertIn("www.shorouknews.com/news/view.aspx",rels)
             self.assertTrue(verify_embedded_evidence(words[0],{
                 "status":"READY","screenshots_verified":1,"articles":1,
