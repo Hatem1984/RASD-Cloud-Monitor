@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "scope": "Egyptian Ministry of Planning; original publicly accessible posts only; no private profiles or personal data",
+  "activation": "HOLD_OWNER_APPROVED_SOURCES_AND_PLATFORM_PERMISSIONS",
+  "original_post_browser_capture_approved": false,
+  "facebook": {
+    "approved": false,
+    "access_confirmed": false,
+    "pages": [],
+    "max_pages_per_page": 3,
+    "max_posts_per_page": 25
+  },
+  "x": {
+    "approved": false,
+    "paid_api_cost_approved": false,
+    "queries": [],
+    "max_pages_per_query": 2,
+    "page_size": 10,
+    "max_posts_per_run": 20
+  },
+  "instagram": {
+    "approved": false,
+    "access_confirmed": false,
+    "accounts": [],
+    "max_pages_per_account": 2,
+    "page_size": 25,
+    "status": "HOLD_MANAGED_PROFESSIONAL_ACCOUNT_ONLY"
+  },
+  "linkedin": {
+    "approved": false,
+    "status": "HOLD_OFFICIAL_ACCESS_AND_ACCOUNT_SCOPE"
+  }
+}

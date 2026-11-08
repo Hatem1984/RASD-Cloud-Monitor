@@ -14,6 +14,7 @@ from pathlib import Path
 
 from daily_report import CAIRO
 from rasd_four_reports_review import build_four_reports, hourly_window
+from rasd_social_review_bridge import approved_social_probe
 
 
 def approved_web_probe(*, now: datetime, evidence_root: Path,
@@ -87,7 +88,11 @@ def approved_web_probe(*, now: datetime, evidence_root: Path,
 
 
 def run_no_send(*, now: datetime, final_day: date, output: Path,
-                probe_web: bool = False, discover=None, capture=None) -> dict:
+                probe_web: bool = False, discover=None, capture=None,
+                probe_social: bool = False, capture_social: bool = False,
+                social_collector=None, social_screenshot=None,
+                social_config: dict | None = None,
+                social_environment: dict | None = None) -> dict:
     """Produces four separate drafts. Real social/daily always remain HOLD."""
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("timezone_required_hold")
@@ -107,19 +112,37 @@ def run_no_send(*, now: datetime, final_day: date, output: Path,
         web_health = [
             {"channel": "web", "name": f["name"],
              "status": "not_configured"} for f in config["feeds"]]
-    health = web_health + [
-        {"channel": "social", "name": platform, "status": "unauthorized"}
-        for platform in ("Facebook", "X", "Instagram", "LinkedIn")]
-    # No social approved capture and no authenticated accepted mail archive
-    # is available in this no-send workflow. It MUST NOT invent either.
+    if probe_social:
+        social_items, social_health, social_summary = approved_social_probe(
+            now=now, evidence_root=evidence,
+            collect=social_collector, screenshot=social_screenshot,
+            capture_originals=capture_social, config=social_config,
+            environment=social_environment)
+        items.extend(social_items)
+    else:
+        social_health = [
+            {"channel": "social", "name": platform, "status": "not_configured"}
+            for platform in ("Facebook", "X", "Instagram", "LinkedIn")]
+        social_summary = {
+            "api_candidates": 0, "independent_original_captures_verified": 0,
+            "original_capture_hold": 0, "capture_authorized": False,
+            "social_archive_receipts_verified": False, "smtp_sent": False,
+        }
+    health = web_health + social_health
+    # Authenticated daily social acceptance is a separate, still-HOLD gate.
+    # Never mint synthetic CAS receipts or treat API metadata as screenshots.
     summary = build_four_reports(
         items, health, [], cutoff=now, date_cairo=final_day,
         evidence_root=evidence, output=output,
         allowed_web_hosts=allowed_hosts)
     summary["live_web_probe_requested"] = bool(probe_web)
-    summary["social_live_posts_verified"] = 0
+    summary["social_live_posts_verified"] = (
+        social_summary["independent_original_captures_verified"])
+    summary["social_collection"] = social_summary
     summary["daily_archive_read"] = False
     summary["email_sent"] = False
+    (output / "RASD-Four-Reports-REVIEW-MANIFEST.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     return summary
 
 
@@ -127,8 +150,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="RASD four Word review, NO SEND")
     parser.add_argument("--probe-approved-web", action="store_true",
                         help="Read approved RSS and capture original pages, NO SEND")
+    parser.add_argument("--probe-approved-social", action="store_true",
+                        help="Use ONLY configured/authorized official social APIs")
+    parser.add_argument("--capture-approved-social", action="store_true",
+                        help="Original post browser proof requires separate owner gates")
     parser.add_argument("--out", type=Path, default=Path("report-output/four-review"))
     args = parser.parse_args()
+    if args.capture_approved_social and not args.probe_approved_social:
+        parser.error("social capture requires approved social source probe")
+    if args.probe_approved_social:
+        protected = (Path(__file__).resolve().parent / "report-output").resolve()
+        if not args.out.resolve().is_relative_to(protected):
+            parser.error("social outputs must remain inside ignored report-output")
     now = datetime.now(timezone.utc)
     local = now.astimezone(CAIRO)
     # Last already completed 22:00 Cairo daily boundary, never a future day.
@@ -136,7 +169,9 @@ def main() -> None:
         local.date().toordinal() - 1)
     result = run_no_send(
         now=now, final_day=final_day, output=args.out,
-        probe_web=args.probe_approved_web)
+        probe_web=args.probe_approved_web,
+        probe_social=args.probe_approved_social,
+        capture_social=args.capture_approved_social)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
