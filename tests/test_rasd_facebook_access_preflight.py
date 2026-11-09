@@ -38,7 +38,7 @@ def get_page(url, token, *, expected_host):
     assert "token=" not in url and "access_token" not in url
     if url.endswith(f"/{PID}?fields=id%2Cname"):
         return {"id": PID, "name": "صفحة رصد اختبار مصطنعة"}
-    if url.startswith("https://graph.facebook.com/v26.0/" + PID + "/published_posts"):
+    if url.startswith("https://graph.facebook.com/v26.0/" + PID + "/posts") or url.startswith("https://graph.facebook.com/v26.0/" + PID + "/published_posts"):
         return {"data": [{
             "id": POST, "message": "وزارة التخطيط تناقش أهداف التنمية",
             "created_time": "2026-11-08T17:30:00+0000",
@@ -86,6 +86,7 @@ class FacebookPreflightQA(unittest.TestCase):
         self.assertEqual(got["status"], "API_METADATA_READABLE_NOT_IMAGE_PROOF")
         self.assertEqual(got["pages_readable"], 1)
         self.assertEqual(got["page_results"][0]["sample_posts_checked"], 1)
+        self.assertEqual(got["page_results"][0]["endpoint_edge"], "posts")
         self.assertEqual(got["original_images_verified"], 0)
         self.assertNotIn("synthetic-test-token", json.dumps(got))
         self.assertNotIn("وزارة التخطيط", json.dumps(got))
@@ -126,6 +127,8 @@ class FacebookPreflightQA(unittest.TestCase):
             env={"RASD_META_PAGE_ACCESS_TOKEN":"synthetic-test-token-123"},
             getter=get_page)
         self.assertEqual(result["pages_readable"], 1)
+        self.assertEqual(result["page_results"][0]["endpoint_edge"],
+                         "published_posts")
         conf["facebook"]["ppca_granted"] = False
         # Managed Page token is separate from the PPCA App review grant.
         self.assertEqual(preflight(
@@ -146,7 +149,8 @@ class FacebookPreflightQA(unittest.TestCase):
         self.assertEqual(result["post_candidates"], [])
         fb["ppca_granted"] = True
         def posts(url, token, *, expected_host):
-            # Existing collector requests /published_posts; no preflight here.
+            # PPCA collector requests /posts; no preflight here.
+            self.assertIn(f"/{PID}/posts?", url)
             p = get_page(url, token, expected_host=expected_host)
             if "data" not in p:
                 self.fail("Production collection unexpected Page id call")
@@ -182,6 +186,37 @@ class FacebookPreflightQA(unittest.TestCase):
                       env={"RASD_META_PPCA_ACCESS_TOKEN":
                            "synthetic-test-token-123"},
                       getter=lambda *a, **k: self.fail("Bad page ID"))
+
+
+    def test_ppca_and_managed_preflight_do_not_mix_edges(self):
+        for mode, edge, secret_key in (
+            ("public_ppca", "/posts?", "RASD_META_PPCA_ACCESS_TOKEN"),
+            ("managed_page", "/published_posts?", "RASD_META_PAGE_ACCESS_TOKEN"),
+        ):
+            with self.subTest(mode=mode):
+                paths = []
+                def checked(url, token, *, expected_host):
+                    if "/posts?" in url or "/published_posts?" in url:
+                        paths.append(url)
+                        self.assertIn(edge, url)
+                    return get_page(url, token, expected_host=expected_host)
+                report = preflight(config=configuration(mode), live=True,
+                    env={secret_key: "synthetic-test-token-123"},
+                    getter=checked)
+                self.assertEqual(report["pages_readable"], 1)
+                self.assertEqual(len(paths), 1)
+                self.assertEqual(report["original_images_verified"], 0)
+
+    def test_unverified_public_app_must_never_read_even_with_token(self):
+        conf = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(conf["facebook"]["approved"], False)
+        self.assertEqual(conf["facebook"]["ppca_granted"], False)
+        self.assertEqual(conf["facebook"]["pages"], [])
+        result = preflight(config=conf, live=True,
+            env={"RASD_META_PPCA_ACCESS_TOKEN": "fake-token-for-qa"},
+            getter=lambda *a, **k: self.fail("Unapproved app made network call"))
+        self.assertEqual(result["status"], "HOLD_NOT_APPROVED")
+        self.assertFalse(result["smtp_sent"])
 
 
 if __name__ == "__main__":
