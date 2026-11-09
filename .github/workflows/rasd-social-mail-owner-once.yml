@@ -1,0 +1,53 @@
+name: RASD — owner one-time social status Word mail test (primary + approved CC)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Owner-only exact confirmation for ONE social-status email (primary + approved CC)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize with the three existing protected newsroom schedulers and their
+# private CAS. This test has a separate kind/key and never enters daily news.
+concurrency:
+  group: rasd-scheduled-monitor-private-ledger
+  cancel-in-progress: false
+
+jobs:
+  owner-one-time-social-mail:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'Hatem1984' &&
+      inputs.confirmation == 'RASD-SOCIAL-ONE-TIME-CC-TEST'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: rasd-production
+    env:
+      RASD_SOCIAL_TEST_APPROVAL: ${{ inputs.confirmation }}
+      RASD_REPORT_CC_REQUIRED: 'true'
+      RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
+      RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
+      # Mandatory: this is a protected Secret, NOT the older Actions variable.
+      # Absent or wrong CC -> HOLD before private CAS and SMTP.
+      RASD_REPORT_CC: ${{ secrets.RASD_REPORT_CC }}
+      RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
+      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install existing RASD Word dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Build and validate UNVERIFIED social status Word, absolutely NO SEND
+        run: python rasd_social_mail_test_once.py --mode dry_run_no_network
+      - name: Owner-confirmed SINGLE protected SMTP/CC attempt, private CAS first
+        shell: bash
+        run: |
+          set -euo pipefail
+          python rasd_social_mail_test_once.py --mode send_once
