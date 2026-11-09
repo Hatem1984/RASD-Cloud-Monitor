@@ -39,7 +39,11 @@ class SocialMailOnlyTest(unittest.TestCase):
             text = "\n".join(p.text for p in doc.paragraphs)
             self.assertIn("اختبار إرسال تقرير السوشيال من رصد", text)
             self.assertIn("لا توجد مواد موثقة", text)
-            self.assertIn("فيسبوك: تصريح الوصول غير متوفر", text)
+            self.assertTrue(
+                "Facebook: غير معتمد بعد" in text or
+                "Facebook: تصريح الوصول غير متوفر" in text)
+            self.assertNotIn("لم تُرسل", text)
+            self.assertIn("نسخة اختبار تسليم بالبريد", text)
             self.assertEqual(len(doc.inline_shapes), 0)
             for section in doc.sections:
                 footer = "\n".join(p.text for p in section.footer.paragraphs)
