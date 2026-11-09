@@ -31,7 +31,8 @@ def _approved_mode(fb: dict) -> str:
 
 
 def _page_samples(page_id: str, expected_name: str,
-                  token: str, getter) -> dict:
+                  token: str, getter, *, mode: str = "managed_page",
+                  handle: str = "") -> dict:
     """Exactly two endpoints; never follow opaque paging.next URLs."""
     profile_url = GRAPH + "/" + page_id + "?" + urlencode(
         {"fields": "id,name"})
@@ -43,7 +44,10 @@ def _page_samples(page_id: str, expected_name: str,
             or " ".join(info["name"].split()).casefold() !=
                " ".join(expected_name.split()).casefold()):
         raise RuntimeError("facebook_preflight_page_identity_hold")
-    feed_url = GRAPH + "/" + page_id + "/published_posts?" + urlencode({
+    if mode not in {"managed_page", "public_ppca"}:
+        raise ValueError("facebook_preflight_mode_hold")
+    edge = "posts" if mode == "public_ppca" else "published_posts"
+    feed_url = GRAPH + "/" + page_id + "/" + edge + "?" + urlencode({
         "fields": "id,message,created_time,permalink_url",
         "limit": MAX_CHECK_POSTS,
     })
@@ -76,7 +80,8 @@ def _page_samples(page_id: str, expected_name: str,
             raise RuntimeError("facebook_preflight_original_link_hold")
         path = urlsplit(permalink).path.strip("/").split("/")
         if (len(path) < 3 or path[-2] != "posts"
-                or path[-3] != page_id
+                or path[-3].casefold() not in
+                   {page_id.casefold(), handle.casefold()}
                 or path[-1] != identifier.split("_", 1)[1]):
             raise RuntimeError("facebook_preflight_link_owner_hold")
     paging = result.get("paging", {})
@@ -84,7 +89,8 @@ def _page_samples(page_id: str, expected_name: str,
         raise RuntimeError("facebook_preflight_paging_hold")
     return {
         "status": "API_METADATA_READABLE_NOT_IMAGE_PROOF",
-        "page_id": page_id, "sample_posts_checked": len(posts),
+        "page_id": page_id, "endpoint_edge": edge,
+        "sample_posts_checked": len(posts),
         "more_pages_advertised": bool(paging.get("next")),
         "original_images_verified": 0,
     }
@@ -132,7 +138,8 @@ def preflight(*, config: dict | None = None,
     statuses = []
     for page in checked:
         try:
-            result = _page_samples(page["id"], page["name"], token, getter)
+            result = _page_samples(page["id"], page["name"], token, getter,
+                                   mode=mode, handle=page["handle"])
             statuses.append(result)
         except (RuntimeError, ValueError, TypeError):
             # Meta error detail and credentials must NEVER enter the audit.
