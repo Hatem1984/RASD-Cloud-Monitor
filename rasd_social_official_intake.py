@@ -1,6 +1,6 @@
 """Authorized, read-only RASD social API discovery. NEVER sends or publishes.
 
-Official Meta Page-published-posts and X recent-search APIs only. No cookies,
+Official approved Meta Page /posts (PPCA) and /published_posts (managed), and X recent-search APIs only. No cookies,
 personal accounts, scraping, third-party search, tokens in URLs/logs, or implicit
 paid X requests. Data are CANDIDATES, never screenshot-verified news.
 """
@@ -224,6 +224,12 @@ def collect_approved_facebook(config: dict, *, token: str,
     profiles = [_fb_page_profile(p) for p in pages]
     if len({p["id"] for p in profiles}) != len(profiles):
         raise ValueError("facebook_duplicate_page_scope_hold")
+    mode = config.get("access_mode", "managed_page")
+    if mode not in {"managed_page", "public_ppca"}:
+        raise ValueError("facebook_access_mode_invalid_hold")
+    # PPCA allows the Page's public /posts edge; /published_posts is
+    # retained for directly managed Pages. This does not grant PPCA.
+    edge = "posts" if mode == "public_ppca" else "published_posts"
     seen, posts, failures = set(), [], []
     for page in profiles:
         after = None
@@ -238,7 +244,7 @@ def collect_approved_facebook(config: dict, *, token: str,
                 }
                 if after:
                     params["after"] = after
-                uri = GRAPH + "/" + page["id"] + "/published_posts?" + urlencode(params)
+                uri = GRAPH + "/" + page["id"] + "/" + edge + "?" + urlencode(params)
                 payload = getter(uri, token, expected_host="graph.facebook.com")
                 data = payload.get("data")
                 if not isinstance(data, list) or len(data) > page_size:
