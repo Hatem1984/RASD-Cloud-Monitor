@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "purpose": "Facebook PPCA source shortlisting for RASD Ministry of Planning review ONLY",
+  "review_date": "2026-11-09",
+  "meta_app_id": "1677477337289157",
+  "operational_status": "HOLD_NO_PPCA_GRANT_OR_META_PAGE_IDS",
+  "promotion_allowed": false,
+  "notes": "NOT active sources; every numeric Page ID must come from authorized Meta API and be matched to an independently approved page name/handle; these URLs alone do not prove current Page IDs or authorization",
+  "pages": [
+    {
+      "name": "وزارة التخطيط والتنمية الاقتصادية - مصر",
+      "url": "https://www.facebook.com/MPEDEGYPT/",
+      "category": "ministry",
+      "publisher_evidence": "https://alfaraena.com/هااام-جدًا-الصفحات-الرسمية-لمؤسسات-ال/",
+      "evidence_class": "secondary_older_2020",
+      "status": "HOLD_FIRST_PARTY_IDENTITY_AND_CURRENT_URL",
+      "meta_numeric_page_id": null,
+      "approved": false
+    },
+    {
+      "name": "اليوم السابع",
+      "url": "https://www.facebook.com/youm7",
+      "category": "news",
+      "publisher_evidence": "https://www.youm7.com/story/2026/5/5/اليوم-السابع-ينوه-بوجود-موقع-ينتحل-اسمه-ويؤكد-لا-يمت/7403158",
+      "evidence_class": "publisher_named_official_2026",
+      "status": "HOLD_META_NUMERIC_PAGE_ID_AND_PPCA",
+      "meta_numeric_page_id": null,
+      "approved": false
+    },
+    {
+      "name": "المصري اليوم",
+      "url": "https://www.facebook.com/AlmasryAlyoum/",
+      "category": "news",
+      "publisher_evidence": "https://www.almasryalyoum.com/news/details/4273101",
+      "evidence_class": "publisher_named_official_2026",
+      "status": "HOLD_META_NUMERIC_PAGE_ID_AND_PPCA",
+      "meta_numeric_page_id": null,
+      "approved": false
+    },
+    {
+      "name": "الوطن",
+      "url": "https://www.facebook.com/elwatannews",
+      "category": "news",
+      "publisher_evidence": "https://www.elwatannews.com/news/details/66972",
+      "evidence_class": "publisher_named_official_old_2012",
+      "status": "HOLD_RECONFIRM_CURRENT_HANDLE_AND_ID",
+      "meta_numeric_page_id": null,
+      "approved": false
+    },
+    {
+      "name": "Q News",
+      "url": "https://www.facebook.com/Qnewsegy",
+      "category": "news",
+      "publisher_evidence": "https://www.dostor.org/4825287",
+      "evidence_class": "third_party_news_report_2024",
+      "status": "HOLD_PUBLISHER_SELF_ATTESTATION_AND_ID",
+      "meta_numeric_page_id": null,
+      "approved": false
+    }
+  ]
+}

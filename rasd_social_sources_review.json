@@ -10,7 +10,9 @@
     "access_confirmed": false,
     "pages": [],
     "max_pages_per_page": 3,
-    "max_posts_per_page": 25
+    "max_posts_per_page": 25,
+    "meta_app_id": "1677477337289157",
+    "status": "HOLD_PPCA_BUSINESS_UNVERIFIED_NO_PAGE_IDS_NO_TOKEN"
   },
   "x": {
     "approved": false,
