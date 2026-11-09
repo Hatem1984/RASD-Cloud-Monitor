@@ -69,6 +69,8 @@ def make_social_test_word(directory: Path, now: datetime,
             "ولا دليلًا على غياب منشورات من المنصات.",
         "معاينة محلية غير مرسلة":
             "اختبار تسليم من نظام رصد — غير معتمد إنتاجيًا",
+        "نسخة مراجعة تجريبية — لم تُرسل ولا تثبت اكتمال التغطية":
+            "نسخة اختبار تسليم بالبريد — لا تثبت اكتمال التغطية",
     }
     updated = set()
     text_paragraphs = list(doc.paragraphs)
@@ -82,6 +84,12 @@ def make_social_test_word(directory: Path, now: datetime,
                     updated.add(before)
     if updated != set(replacements):
         raise RuntimeError("social_test_word_label_replacement_hold")
+    # Sender must never transmit a document still saying it was NOT sent.
+    for paragraph in text_paragraphs:
+        if any(mark in paragraph.text for mark in
+               ("لم تُرسل", "معاينة محلية غير مرسلة",
+                "هذه نسخة معاينة بلا إرسال")):
+            raise RuntimeError("social_test_unconverted_draft_label_hold")
     notice = doc.paragraphs[0].insert_paragraph_before(
         "اختبار إرسال تقرير السوشيال من رصد — لا توجد منشورات موثقة "
         "في بيانات الاختبار، وصلاحيات Facebook العامة غير معتمدة."
