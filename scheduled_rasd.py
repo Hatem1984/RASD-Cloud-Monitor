@@ -225,6 +225,48 @@ def validate_story(item: dict, config: dict) -> None:
         raise ValueError("incomplete_story")
 
 
+
+def public_failed_feed_diagnostics(sources: list[dict],
+                                   configured_feeds: list[dict]) -> list[dict]:
+    """Bounded diagnostics for PUBLIC approved RSS feed failures only.
+
+    No raw exception strings, feed URLs, story content, credentials, email
+    addresses, private ledger data, or publisher response bodies are logged.
+    An unexpected source mapping is never treated as trusted evidence.
+    """
+    if (len(sources) != len(configured_feeds) or
+            [row.get("feed_id") for row in sources] !=
+            [feed.get("id") for feed in configured_feeds]):
+        return []
+    safe_errors = frozenset({
+        "HTTPError", "URLError", "ParseError", "TimeoutError",
+        "ValueError", "RuntimeError", "OSError", "SSLError",
+        "ConnectionResetError", "RemoteDisconnected",
+    })
+    safe_http = frozenset({
+        301, 302, 303, 307, 308, 400, 401, 403, 404, 408, 429,
+        500, 502, 503, 504,
+    })
+    failures = []
+    for row in sources:
+        if row.get("status") != "failed":
+            continue
+        source_id = row.get("feed_id")
+        if (not isinstance(source_id, str) or
+                re.fullmatch(r"[a-z0-9_]{1,40}", source_id) is None):
+            continue
+        error = row.get("error")
+        http = row.get("http_status")
+        failures.append({
+            "feed_id": source_id,
+            "error_type": error if type(error) is str
+                          and error in safe_errors else "other",
+            "http_status": http if type(http) is int
+                           and http in safe_http else None,
+        })
+    return failures
+
+
 def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                            allow_degraded: bool = False,
                            source_records: list[dict] | None = None,
@@ -252,6 +294,13 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
             "feed_id": s["feed_id"], "status": s["status"],
             "verified_links": s.get("verified_links", 0)
         } for s in observed["sources"])
+        # This is a public, bounded publisher-status diagnostic only.
+        # It does not change source admission, images, SMTP or private CAS.
+        failed_feeds = public_failed_feed_diagnostics(
+            observed["sources"], config["feeds"])
+        if failed_feeds:
+            print("RASD_APPROVED_RSS_SOURCE_FAILURES=" + json.dumps(
+                failed_feeds, sort_keys=True, ensure_ascii=True), flush=True)
     if not allow_degraded and any(s["status"] != "ok" for s in observed["sources"]):
         raise RuntimeError("source_not_healthy")
     newest = {}
