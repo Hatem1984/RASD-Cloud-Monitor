@@ -284,14 +284,20 @@ def render_docx(report: dict, destination: Path) -> None:
     p = doc.add_paragraph()
     _rtl(p)
     coverage = report["coverage"]
-    if coverage == "CONSOLIDATED_PREVIOUSLY_SENT_ORIGINALS":
+    if report.get("manual_web_mode"):
+        count_label = "روابط RSS التي أمكن فحصها"
+        article_label = "مواد مسودة دون صور موثقة"
+        coverage_label = "معاينة RSS غير موثقة بالصور"
+    elif coverage == "CONSOLIDATED_PREVIOUSLY_SENT_ORIGINALS":
         count_label = "روابط الأخبار المسلّمة"
         article_label = "أخبار مجمّعة من التسليم السابق"
+        coverage_label = COVERAGE_LABELS.get(coverage, coverage)
     else:
         count_label = "روابط RSS التي أمكن فحصها"
         article_label = "أخبار مصورة مستوفية"
+        coverage_label = COVERAGE_LABELS.get(coverage, coverage)
     p.add_run(
-        "الحالة: " + COVERAGE_LABELS.get(coverage, coverage) +
+        "الحالة: " + coverage_label +
         " | " + count_label + ": " + str(report["verified_links"]) +
         " | " + article_label + ": " + str(len(report["articles"]))
     )
