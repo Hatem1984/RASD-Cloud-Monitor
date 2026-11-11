@@ -1,0 +1,50 @@
+name: RASD owner QA contract - OFFLINE NO SEND
+
+on:
+  push:
+    branches:
+      - 'qa/owner-halfhour-cloud-review-20261103'
+    paths:
+      - '.github/workflows/rasd-owner-protected-readonly-qa.yml'
+      - 'rasd_protected_settings_preflight.py'
+      - 'rasd_settings_bridge_qa.py'
+      - 'sources_owner_daily_qa.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-owner-contract-qa-offline
+  cancel-in-progress: false
+
+jobs:
+  qa-contract-no-secrets:
+    if: github.repository == 'Hatem1984/RASD-Cloud-Monitor' && github.ref == 'refs/heads/qa/owner-halfhour-cloud-review-20261103'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      RASD_OWNER_SETTINGS_ENABLED: 'false'
+      RASD_AUTOMATION_ENABLED: 'false'
+    steps:
+      - name: Checkout QA code with no persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install existing offline unit test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Validate private-settings reader contract with mocked API (NO NETWORK, NO SMTP)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p test_owner_protected_settings_preflight_qa.py -q
+          python -m unittest discover -s tests -p test_owner_settings_bridge_qa.py -q
+      - name: Confirm safe separation from production secret environment
+        run: |
+          echo 'RASD_PUBLIC_QA_CONTRACT=PASS'
+          echo 'RASD_PRIVATE_QA_RUNTIME=TESTED_IN_RASD_PILOT_PRIVATE_REPOSITORY'
+          echo 'RASD_SMTP_SENT=false'

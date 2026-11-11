@@ -123,26 +123,34 @@ def proof_capture(article: dict, feeds: list[dict], destination: Path,
             not allowed_url(article["url"], publisher) or
             article_id(article["url"]) != article["id"]):
         return {"status": "hold", "reason": "source_identity_mismatch"}
-    result = capture(article["url"], publisher, destination)
-    if not result.get("ok"):
-        return {"status": "hold", "reason": classify_failure(result.get("reason"))}
-    if (not result.get("actual_url") or
-            canonical_url(result["actual_url"]) != canonical_url(article["url"])):
-        return {"status": "hold", "reason": "url_mismatch"}
-    if not original_headline_in_page_title(article["headline"], result.get("title", "")):
-        return {"status": "hold", "reason": "title_mismatch"}
-    if not destination.is_file() or destination.stat().st_size < 8000:
-        return {"status": "hold", "reason": "screenshot_too_small"}
-    quality = image_quality(destination)
-    if not quality["accepted"]:
-        return {"status": "hold", "reason": classify_failure("visual_qa_" + quality["reason"])}
-    raw = destination.read_bytes()
-    if not raw.startswith(b"\xff\xd8"):
-        return {"status": "hold", "reason": "invalid_jpeg_signature"}
-    digest = hashlib.sha256(raw).hexdigest()
-    if result.get("sha256") and digest != result["sha256"]:
-        return {"status": "hold", "reason": "screenshot_digest_mismatch"}
-    return {"status": "verified", "sha256": digest, "bytes": len(raw)}
+    # Capture into a unique staging directory. A page may be rendered but
+    # subsequently fail URL/title/digest QA. Never promote that rejected image
+    # as the "original" screenshot, or overwrite a previous verified artifact.
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".rasd-proof-", dir=destination.parent) as folder:
+        staged = Path(folder) / "original.jpg"
+        result = capture(article["url"], publisher, staged)
+        if not result.get("ok"):
+            return {"status": "hold", "reason": classify_failure(result.get("reason"))}
+        if (not result.get("actual_url") or
+                canonical_url(result["actual_url"]) != canonical_url(article["url"])):
+            return {"status": "hold", "reason": "url_mismatch"}
+        if not original_headline_in_page_title(article["headline"], result.get("title", "")):
+            return {"status": "hold", "reason": "title_mismatch"}
+        if not staged.is_file() or staged.stat().st_size < 8000:
+            return {"status": "hold", "reason": "screenshot_too_small"}
+        quality = image_quality(staged)
+        if not quality["accepted"]:
+            return {"status": "hold", "reason": classify_failure("visual_qa_" + quality["reason"])}
+        raw = staged.read_bytes()
+        if not raw.startswith(b"\xff\xd8"):
+            return {"status": "hold", "reason": "invalid_jpeg_signature"}
+        digest = hashlib.sha256(raw).hexdigest()
+        if result.get("sha256") and digest != result["sha256"]:
+            return {"status": "hold", "reason": "screenshot_digest_mismatch"}
+        staged.replace(destination)
+        return {"status": "verified", "sha256": digest, "bytes": len(raw)}
 
 
 def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,

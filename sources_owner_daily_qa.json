@@ -1,0 +1,131 @@
+{
+  "version": 4,
+  "scope": "Egyptian Ministry of Planning - publicly published news only",
+  "keywords": [
+    "وزير التخطيط",
+    "الدكتور أحمد رستم",
+    "أحمد رستم",
+    "Ahmed Rostom",
+    "وزارة التخطيط",
+    "خطة التنمية الاقتصادية",
+    "بنك الاستثمار القومي",
+    "معدل النمو",
+    "معدل نمو الاقتصاد المصري",
+    "البرنامج الوطني للتحول الاقتصادي",
+    "تقرير الفقر",
+    "الجهاز المركزي للتعبئة العامة والإحصاء"
+  ],
+  "feeds": [
+    {
+      "id": "hapi",
+      "name": "Hapi native news RSS",
+      "url": "https://hapijournal.com/feed/",
+      "allowed_article_hosts": [
+        "hapijournal.com",
+        "www.hapijournal.com"
+      ]
+    },
+    {
+      "id": "almasryalyoum",
+      "name": "Al Masry Al Youm native news RSS",
+      "url": "https://www.almasryalyoum.com/rss/rssfeeds",
+      "allowed_article_hosts": [
+        "www.almasryalyoum.com",
+        "almasryalyoum.com"
+      ]
+    },
+    {
+      "id": "shorouk",
+      "name": "Al Shorouk native Economy RSS",
+      "url": "https://www.shorouknews.com/Economy/rss",
+      "allowed_article_hosts": [
+        "www.shorouknews.com"
+      ]
+    },
+    {
+      "id": "alborsa",
+      "name": "Alborsa native Egyptian Economy RSS",
+      "url": "https://alborsaanews.com/category/%D8%A7%D9%84%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%89/feed",
+      "allowed_article_hosts": [
+        "www.alborsaanews.com",
+        "alborsaanews.com"
+      ]
+    },
+    {
+      "id": "masrawy",
+      "name": "Masrawy native Egypt news RSS",
+      "url": "https://www.masrawy.com/rss/feed/35/%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1%20%D9%85%D8%B5%D8%B1-%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9",
+      "allowed_article_hosts": [
+        "www.masrawy.com",
+        "masrawy.com"
+      ]
+    },
+    {
+      "id": "almessa",
+      "name": "Al Massa native news RSS",
+      "url": "https://almessa.gomhuriaonline.com/feed/",
+      "allowed_article_hosts": [
+        "almessa.gomhuriaonline.com"
+      ]
+    },
+    {
+      "id": "elbalad",
+      "name": "Sada El Balad native news RSS",
+      "url": "https://www.elbalad.news/rss.aspx",
+      "allowed_article_hosts": [
+        "www.elbalad.news"
+      ]
+    },
+    {
+      "id": "vetogate",
+      "name": "Veto native news RSS",
+      "url": "https://www.vetogate.com/rss.aspx",
+      "allowed_article_hosts": [
+        "www.vetogate.com"
+      ]
+    },
+    {
+      "id": "dailynewsegypt",
+      "name": "Daily News Egypt native RSS",
+      "url": "https://dailynewsegypt.com/feed/",
+      "allowed_article_hosts": [
+        "dailynewsegypt.com",
+        "www.dailynewsegypt.com"
+      ]
+    },
+    {
+      "id": "egyptindependent",
+      "name": "Egypt Independent native RSS",
+      "url": "https://www.egyptindependent.com/feed/",
+      "allowed_article_hosts": [
+        "www.egyptindependent.com"
+      ]
+    },
+    {
+      "id": "egyptianstreets",
+      "name": "Egyptian Streets native RSS",
+      "url": "https://egyptianstreets.com/feed/",
+      "allowed_article_hosts": [
+        "egyptianstreets.com"
+      ]
+    },
+    {
+      "id": "skynewsarabia",
+      "name": "Sky News Arabia native RSS",
+      "url": "https://www.skynewsarabia.com/rss.xml",
+      "allowed_article_hosts": [
+        "www.skynewsarabia.com"
+      ]
+    },
+    {
+      "id": "inp_official",
+      "name": "National Planning Institute native RSS",
+      "url": "https://inp.edu.eg/feed/",
+      "allowed_article_hosts": [
+        "inp.edu.eg"
+      ]
+    }
+  ],
+  "max_feed_bytes": 1500000,
+  "recent_hours": 72
+}

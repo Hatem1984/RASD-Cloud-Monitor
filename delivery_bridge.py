@@ -156,7 +156,7 @@ class PrivateGitHubLedger:
         self.write(complete_entry(state, article_key, now_iso(), message_id), sha)
 
     def mark_smtp_accepted_many(self, article_keys: list[str],
-                                message_id: str) -> None:
+                                message_id: str, *, slot_key: str | None = None) -> None:
         """Atomically accept one Word email containing several news articles.
 
         Validate ALL article reservations before the single private CAS PUT.
@@ -174,10 +174,20 @@ class PrivateGitHubLedger:
                     state["entries"][key].get("status") != "reserved" or
                     state["entries"][key].get("kind") != "interval_item"):
                 raise RuntimeError("batch_reservation_not_eligible")
+        if slot_key is not None:
+            if not HEX_ID.fullmatch(slot_key):
+                raise ValueError("interval_slot_key_invalid")
+            slot = state["entries"].get(slot_key)
+            if (not isinstance(slot, dict) or slot.get("kind")!="interval_slot"
+                    or slot.get("status")!="reserved"
+                    or sorted(slot.get("article_ids",[]))!=sorted(article_keys)):
+                raise RuntimeError("interval_slot_not_eligible")
         accepted_at = now_iso()
         final = state
         for key in article_keys:
             final = complete_entry(final, key, accepted_at, message_id)
+        if slot_key is not None:
+            final = complete_entry(final, slot_key, accepted_at, message_id)
         try:
             self.write(final, sha)
         except RuntimeError:
@@ -195,7 +205,7 @@ class PrivateGitHubLedger:
                     current["entries"].get(key, {}).get("status") != "smtp_accepted" or
                     current["entries"][key].get("message_id") != message_id or
                     current["entries"][key].get("accepted_at") != accepted_at
-                    for key in article_keys):
+                    for key in article_keys + ([slot_key] if slot_key else [])):
                 raise RuntimeError(
                     "smtp_receipt_persistence_uncertain_manual_reconcile") from None
 

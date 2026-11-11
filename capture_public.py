@@ -15,7 +15,7 @@ APPROVED_PUBLISHERS = {
     "gomhuriaonline.com": frozenset({"almessa.gomhuriaonline.com"}),
     "elbalad.news": frozenset({"www.elbalad.news"}),
     "vetogate.com": frozenset({"www.vetogate.com"}),
-    "dailynewsegypt.com": frozenset({"www.dailynewsegypt.com"}),
+    "dailynewsegypt.com": frozenset({"dailynewsegypt.com", "www.dailynewsegypt.com"}),
     "egyptindependent.com": frozenset({"www.egyptindependent.com"}),
     "egyptianstreets.com": frozenset({"egyptianstreets.com"}),
     "skynewsarabia.com": frozenset({"www.skynewsarabia.com"}),
@@ -30,6 +30,18 @@ APPROVED_PUBLISHERS = {
 # An official Ministry programme may be named without the word "planning".
 # These exact topics preserve the narrow ministry brief and exclude generic economy news.
 PLANNING_TOPIC_NAMES = (
+    "وزير التخطيط",
+    "الدكتور أحمد رستم",
+    "أحمد رستم",
+    "Ahmed Rostom",
+    "وزارة التخطيط",
+    "خطة التنمية الاقتصادية",
+    "بنك الاستثمار القومي",
+    "معدل النمو",
+    "معدل نمو الاقتصاد المصري",
+    "البرنامج الوطني للتحول الاقتصادي",
+    "تقرير الفقر",
+    "الجهاز المركزي للتعبئة العامة والإحصاء",
     "وزارة التخطيط", "وزير التخطيط", "وزيرة التخطيط",
     "التخطيط والتنمية الاقتصادية", "معهد التخطيط القومي",
     "Ministry of Planning", "Planning Ministry",
@@ -105,16 +117,26 @@ def suspicious_flat_lead_media(photo: Image.Image) -> bool:
     width, height = photo.size
     if width < 900 or height < 700:
         return False
-    lead = photo.convert("RGB").crop((
-        int(width * 0.05), int(height * 0.42),
-        int(width * 0.63), int(height * 0.78),
-    ))
-    lead.thumbnail((160, 100))
-    stats = ImageStat.Stat(lead)
-    means, deviations = stats.mean, stats.stddev
-    return (230 <= min(means) and max(means) <= 252
-            and max(means) - min(means) <= 2.8
-            and max(deviations) <= 2.4)
+    rgb = photo.convert("RGB")
+    # Both LEFT and RIGHT article-column layouts occur in real Arabic sites.
+    # Previously only the left crop was inspected: a Nov-2026 Shorouk
+    # screenshot had a readable H1 but a large perfectly flat article area
+    # on the RIGHT, which passed whole-frame variance and was misleading.
+    candidates = (
+        ((0.05, 0.42, 0.63, 0.78), 2.8),
+        ((0.46, 0.33, 0.94, 0.62), 10.0),
+    )
+    for (x0, y0, x1, y1), max_tint in candidates:
+        lead = rgb.crop((int(width*x0), int(height*y0),
+                         int(width*x1), int(height*y1)))
+        lead.thumbnail((160, 100))
+        stats = ImageStat.Stat(lead)
+        means, deviations = stats.mean, stats.stddev
+        if (222 <= min(means) and max(means) <= 253
+                and max(means) - min(means) <= max_tint
+                and max(deviations) <= 2.4):
+            return True
+    return False
 
 
 def image_quality(path: Path) -> dict:
@@ -158,6 +180,36 @@ def accept_staged_image(staged: Path, destination: Path) -> dict:
     return {"ok": True, "reason": "accepted",
             "image": destination.name, "bytes": len(raw),
             "sha256": hashlib.sha256(raw).hexdigest(), "quality": quality}
+
+
+def original_headline_h1_index(page_title: str, page_body: str,
+                               headings: list[str]) -> int | None:
+    """Choose the unique real article H1, not an unrelated sidebar H1.
+
+    Match the heading's words against the genuine publisher <title> AND body.
+    Never insert text, create a synthetic headline or skip the visibility QA.
+    """
+    import re
+    from monitor import _matchable_arabic
+
+    def tokens(text):
+        return re.sub(r"[^\w]+", " ", _matchable_arabic(text)).split()
+
+    title_words = tokens(page_title) if isinstance(page_title, str) else []
+    body_words = tokens(page_body) if isinstance(page_body, str) else []
+    title_norm, body_norm = " ".join(title_words), " ".join(body_words)
+    matches = []
+    for i, heading in enumerate(headings if isinstance(headings, list) else []):
+        if not isinstance(heading, str) or len(heading.strip()) < 18:
+            continue
+        words = tokens(heading)
+        if len(words) < 4:
+            continue
+        lead = " ".join(words[:min(len(words), 6)])
+        if (re.search(r"(?<!\w)" + re.escape(lead) + r"(?!\w)", title_norm)
+                and re.search(r"(?<!\w)" + re.escape(lead) + r"(?!\w)", body_norm)):
+            matches.append(i)
+    return matches[0] if len(matches) == 1 else None
 
 
 def headline_visible_in_viewport(box: dict | None, viewport: dict | None) -> bool:
@@ -229,14 +281,14 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                 # Scroll the ORIGINAL publisher page so its genuine H1
                 # and article lead, not a large ad masthead, fill the
                 # screenshot. Never alter DOM text, source or access rights.
-                headline = page.locator("h1").first
-                if not headline.count():
+                headings = page.locator("h1")
+                if not headings.count():
                     return {"ok": False, "reason": "missing_original_headline"}
-                actual_headline = " ".join(
-                    headline.inner_text(timeout=8000).split())
-                if (len(actual_headline) < 18 or
-                        actual_headline not in " ".join(body.split())):
+                heading_index = original_headline_h1_index(
+                    title, body, headings.all_inner_texts())
+                if heading_index is None:
                     return {"ok": False, "reason": "original_headline_not_in_article"}
+                headline = headings.nth(heading_index)
                 headline.scroll_into_view_if_needed(timeout=4000)
                 headline.evaluate(
                     """element => window.scrollTo(
@@ -247,6 +299,14 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                 # from the already-approved publisher origin. No outside CDN,
                 # retry of a 401/403, DOM alteration or generated replacement.
                 page.wait_for_timeout(1600)
+                # Publisher layout/ad scripts may shift the real heading after
+                # initial scrolling. Re-align the same unmodified DOM heading;
+                # do not accept an out-of-frame screenshot.
+                headline.evaluate(
+                    """element => window.scrollTo(0,
+                       Math.max(0, window.scrollY +
+                       element.getBoundingClientRect().top - 120))""")
+                page.wait_for_timeout(250)
                 if not headline_visible_in_viewport(
                         headline.bounding_box(), page.viewport_size):
                     return {"ok": False, "reason": "original_headline_out_of_frame"}
