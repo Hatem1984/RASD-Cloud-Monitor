@@ -15,7 +15,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from cloud_proof_report import word_images_match_capture_digests
-from daily_report import CAIRO, render_docx
+from daily_report import ARABIC_MONTHS, CAIRO, render_docx
 from official_ministry_source import (
     _read_original, allowed_official_resource, canonical_official_article,
     discover_official_newslist,
@@ -172,10 +172,13 @@ def build_official_daily(output: Path, *, target_date: date,
             browser.close()
     if not accepted:
         raise RuntimeError("official_no_verified_new_original_today")
+    day_display = (f"{target_date.day} "
+                   f"{ARABIC_MONTHS[target_date.month - 1]} "
+                   f"{target_date.year}")
     report = {
-        "title": "رصد | البيان الصحفي الرسمي للوزارة — " + target_date.isoformat(),
-        "display_window_start": target_date.isoformat() + " 00:00 القاهرة",
-        "display_window_end": target_date.isoformat() + " 23:59 القاهرة",
+        "title": "رصد | أخبار الموقع الرسمي للوزارة — " + day_display,
+        "display_window_start": day_display + "، 00:00 بتوقيت القاهرة",
+        "display_window_end": day_display + "، 23:59 بتوقيت القاهرة",
         "coverage": "OFFICIAL_SOURCE_ONLY",
         "verified_links": len(accepted),
         "articles": [{
@@ -183,7 +186,7 @@ def build_official_daily(output: Path, *, target_date: date,
             "source": "وزارة التخطيط والتنمية الاقتصادية — الموقع الرسمي",
             "url": r["url"],
             "published_at_cairo": r["published_date_cairo"] + " (date only)",
-            "published_display_cairo": r["published_date_cairo"] + " — بدون ساعة نشر موثقة",
+            "published_display_cairo": day_display + " — ساعة النشر غير موثقة",
             "evidence_image_path": r["image_path"],
         } for r in accepted],
         "sources": [{

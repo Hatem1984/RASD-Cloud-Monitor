@@ -59,6 +59,17 @@ class OfficialWordPageLayoutTests(unittest.TestCase):
             self.assertIn(headline, "\n".join(p.text for p in out.paragraphs))
             self.assertIn("محدود النطاق",
                           "\n".join(p.text for p in out.paragraphs))
+            body = "\n".join(p.text for p in out.paragraphs)
+            self.assertIn("تقرير محدود من الموقع الرسمي للوزارة", body)
+            self.assertIn("صفحات أخبار رسمية تم التحقق منها", body)
+            self.assertIn("حدود النص المنقول", body)
+            self.assertNotIn("OFFICIAL_SOURCE_ONLY", body)
+            self.assertNotIn("روابط RSS التي أمكن فحصها", body)
+            self.assertNotIn("تحليل تحريري مرتبط بموضوع الخبر", body)
+            self.assertIn("موقع وزارة التخطيط — قائمة الأخبار الرسمية", body)
+            self.assertIn("صفحة موثقة", body)
+            self.assertNotIn("mped-official-original-NewsList-page-1", body)
+            self.assertEqual(len(out.inline_shapes), 1)
             self.assertLessEqual(out.styles["Normal"].font.size.pt, 10)
             self.assertLessEqual(out.styles["Title"].font.size.pt, 14)
             self.assertEqual(out.sections[0].top_margin,
