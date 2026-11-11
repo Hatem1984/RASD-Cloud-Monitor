@@ -396,16 +396,14 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
         "error_type": None if row["status"] == "ok" else "original_feed_unavailable",
     } for row in source_records]
     limitations = (
-        "كل صورة في التقرير ملتقطة من صفحة الناشر الأصلية ومطابقة لبصمة"
-        " JPEG الموجودة فعليًا داخل ملف Word. المطابقة على مستوى"
-        " الرابط المنشور، وليست تجميعًا تحريريًا للأحداث المستقلة."
+        "الصور المرفقة ملتقطة من صفحات الناشرين، وبصماتها مطابقة"
+        " لصور JPEG داخل Word؛ مطابقة الروابط لا تعني استقلال الأحداث."
     )
     if degraded:
         limitations += (
-            f" تغطية جزئية معلنة: {rejected} روابط مطابقة تعذر إثبات صورها؛"
-            f" {sum(s['status'] != 'ok' for s in source_records)}"
-            " مصادر RSS لم تكن متاحة. الروابط المعلقة لم تُحسب"
-            " كأخبار مُسلّمة ويمكن فحصها لاحقًا."
+            f" تغطية جزئية: روابط تعذّر إثبات صورها: {rejected}؛"
+            f" مصادر RSS غير متاحة: {sum(s['status'] != 'ok' for s in source_records)}."
+            " الروابط المعلّقة ليست أخبارًا مُسلّمة ويمكن مراجعتها لاحقًا."
         )
     if pending_approved_news:
         limitations += (
