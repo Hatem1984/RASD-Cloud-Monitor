@@ -109,7 +109,8 @@ jobs:
       RASD_OWNER_PUSH_CONFIRM: ${{ github.event.head_commit.message }}
       RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
       RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
-      RASD_REPORT_CC: ${{ vars.RASD_REPORT_CC }} # second destination, pinned by SHA256 in sender
+      RASD_REPORT_CC: ${{ secrets.RASD_REPORT_CC }} # protected, digest-pinned owner-approved copy
+      RASD_REPORT_CC_REQUIRED: 'true' # fail closed if Secret not provisioned
       RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
       RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
     steps:
@@ -123,6 +124,8 @@ jobs:
           python -m playwright install --only-shell chromium
       - name: Validate scheduler security boundary offline before any private I/O
         run: python -m unittest discover -s tests -p test_scheduled_rasd.py -v
+      - name: Check pinned secondary recipient Secret before private I/O (NO SEND)
+        run: python rasd_recipient_preflight.py
       - name: Research and email verified Word from GitHub cloud worker
         shell: bash
         run: |

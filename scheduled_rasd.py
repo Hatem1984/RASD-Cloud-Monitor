@@ -170,14 +170,18 @@ def require_github_scheduler() -> None:
 
 
 # Fixed digest of the additional address explicitly approved by the owner.
-# Keep the address itself in the protected repository Actions variable, not source.
+# Keep the address only in the protected GitHub Actions Secret, never a repository variable.
 APPROVED_REPORT_COPY_SHA256 = "3a7d7bbeab13d39598527216af04d1ab59f098c57c1dfc2eb93f604f487a0051"
 
 
 def approved_report_copy(sender: str, primary: str) -> str | None:
     """One explicitly authorized extra Gmail recipient; absent means legacy mode."""
     raw = os.environ.get("RASD_REPORT_CC", "")
+    # Production sends require both previously approved recipients; a missing
+    # Secret must NEVER silently downgrade to a one-recipient delivery.
     if not raw:
+        if os.environ.get("RASD_REPORT_CC_REQUIRED") == "true":
+            raise RuntimeError("report_copy_secret_missing")
         return None
     candidate = raw.strip().casefold()
     if (not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", candidate)
@@ -205,6 +209,9 @@ def protected_credentials() -> tuple[str, str, str, PrivateGitHubLedger]:
         raise RuntimeError("sender_and_recipient_must_differ")
     if len(password) < 12 or len(token) < 16:
         raise RuntimeError("missing_protected_credentials")
+    # Fail closed before reading or mutating the private ledger if the
+    # required owner-approved copy Secret was not provisioned or mismatches.
+    approved_report_copy(sender, recipient)
     ledger = PrivateGitHubLedger(token)
     state, _ = ledger.read()
     actual = hashlib.sha256(recipient.encode()).hexdigest()
