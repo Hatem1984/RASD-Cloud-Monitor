@@ -160,6 +160,42 @@ def accept_staged_image(staged: Path, destination: Path) -> dict:
             "sha256": hashlib.sha256(raw).hexdigest(), "quality": quality}
 
 
+
+def original_headline_h1_index(page_title: str, page_body: str,
+                               headings: list[str]) -> int | None:
+    """Locate the one publisher H1 that belongs to the actual article.
+
+    Some newspaper layouts put an unrelated sidebar H1 before the story.
+    Require a substantive heading whose leading words occur in BOTH the
+    unmodified original page title and body. Ambiguous/missing = HOLD.
+    """
+    import re
+    from monitor import _matchable_arabic
+
+    if (not isinstance(page_title, str) or
+            not isinstance(page_body, str) or not isinstance(headings, list)):
+        return None
+
+    def normalized_words(value: str) -> list[str]:
+        normalized = _matchable_arabic(value)
+        return re.sub(r"[^\w]+", " ", normalized).split()
+
+    title = " ".join(normalized_words(page_title))
+    body = " ".join(normalized_words(page_body))
+    matches = []
+    for index, heading in enumerate(headings):
+        if not isinstance(heading, str) or len(heading.strip()) < 18:
+            continue
+        words = normalized_words(heading)
+        if len(words) < 4:
+            continue
+        leading = " ".join(words[:min(6, len(words))])
+        pattern = r"(?<!\w)" + re.escape(leading) + r"(?!\w)"
+        if re.search(pattern, title) and re.search(pattern, body):
+            matches.append(index)
+    return matches[0] if len(matches) == 1 else None
+
+
 def headline_visible_in_viewport(box: dict | None, viewport: dict | None) -> bool:
     """Visual frame must contain real, readable publisher headline geometry."""
     try:
@@ -229,14 +265,14 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                 # Scroll the ORIGINAL publisher page so its genuine H1
                 # and article lead, not a large ad masthead, fill the
                 # screenshot. Never alter DOM text, source or access rights.
-                headline = page.locator("h1").first
-                if not headline.count():
+                headings = page.locator("h1")
+                if not headings.count():
                     return {"ok": False, "reason": "missing_original_headline"}
-                actual_headline = " ".join(
-                    headline.inner_text(timeout=8000).split())
-                if (len(actual_headline) < 18 or
-                        actual_headline not in " ".join(body.split())):
+                matched_index = original_headline_h1_index(
+                    title, body, headings.all_inner_texts())
+                if matched_index is None:
                     return {"ok": False, "reason": "original_headline_not_in_article"}
+                headline = headings.nth(matched_index)
                 headline.scroll_into_view_if_needed(timeout=4000)
                 headline.evaluate(
                     """element => window.scrollTo(
@@ -247,6 +283,13 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                 # from the already-approved publisher origin. No outside CDN,
                 # retry of a 401/403, DOM alteration or generated replacement.
                 page.wait_for_timeout(1600)
+                # Re-align the SAME original heading after late layout shifts;
+                # still reject if it ends outside the screenshot viewport.
+                headline.evaluate(
+                    """element => window.scrollTo(0,
+                       Math.max(0, window.scrollY +
+                       element.getBoundingClientRect().top - 120))""")
+                page.wait_for_timeout(250)
                 if not headline_visible_in_viewport(
                         headline.bounding_box(), page.viewport_size):
                     return {"ok": False, "reason": "original_headline_out_of_frame"}
