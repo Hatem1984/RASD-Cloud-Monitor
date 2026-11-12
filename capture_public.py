@@ -178,7 +178,7 @@ def original_headline_h1_index(page_title: str, page_body: str,
 
     def normalized_words(value: str) -> list[str]:
         normalized = _matchable_arabic(value)
-        return re.sub(r"[^\\w]+", " ", normalized).split()
+        return re.sub(r"[^\w]+", " ", normalized).split()
 
     title = " ".join(normalized_words(page_title))
     body = " ".join(normalized_words(page_body))
@@ -190,7 +190,7 @@ def original_headline_h1_index(page_title: str, page_body: str,
         if len(words) < 4:
             continue
         leading = " ".join(words[:min(6, len(words))])
-        pattern = r"(?<!\\w)" + re.escape(leading) + r"(?!\\w)"
+        pattern = r"(?<!\w)" + re.escape(leading) + r"(?!\w)"
         if re.search(pattern, title) and re.search(pattern, body):
             matches.append(index)
     return matches[0] if len(matches) == 1 else None
