@@ -1,0 +1,29 @@
+name: RASD — owner-reference extra original source QA (NO SEND)
+on:
+  push:
+    branches:
+      - 'gate-rasd-reference-extra-source-qa-*'
+permissions:
+  contents: read
+jobs:
+  original-candidate-rss:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline candidate source safety tests
+        run: python -m unittest discover -s tests -p test_reference_source_probe.py -v
+      - name: Read publisher-owned candidate RSS only (NO NETWORK TO PRIVATE SERVICES)
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: python rasd_reference_source_probe.py
+      - name: Document non-activation boundary
+        run: |
+          echo 'RSS QA observation only. All candidates remain HOLD until source-page screenshot and approved Word tests.'
+          echo 'No report, no SMTP, no source activation, no schedule.'
