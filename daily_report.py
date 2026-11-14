@@ -245,6 +245,14 @@ def _word_hyperlink(paragraph, url, label="فتح الخبر في موقع ال�
 
 
 def render_docx(report: dict, destination: Path) -> None:
+    # The 22:00 report reuses verified original JPEGs from Sent, and adopts
+    # the owner's 1-Nov ministry reference: navy/gold cover, source summary,
+    # then two-column original-page screenshot cards. Other Word paths keep
+    # their existing evidence layout and delivery constraints.
+    if report.get("ministry_media_grid") is True:
+        from rasd_ministry_visual_layout import render_ministry_visual_word
+        render_ministry_visual_word(report, destination)
+        return
     from docx import Document
     from docx.shared import Inches, Pt, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
