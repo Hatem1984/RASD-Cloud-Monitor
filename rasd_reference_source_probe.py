@@ -10,9 +10,31 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
+from urllib.request import Request, build_opener
 
-from monitor import parse_rss, read_feed
+from monitor import RejectRedirect, parse_rss
 
+# Candidate-only first-party fetch, deliberately NOT added to monitor's
+# protected production RSS allowlist. Exact URLs are reviewed in the QA
+# registry; no redirects, no credentials, no alternate mirror or fallback.
+def read_candidate_feed(url: str, limit: int) -> bytes:
+    req = Request(url, headers={"User-Agent": "RASD-original-RSS-QA/1.0"})
+    with build_opener(RejectRedirect()).open(req, timeout=20) as response:
+        if response.status != 200 or response.geturl() != url:
+            raise ValueError("candidate_http_or_redirect_error")
+        raw = response.read(limit + 1)
+        if len(raw) > limit:
+            raise ValueError("candidate_rss_size_exceeded")
+        return raw
+
+
+SAFE_EXPLICIT_REASONS = frozenset({
+    "DTD_or_entity_forbidden", "not_rss", "rss_channel_unverifiable",
+    "rss_original_item_identity_unverifiable",
+    "rss_original_item_date_unverifiable",
+    "rss_original_duplicate_conflict",
+    "candidate_http_or_redirect_error", "candidate_rss_size_exceeded",
+})
 
 ALLOWED_CODES = {
     "ValueError", "RuntimeError", "URLError", "HTTPError",
@@ -21,8 +43,10 @@ ALLOWED_CODES = {
 }
 
 
-def strict_candidate_probe(config: dict, *, fetch=read_feed,
+def strict_candidate_probe(config: dict, *, fetch=None,
                            clock: datetime | None = None) -> dict:
+    if fetch is None:
+        fetch = read_candidate_feed
     now = clock or datetime.now(timezone.utc)
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("candidate_clock_must_have_timezone")
@@ -45,6 +69,7 @@ def strict_candidate_probe(config: dict, *, fetch=read_feed,
         if (parts.scheme != "https" or parts.username or parts.password
                 or parts.port not in (None, 443)
                 or not isinstance(hosts, list) or not hosts
+                or parts.hostname not in hosts
                 or not all(isinstance(x, str) and x for x in hosts)):
             record["reason"] = "INVALID_HTTPS_CANDIDATE"
             checked.append(record)
@@ -68,8 +93,13 @@ def strict_candidate_probe(config: dict, *, fetch=read_feed,
                 original_links=original, relevant_matches=len(matches),
             )
         except Exception as exc:
-            error = type(exc).__name__
-            record["reason"] = error if error in ALLOWED_CODES else "other"
+            # Publisher body/exception messages are untrusted. Only exact
+            # internal exception labels may enter public GitHub logs.
+            if type(exc) is ValueError and str(exc) in SAFE_EXPLICIT_REASONS:
+                record["reason"] = str(exc)
+            else:
+                error = type(exc).__name__
+                record["reason"] = error if error in ALLOWED_CODES else "other"
         checked.append(record)
     return {
         "mode": "strict_original_rss_admission_observation",
