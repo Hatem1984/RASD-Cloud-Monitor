@@ -1,0 +1,55 @@
+{
+  "purpose": "Owner's 1 Nov 2026 six-publisher reference: first-party onboarding CHECKS only; no active feed change.",
+  "review_date": "2026-11-14",
+  "status": "NO_NEW_SOURCES_ACTIVE",
+  "active_already": [
+    "almasryalyoum"
+  ],
+  "candidates": [
+    {
+      "id": "youm7_reports",
+      "publisher": "اليوم السابع",
+      "original_site": "https://www.youm7.com/",
+      "rss_candidate": "https://www.youm7.com/rss/SectionRss?SectionID=97",
+      "allowed_article_hosts": [
+        "www.youm7.com"
+      ],
+      "admission": "HOLD_STRICT_XML_AND_CAPTURE_REQUIRED"
+    },
+    {
+      "id": "soutalomma",
+      "publisher": "صوت الأمة",
+      "original_site": "https://www.soutalomma.com/",
+      "rss_candidate": "https://www.soutalomma.com/rss/rss",
+      "allowed_article_hosts": [
+        "www.soutalomma.com"
+      ],
+      "admission": "HOLD_CHECK_RSS_NOT_HTML"
+    },
+    {
+      "id": "dostor",
+      "publisher": "الدستور",
+      "original_site": "https://www.dostor.org/",
+      "rss_candidate": "https://www.dostor.org/rss.aspx",
+      "allowed_article_hosts": [
+        "www.dostor.org"
+      ],
+      "admission": "HOLD_RSS_ACCESS_UNKNOWN"
+    },
+    {
+      "id": "daralmaref",
+      "publisher": "بوابة دار المعارف",
+      "original_site": "https://daralmaref.com/",
+      "rss_candidate": null,
+      "admission": "HOLD_NATIVE_FEED_UNIDENTIFIED"
+    },
+    {
+      "id": "forbesmiddleeast",
+      "publisher": "فوربس الشرق الأوسط",
+      "original_site": "https://www.forbesmiddleeast.com/ar",
+      "rss_candidate": null,
+      "admission": "HOLD_NATIVE_FEED_UNIDENTIFIED"
+    }
+  ],
+  "acceptance": "No activation until first-party full XML, dated direct links, exact host, original-page screenshot and SHA-bound Word pass in no-send QA."
+}
