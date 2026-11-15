@@ -250,8 +250,12 @@ def render_docx(report: dict, destination: Path) -> None:
     # then two-column original-page screenshot cards. Other Word paths keep
     # their existing evidence layout and delivery constraints.
     if report.get("ministry_media_grid") is True:
-        from rasd_ministry_visual_layout import render_ministry_visual_word
-        render_ministry_visual_word(report, destination)
+        from rasd_ministry_visual_layout import (
+            render_ministry_visual_word, render_ministry_no_accepted_word)
+        if report.get("coverage") == "NO_ACCEPTED_VERIFIED_NEWS":
+            render_ministry_no_accepted_word(report, destination)
+        else:
+            render_ministry_visual_word(report, destination)
         return
     from docx import Document
     from docx.shared import Inches, Pt, RGBColor
