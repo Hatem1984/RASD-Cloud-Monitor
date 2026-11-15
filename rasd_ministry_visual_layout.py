@@ -243,7 +243,7 @@ def render_ministry_no_accepted_word(report: dict, destination: Path) -> None:
 
     p = doc.add_paragraph()
     _rtl(p)
-    _run(p, "تقرير حالة الرصد — لا توجد أخبار مصوّرة مُسلّمة", size=18, bold=True)
+    _run(p, "تقرير حالة الرصد — لا أخبار مصوّرة مُسلّمة", size=18, bold=True)
     p = doc.add_paragraph()
     _rtl(p)
     _run(p, "هذه نتيجة مراجعة سجل التسليم خلال الفترة، وليست شهادة بعدم نشر أخبار.",
