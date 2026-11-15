@@ -221,6 +221,9 @@ def consolidate_sent_words(
     report = {
         "title": title,
         "display_window_start": start, "display_window_end": end,
+        # Style affects only previously accepted original screenshot evidence.
+        # No source, ledger, timestamp, image bytes, or SMTP rules change.
+        "ministry_media_grid": True,
         "coverage": "CONSOLIDATED_PREVIOUSLY_SENT_ORIGINALS",
         "verified_links": len(stories), "articles": assembled,
         "sources": [],
