@@ -184,5 +184,41 @@ class DailyProductionDeliveryNoSend(unittest.TestCase):
         ledger.mark_smtp_accepted.assert_not_called()
 
 
+    def test_eight_coverages_six_sites_like_owner_reference_no_send(self):
+        """1-Nov example scale: 8 publisher clips from 6 origins, all dummy."""
+        from daily_report import render_docx
+        from test_ministry_visual_daily_layout import MinistryMediaLayoutNoSend
+
+        with tempfile.TemporaryDirectory(prefix="rasd-eight-sites-") as folder:
+            root = Path(folder)
+            report, receipts = MinistryMediaLayoutNoSend()._report(root, 8)
+            publishers = [
+                "Hapi native news RSS",
+                "Al Masry Al Youm native news RSS",
+                "Al Shorouk native Economy RSS",
+                "Masrawy native Egypt news RSS",
+                "Al Massa native news RSS",
+                "Sada El Balad native news RSS",
+            ]
+            for index, article in enumerate(report["articles"]):
+                article["source"] = publishers[index % len(publishers)]
+            self.assertEqual(
+                len({item["source"] for item in report["articles"]}), 6)
+            document_path = root / "eight-publisher-fixtures.docx"
+            render_docx(report, document_path)
+            document = Document(document_path)
+            self.assertEqual(len(document.inline_shapes), 8)
+            self.assertGreaterEqual(len(document.tables), 4)
+            self.assertTrue(
+                word_images_match_capture_digests(document_path, receipts))
+            hyperlinks = [
+                rel.target_ref for rel in document.part.rels.values()
+                if rel.reltype.endswith("/hyperlink")
+            ]
+            self.assertEqual(len(hyperlinks), 8)
+            self.assertTrue(all(item["url"] in hyperlinks
+                                for item in report["articles"]))
+
+
 if __name__ == "__main__":
     unittest.main()
