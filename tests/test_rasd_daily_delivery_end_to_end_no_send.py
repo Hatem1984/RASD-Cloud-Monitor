@@ -13,6 +13,7 @@ import os
 import tempfile
 import unittest
 import zipfile
+from email import message_from_bytes, policy
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -24,6 +25,8 @@ from cloud_proof_report import word_images_match_capture_digests
 from test_daily_sent_consolidation import (
     FakeSent, MergeActualDeliveredWord, SENDER, RECIPIENT
 )
+
+CC = "approved-copy@example.invalid"
 
 
 class MockTLSGmail:
@@ -39,7 +42,7 @@ class MockTLSGmail:
         assert sender == SENDER and password == "offline-only"
     def send_message(self, message, from_addr, to_addrs):
         assert from_addr == SENDER
-        assert to_addrs == [RECIPIENT]
+        assert to_addrs == [RECIPIENT, CC]
         self.__class__.messages.append(message)
         return {}
 
@@ -58,7 +61,9 @@ class DailyProductionDeliveryNoSend(unittest.TestCase):
                 original, original_hashes = helper.sample_doc(root, [news])
                 hashes.update(original_hashes)
                 mid = "<rasd-" + ("c" if index == 0 else "d")*24 + "@gmail.com>"
-                sent[mid] = helper.mail(mid, original)
+                mime = message_from_bytes(helper.mail(mid, original), policy=policy.default)
+                mime["Cc"] = CC
+                sent[mid] = mime.as_bytes()
                 state["entries"][news["id"]] = {
                     "status": "smtp_accepted", "kind": "interval_item",
                     "news": news, "message_id": mid,
@@ -100,6 +105,7 @@ class DailyProductionDeliveryNoSend(unittest.TestCase):
                 patch.object(worker, "protected_credentials",
                              return_value=(SENDER, RECIPIENT, "offline-only", ledger)),
                 patch.object(worker, "news_for_rollup", return_value=stories),
+                patch.object(worker, "approved_report_copy", return_value=CC),
                 patch.object(archive, "consolidate_sent_words",
                              side_effect=checked_consolidator),
                 patch.object(worker.smtplib, "SMTP_SSL", MockTLSGmail),
@@ -124,7 +130,7 @@ class DailyProductionDeliveryNoSend(unittest.TestCase):
 
             msg = MockTLSGmail.messages[0]
             self.assertEqual(msg["To"], RECIPIENT)
-            self.assertEqual(msg.get_all("Cc", []), [])
+            self.assertEqual(msg.get_all("Cc", []), [CC])
             self.assertEqual(msg["X-RASD-Delivery-ID"],
                              worker.digest_key("rollup:2026-11-14"))
             self.assertEqual(len(list(msg.iter_attachments())), 1)
