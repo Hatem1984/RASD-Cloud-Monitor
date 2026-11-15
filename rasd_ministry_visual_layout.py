@@ -209,6 +209,64 @@ def _card(cell, item: dict, index: int) -> None:
     p=cell.add_paragraph();_rtl(p);_link(p,item["url"])
 
 
+
+def render_ministry_no_accepted_word(report: dict, destination: Path) -> None:
+    """Use the ministry-style cover for a daily operational ZERO-delivery notice.
+
+    Never confuse zero previously delivered original screenshots with no
+    publisher news. This path inserts neither fabricated articles nor images.
+    """
+    if (report.get("coverage") != "NO_ACCEPTED_VERIFIED_NEWS" or
+            report.get("articles") != [] or
+            report.get("verified_links") != 0):
+        raise ValueError("rasd_visual_zero_status_untrusted")
+
+    doc = Document()
+    section = doc.sections[0]
+    section.page_height = Cm(29.7)
+    section.page_width = Cm(21)
+    section.top_margin = Cm(1.35)
+    section.bottom_margin = Cm(1.35)
+    section.left_margin = Cm(1.4)
+    section.right_margin = Cm(1.4)
+    section.header_distance = Cm(0.65)
+    section.footer_distance = Cm(0.7)
+    section.different_first_page_header_footer = True
+    _section_header(section)
+    doc.styles["Normal"].font.name = "DejaVu Sans"
+    doc.styles["Normal"].font.size = Pt(10)
+
+    end = report.get("display_window_end", "فترة غير محددة")
+    start = report.get("display_window_start", "فترة غير محددة")
+    _cover(doc, date_label=end, period_label=start + " إلى " + end,
+           stories=0, sites=0)
+
+    p = doc.add_paragraph()
+    _rtl(p)
+    _run(p, "تقرير حالة الرصد — لا أخبار مصوّرة مُسلّمة", size=18, bold=True)
+    p = doc.add_paragraph()
+    _rtl(p)
+    _run(p, "هذه نتيجة مراجعة سجل التسليم خلال الفترة، وليست شهادة بعدم نشر أخبار.",
+         size=12, bold=True)
+    p = doc.add_paragraph()
+    _rtl(p)
+    _run(p, "الأخبار المصوّرة التي اجتازت التحقق وأُرسلت خلال الفترة: 0.",
+         size=12)
+    p = doc.add_paragraph()
+    _rtl(p)
+    _run(p, "قد تكون هناك أخبار منشورة لم تُسلّم بسبب تعذر وصول المصدر "
+         "أو رفض التقاط صورة الصفحة الأصلية أو انتظار المراجعة.", size=11)
+    limitations = report.get("limitations", "")
+    if limitations:
+        p = doc.add_paragraph()
+        _rtl(p)
+        _run(p, "حدود التغطية: " + limitations, size=10)
+    doc.core_properties.title = "رصد | تقرير حالة رصد المواقع الإلكترونية"
+    doc.core_properties.author = "RASD"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(destination)
+
+
 def render_ministry_visual_word(report: dict, destination: Path) -> None:
     """Format previously SENT verified screenshots; never infer missing news."""
     if report.get("coverage")!="CONSOLIDATED_PREVIOUSLY_SENT_ORIGINALS":

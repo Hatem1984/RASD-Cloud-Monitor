@@ -903,6 +903,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     "display_window_start": "الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
                     "display_window_end": end_label,
                     "coverage": "NO_ACCEPTED_VERIFIED_NEWS",
+                    "ministry_media_grid": True,
                     "verified_links": 0,
                     "articles": [],
                     "sources": [],
