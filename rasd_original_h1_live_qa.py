@@ -36,25 +36,38 @@ def run_one(*, inspector=inspect, proof=proof_capture) -> dict:
                               for s in observed["sources"]),
         "eligible_candidates": len(discovered),
     }
-    receipt = {"status": "NO_CURRENT_ELIGIBLE_SAMPLE",
-               "publisher_id": None, "image_verified": False,
-               "reason": None}
+    receipts = []
+    attempts = []
+    seen = set()
+    # Sample different ORIGINAL publisher sites to detect regressions beyond
+    # the first successful article. At most three original pages are accessed.
+    for source_id, article in discovered:
+        if source_id in seen:
+            continue
+        seen.add(source_id)
+        attempts.append((source_id, article))
+        if len(attempts) >= 3:
+            break
     with tempfile.TemporaryDirectory(prefix="rasd-h1-live-qa-") as tmp:
-        if discovered:
-            publisher_id, article = discovered[0]
-            result = proof(article, config["feeds"], Path(tmp) / "original.jpg")
+        for index, (publisher_id, article) in enumerate(attempts, 1):
+            result = proof(
+                article, config["feeds"], Path(tmp) / f"original-{index}.jpg")
             good = result.get("status") == "verified"
             reason = result.get("reason")
-            receipt = {
+            receipts.append({
                 "status": "ORIGINAL_PAGE_VERIFIED" if good else "IMAGE_HOLD",
                 "publisher_id": publisher_id,
                 "image_verified": good,
                 "reason": (None if good else reason if
                            reason in SAFE_CAPTURE_FAILURE_CODES else "other")
-            }
+            })
     return {
-        "mode": "RASD_ORIGINAL_H1_ONE_LIVE_QA_NO_SEND",
-        **counts, **receipt,
+        "mode": "RASD_ORIGINAL_H1_MULTIPUBLISHER_LIVE_QA_NO_SEND",
+        **counts,
+        "original_page_attempts": len(receipts),
+        "verified_original_screenshots": sum(
+            x["image_verified"] for x in receipts),
+        "receipts": receipts,
         "sample_only": True,
         "original_page_or_photo_substituted": False,
         "new_sources_activated": False,
