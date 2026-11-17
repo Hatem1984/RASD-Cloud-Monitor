@@ -809,13 +809,13 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 available = [a for a in available
                              if a["published_at_cairo"].startswith("2026-10-23 ")]
             unsent = [a for a in available if a["id"] not in state["entries"]]
-            from event_identity import distinct_events
+            from event_identity import distinct_publisher_coverages
             history = [v["news"] for v in state["entries"].values()
                        if isinstance(v, dict)
                        and v.get("kind") == "interval_item"
                        and v.get("status") in ("reserved", "smtp_accepted")
                        and isinstance(v.get("news"), dict)]
-            stories, repeated_events = distinct_events(unsent, history)
+            stories, repeated_events = distinct_publisher_coverages(unsent, history)
             if repeated_events:
                 print("RASD_SAME_EVENT_HELD_COUNT=" + str(len(repeated_events)),
                       flush=True)
