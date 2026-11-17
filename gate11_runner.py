@@ -28,9 +28,12 @@ SAFE_CAPTURE_FAILURE_CODES = frozenset({
     "publisher_server_error",
     "redirect_outside_publisher", "page_content_unavailable",
     "not_a_planning_article", "screenshot_too_small",
-    "original_article_image_not_loaded",
+    "missing_original_headline", "original_headline_not_in_article",
+    "original_headline_out_of_frame", "original_article_image_not_loaded",
     "visual_qa_too_small_dimensions", "visual_qa_blank_or_low_content",
-    "visual_qa_invalid_image", "invalid_jpeg_signature",
+    "visual_qa_invalid_image", "visual_qa_suspicious_flat_original_lead_media",
+    "invalid_jpeg_signature", "source_identity_mismatch",
+    "screenshot_digest_mismatch",
     "TimeoutError", "Error", "url_mismatch", "title_mismatch",
 })
 
