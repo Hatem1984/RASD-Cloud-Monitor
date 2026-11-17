@@ -94,6 +94,60 @@ class LiveCoverageContract(unittest.TestCase):
             run_coverage_qa(untrusted, inspector=lambda *_a, **_k:
                             self.fail("should never fetch"), now=NOW)
 
+    def test_strict_monitor_exposes_only_preapproved_feed_error_code(self):
+        from monitor import inspect
+
+        config = {
+            "feeds": [
+                {"id": "hapi", "name": "Hapi", "url": "https://hapijournal.com/feed/",
+                 "allowed_article_hosts": ["hapijournal.com"]},
+                {"id": "broken", "name": "Broken QA", "url": "https://broken.invalid/feed",
+                 "allowed_article_hosts": ["broken.invalid"]},
+            ],
+            "keywords": ["وزارة التخطيط"],
+            "max_feed_bytes": 100000,
+            "recent_hours": 72,
+        }
+        fixture = (
+            '<rss><channel><item><title>وزارة التخطيط تعلن برنامجًا جديدًا</title>'
+            '<link>https://hapijournal.com/qa-story</link>'
+            '<pubDate>Tue, 17 Nov 2026 07:00:00 +0000</pubDate>'
+            '</item></channel></rss>').encode()
+        def fetch(url, _limit):
+            if "broken.invalid" in url:
+                raise RuntimeError("feed_redirect_blocked")
+            return fixture
+        result = inspect(config, fetch=fetch, now=NOW,
+                         require_complete_items=True, article_limit=200)
+        self.assertEqual(result["sources"][1]["error"], "RuntimeError")
+        self.assertEqual(result["sources"][1]["error_code"],
+                         "feed_redirect_blocked")
+
+    def test_untrusted_feed_error_message_replaced_with_other(self):
+        from monitor import inspect
+        config = {
+            "feeds": [
+                {"id": "first", "name": "Hapi", "url": "https://hapijournal.com/feed/",
+                 "allowed_article_hosts": ["hapijournal.com"]},
+                {"id": "second", "name": "Broken", "url": "https://blocked.invalid/feed",
+                 "allowed_article_hosts": ["blocked.invalid"]},
+            ],
+            "keywords": [],
+            "max_feed_bytes": 100000,
+            "recent_hours": 72,
+        }
+        fixture = (b'<rss><channel><item><title>Normal news</title>'
+                   b'<link>https://hapijournal.com/story</link>'
+                   b'<pubDate>Tue, 17 Nov 2026 07:00:00 +0000</pubDate>'
+                   b'</item></channel></rss>')
+        def fetch(url, _limit):
+            if "blocked.invalid" in url:
+                raise ValueError("secret=DO_NOT_EXPOSE http://private.invalid")
+            return fixture
+        result = inspect(config, fetch=fetch, now=NOW,
+                         require_complete_items=True)
+        self.assertEqual(result["sources"][1]["error_code"], "other")
+
 
 if __name__ == "__main__":
     unittest.main()
