@@ -911,7 +911,35 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
         if mode in ("rollup", "rollup_recovery", "rollup_owner_once"):
             rollup_key = digest_key("rollup:" + day)
             if rollup_key in state["entries"]:
-                return {"status": "rollup_already_reserved_or_sent", "smtp_accepted": False}
+                # Reserved is NOT SMTP accepted; and SMTP accepted is NOT
+                # evidence of inbox arrival. Preserve exactly-once blocking
+                # for BOTH states; only report the true durable ledger status.
+                existing = state["entries"][rollup_key]
+                if not isinstance(existing, dict):
+                    raise RuntimeError("daily_rollup_ledger_entry_invalid")
+                actual = existing.get("status")
+                if actual == "reserved":
+                    return {
+                        "status": "rollup_reserved_pending_manual_reconciliation",
+                        "smtp_accepted": False,
+                        "inbox_delivery_verified": False,
+                        "manual_reconciliation_required": True,
+                    }
+                if actual == "smtp_accepted":
+                    return {
+                        "status": "rollup_already_smtp_accepted_unconfirmed_inbox",
+                        "smtp_accepted": False,  # no NEW SMTP in this run
+                        "inbox_delivery_verified": False,
+                        "manual_reconciliation_required": False,
+                    }
+                if actual == "hold":
+                    return {
+                        "status": "rollup_ledger_hold_requires_review",
+                        "smtp_accepted": False,
+                        "inbox_delivery_verified": False,
+                        "manual_reconciliation_required": True,
+                    }
+                raise RuntimeError("daily_rollup_ledger_status_invalid")
             stories = news_for_rollup(state, day, config)
             day_label, end_label = cairo_rollup_label(day)
             if not stories:
