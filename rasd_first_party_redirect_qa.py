@@ -30,10 +30,16 @@ def safe_first_party_destination(source: dict, newurl: str) -> str | None:
     try:
         target = urlsplit(newurl)
         hosts = source["allowed_article_hosts"]
-        if (target.scheme == "https" and target.hostname in hosts
+        # The only QA extension is the SAME site's www/apex spelling.
+        # It is not a general same-eTLD, CDN or redirect allowance.
+        origin_root = original.hostname.removeprefix("www.")
+        target_root = (target.hostname or "").removeprefix("www.")
+        if (target.scheme == "https" and original.hostname in hosts
+                and target_root == origin_root
+                and target.hostname in {origin_root, "www." + origin_root}
                 and target.port in (None, 443) and not target.username
                 and not target.password and not target.fragment
-                and not target.query and original.hostname in hosts):
+                and not target.query):
             return newurl
     except (ValueError, TypeError, KeyError):
         pass
@@ -83,7 +89,11 @@ def observe(feed: dict, *, opener=None, now=None) -> dict:
             if len(data) > 1_500_000:
                 result["reason"] = "TARGET_TOO_LARGE"
                 return result
-        candidate = {**feed, "url": target}
+        candidate = {
+            **feed, "url": target,
+            "allowed_article_hosts": list(set(feed["allowed_article_hosts"]) |
+                                          {urlsplit(target).hostname}),
+        }
         count, _matches = parse_rss(
             data, candidate, ["وزارة التخطيط", "وزير التخطيط",
                               "التخطيط والتنمية الاقتصادية"],
