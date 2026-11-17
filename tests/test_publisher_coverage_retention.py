@@ -41,6 +41,21 @@ class PublisherClippingEvidenceTests(unittest.TestCase):
         self.assertEqual(retained, [a])
         self.assertEqual(suppressed, [b])
 
+    def test_different_one_digit_government_figures_never_merge(self):
+        a = coverage("صحيفة أ", "a" * 24,
+                     "وزارة التخطيط تستهدف تنفيذ 3 مشروعات تنموية جديدة")
+        b = coverage("صحيفة أ", "b" * 24,
+                     "وزارة التخطيط تستهدف تنفيذ 5 مشروعات تنموية جديدة")
+        self.assertFalse(same_event(a, b))
+        self.assertEqual(len(distinct_publisher_coverages([a, b])[0]),2)
+
+    def test_arabic_single_digits_remain_distinct(self):
+        a = coverage("صحيفة أ", "a"*24,
+                     "وزارة التخطيط تناقش ٣ مشروعات تطوير جديدة")
+        b = coverage("صحيفة أ", "b"*24,
+                     "وزارة التخطيط تناقش ٥ مشروعات تطوير جديدة")
+        self.assertFalse(same_event(a, b))
+
     def test_same_original_url_id_is_never_resent(self):
         a = coverage("صحيفة معتمدة", "a" * 24)
         duplicate = coverage("مصدر آخر - بيانات متناقضة", "a" * 24)
