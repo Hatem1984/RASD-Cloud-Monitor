@@ -51,6 +51,23 @@ class NewPublisherQA(unittest.TestCase):
         self.assertEqual(observed["emails_sent"], 0)
         self.assertFalse(observed["screenshots_and_word_created"])
 
+    def test_canonical_swap_only_exact_first_party_https(self):
+        from rasd_candidate_redirect_qa import approved_apex_swap
+        url = "https://amwalalghad.com/feed/"
+        hosts = ("amwalalghad.com", "www.amwalalghad.com")
+        self.assertEqual(
+            approved_apex_swap(url, "https://www.amwalalghad.com/feed/", hosts),
+            "https://www.amwalalghad.com/feed/")
+        for target in (
+            "https://evil.invalid/feed/",
+            "https://www.amwalalghad.com/other",
+            "https://www.amwalalghad.com/feed/?next=external",
+            "http://www.amwalalghad.com/feed/",
+            "https://www.amwalalghad.com.attacker.invalid/feed/",
+        ):
+            with self.subTest(target=target):
+                self.assertIsNone(approved_apex_swap(url, target, hosts))
+
     def test_cross_origin_or_plain_http_never_fetches(self):
         for address in ("http://amwalalghad.com/feed/",
                         "https://attacker.invalid/feed/",
