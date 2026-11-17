@@ -41,11 +41,30 @@ class SmartNoEmptyInterval(unittest.TestCase):
   return result,capture
  def test_empty_news_no_mail_cas(self):
   result,capture=self.call([])
-  self.assertEqual(result["status"],"NO_NEW_VERIFIED_NEWS")
+  self.assertEqual(result["status"],"SOURCE_UNAVAILABLE_NO_VERIFIED_NEWS")
   self.assertFalse(result["smtp_accepted"])
   self.assertEqual(result["sources_failed"],1)
+  self.assertEqual(result["failed_source_ids"],["hapi"])
   self.assertEqual(result["sources_checked"],2)
   capture.assert_not_called()
+
+ def test_all_healthy_and_no_articles_is_true_no_new_verified_news(self):
+  self.good[1]["status"]="ok"
+  result,capture=self.call([])
+  self.assertEqual(result["status"],"NO_NEW_VERIFIED_NEWS")
+  self.assertEqual(result["coverage_status"],"HEALTHY")
+  self.assertEqual(result["failed_source_ids"],[])
+  self.assertEqual(result["sources_failed"],0)
+  capture.assert_not_called()
+
+ def test_failed_source_is_always_reported_even_when_image_hold(self):
+  story={"id":"a"*24,"headline":"fixture",
+         "published_at_cairo":"2026-10-27 14:30 EEST"}
+  result,capture=self.call([story])
+  self.assertEqual(result["status"],"EVIDENCE_HOLD")
+  self.assertEqual(result["failed_source_ids"],["hapi"])
+  self.assertEqual(result["coverage_status"],"PARTIAL")
+  capture.assert_called_once()
  def test_source_image_hold_no_mail_retry_eligible(self):
   story={"id":"a"*24,"headline":"test","published_at_cairo":"2026-10-27 14:30 EEST"}
   result,capture=self.call([story])
@@ -64,6 +83,25 @@ class SmartNoEmptyInterval(unittest.TestCase):
   with self.assertRaisesRegex(RuntimeError,"source_health_metadata"):
    rasd.smart_interval_no_mail(config=self.config,
     health=[{"feed_id":"ministry","status":"ok"}],window="2026-10-27T11:30Z")
+ def test_untrusted_source_ids_never_leak_to_public_run_result(self):
+  for unsafe in ("unsafe\\nURL=https://secret.invalid", "UPPERCASE",
+                 "bad id", {"private":"data"}):
+   with self.subTest(unsafe=unsafe):
+    config={"feeds":[{"id":"ministry"},{"id":unsafe}]}
+    health=[{"feed_id":"ministry","status":"ok"},
+            {"feed_id":unsafe,"status":"failed"}]
+    with self.assertRaisesRegex(RuntimeError,"source_health_metadata"):
+     rasd.smart_interval_no_mail(config=config,health=health,
+      window="2026-10-27T11:30Z")
+
+ def test_duplicate_feed_id_fails_closed(self):
+  config={"feeds":[{"id":"hapi"},{"id":"hapi"}]}
+  with self.assertRaisesRegex(RuntimeError,"source_health_metadata"):
+   rasd.smart_interval_no_mail(config=config,
+    health=[{"feed_id":"hapi","status":"ok"},
+            {"feed_id":"hapi","status":"failed"}],
+    window="2026-10-27T11:30Z")
+
  def test_negative_hold_fails_closed(self):
   with self.assertRaisesRegex(RuntimeError,"interval_status_invalid_hold_count"):
    rasd.smart_interval_no_mail(config=self.config,health=self.good,

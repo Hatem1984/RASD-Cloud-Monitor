@@ -581,17 +581,28 @@ def smart_interval_no_mail(*, config: dict, health: list[dict],
             [item.get("feed_id") for item in health] != expected or
             any(item.get("status") not in ("ok", "failed") for item in health)):
         raise RuntimeError("source_health_metadata_missing_or_untrusted")
-    degraded = sum(x["status"] == "failed" for x in health)
+    # Never present an incomplete observation as proof of no new news.
+    # Feed IDs are existing, approved config identifiers, not publisher text.
+    if (any(not isinstance(fid, str) or not re.fullmatch(
+            r"[a-z][a-z0-9_-]{0,49}", fid) for fid in expected)
+            or len(expected) != len(set(expected))):
+        raise RuntimeError("source_health_metadata_missing_or_untrusted")
+    failed_ids = [entry["feed_id"] for entry in health
+                  if entry["status"] == "failed"]
+    degraded = len(failed_ids)
     pending = held_articles + waiting_articles
     result = {
-        "status": ("EVIDENCE_HOLD" if pending else "NO_NEW_VERIFIED_NEWS"),
+        "status": ("EVIDENCE_HOLD" if pending else
+                   "SOURCE_UNAVAILABLE_NO_VERIFIED_NEWS" if degraded else
+                   "NO_NEW_VERIFIED_NEWS"),
         "window": window,
         "items": 0,
         "held_articles": held_articles,
         "waiting_approved_news": waiting_articles,
         "sources_checked": len(expected),
         "sources_failed": degraded,
-        "coverage_status": "PARTIAL" if degraded else "SOURCE_LIMITED",
+        "failed_source_ids": failed_ids,
+        "coverage_status": "PARTIAL" if degraded else "HEALTHY",
         "smtp_accepted": False,
         "inbox_delivery_verified": False,
         "cas_mutated": False,
