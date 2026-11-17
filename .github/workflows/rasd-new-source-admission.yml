@@ -24,5 +24,7 @@ jobs:
           RASD_REPORT_CC: ''
           RASD_PRIVATE_LEDGER_TOKEN: ''
         run: python rasd_new_sources_qa.py
+      - name: Inspect only strict www-apex first-party redirect targets (NO SEND)
+        run: python rasd_candidate_redirect_qa.py
       - name: Confirm all sites remain candidate-only
         run: echo "No new sources activated, no Word/email/private state, no added cron."
