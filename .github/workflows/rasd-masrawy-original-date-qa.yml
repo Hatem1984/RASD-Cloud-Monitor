@@ -1,0 +1,25 @@
+name: RASD — Masrawy first-party original publication date QA (NO SEND)
+on:
+  push:
+    branches:
+      - 'gate-rasd-masrawy-original-date-qa-*'
+permissions:
+  contents: read
+jobs:
+  exact-publisher-dates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check up to 6 original article publication stamps (NO SEND)
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: python rasd_masrawy_publication_qa.py
+      - name: Confirm admission has not been bypassed
+        run: echo 'Original publisher explicit timezone only; never infer from RSS. No email.'
