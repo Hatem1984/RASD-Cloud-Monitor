@@ -5,7 +5,9 @@ A sidebar, missing page title, or ambiguous duplicated H1 must remain HOLD.
 """
 import unittest
 
-from capture_public import original_headline_h1_index, headline_visible_in_viewport
+from capture_public import (original_headline_h1_index,
+                            headline_visible_in_viewport,
+                            original_article_images_loaded)
 
 
 class OriginalPublisherH1Selection(unittest.TestCase):
@@ -53,6 +55,43 @@ class OriginalPublisherH1Selection(unittest.TestCase):
         ):
             with self.subTest(title=title, body=body, headings=headings):
                 self.assertIsNone(original_headline_h1_index(title, body, headings))
+
+    def test_native_loaded_photo_needs_no_additional_wait(self):
+        from unittest.mock import MagicMock
+        page = MagicMock()
+        page.evaluate.return_value = [{"visible": True, "loaded": True}]
+        self.assertTrue(original_article_images_loaded(page))
+        page.evaluate.assert_called_once()
+        page.wait_for_timeout.assert_not_called()
+
+    def test_one_bounded_wait_accepts_only_actual_newly_loaded_image(self):
+        from unittest.mock import MagicMock
+        page = MagicMock()
+        page.evaluate.side_effect = [
+            [{"visible": True, "loaded": False}],
+            [{"visible": True, "loaded": True}],
+        ]
+        self.assertTrue(original_article_images_loaded(page))
+        page.wait_for_timeout.assert_called_once_with(1000)
+        self.assertEqual(page.evaluate.call_count, 2)
+
+    def test_unloaded_original_photo_remains_hold_after_one_retry(self):
+        from unittest.mock import MagicMock
+        page = MagicMock()
+        page.evaluate.return_value = [{"visible": True, "loaded": False}]
+        self.assertFalse(original_article_images_loaded(page))
+        page.wait_for_timeout.assert_called_once_with(1000)
+        self.assertEqual(page.evaluate.call_count, 2)
+
+    def test_untrusted_or_missing_image_state_is_never_bypassed(self):
+        from unittest.mock import MagicMock
+        for state in ([{}], "invalid", None):
+            with self.subTest(state=state):
+                page = MagicMock()
+                page.evaluate.return_value = state
+                self.assertFalse(original_article_images_loaded(page))
+                self.assertEqual(page.evaluate.call_count, 2)
+                page.wait_for_timeout.assert_called_once_with(1000)
 
     def test_original_frame_geometry_guard_still_rejects_out_of_view(self):
         viewport = {"width": 1200, "height": 900}
