@@ -74,7 +74,7 @@ class DailyCatchUp(unittest.TestCase):
             result=worker.run_scheduled(
                 "rollup_recovery",
                 datetime(2026,10,23,13,30,tzinfo=timezone.utc))
-        self.assertEqual(result["status"],"rollup_already_reserved_or_sent")
+        self.assertEqual(result["status"],"rollup_reserved_pending_manual_reconciliation")
         send.assert_not_called()
         ledger.reserve.assert_not_called()
 
