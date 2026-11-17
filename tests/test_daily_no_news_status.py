@@ -79,7 +79,7 @@ class ZeroNewsDailyStatus(unittest.TestCase):
                           side_effect=AssertionError("duplicate SMTP")):
             result=rasd.run_scheduled(
                 "rollup",datetime(2026,10,22,19,15,tzinfo=timezone.utc))
-        self.assertEqual(result["status"],"rollup_already_reserved_or_sent")
+        self.assertEqual(result["status"],"rollup_reserved_pending_manual_reconciliation")
         ledger.reserve.assert_not_called()
         ledger.mark_smtp_accepted.assert_not_called()
 
