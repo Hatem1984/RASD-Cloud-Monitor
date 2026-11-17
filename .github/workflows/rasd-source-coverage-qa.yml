@@ -32,6 +32,8 @@ jobs:
           RASD_PRIVATE_LEDGER_TOKEN: ''
         run: |
           python rasd_live_coverage_qa.py --max-attempts 3
+      - name: Qualify redirect targets for two failing approved original RSS sources (NO SEND)
+        run: python rasd_first_party_redirect_qa.py
       - name: Enforce no-report-publication boundary
         run: |
           echo 'Read-only QA only. No private state, no SMTP, no saved screenshots or Word artifacts.'
