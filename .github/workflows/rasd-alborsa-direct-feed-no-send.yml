@@ -1,0 +1,45 @@
+name: RASD — corrected Alborsa original RSS direct-URL acceptance (NO SEND)
+on:
+  push:
+    branches:
+      - 'gate-rasd-alborsa-direct-feed-*'
+permissions:
+  contents: read
+jobs:
+  strict-original-rss:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline first-party host, redirect, and active source invariants
+        run: python -m unittest discover -s tests -p test_alborsa_direct_feed.py -v
+      - name: Revalidate approved original Alborsa RSS on exact canonical URL (NO SEND)
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_REPORT_TO: ''
+          RASD_REPORT_CC: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from monitor import read_feed, parse_rss
+          cfg = json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
+          feed = next(f for f in cfg["feeds"] if f["id"] == "alborsa")
+          raw = read_feed(feed["url"], cfg["max_feed_bytes"])
+          original, matches = parse_rss(raw, feed, cfg["keywords"],
+                                        datetime.now(timezone.utc),
+                                        cfg["recent_hours"], require_complete_items=True)
+          if not original or original > 500:
+              raise RuntimeError("alborsa_native_xml_content_hold")
+          print(json.dumps({"mode":"alborsa_first_party_original_RSS_QA",
+                            "feed_id":"alborsa","status":"DIRECT_STRICT_RSS_QA_ONLY",
+                            "original_links":original,
+                            "planning_keyword_matches":len(matches),
+                            "screenshots_verified":0,
+                            "production_activated":False,"email_sent":False}))
+          PY
