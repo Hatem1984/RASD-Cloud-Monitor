@@ -61,7 +61,6 @@ class VerifiedWebReferenceQA(unittest.TestCase):
             self.assertIn("تحليل الرصد", text)
             self.assertIn("المواقع الإلكترونية", text)
             self.assertIn("2</b>", text)
-            self.assertIn("2</td>", text) if False else None
             self.assertEqual(text.count("50.0%"), 2)
             self.assertEqual(text.count("data:image/jpeg;base64,"), 4)
             self.assertIn('href="https://first.example/original-news-0"', text)
