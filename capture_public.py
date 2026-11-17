@@ -15,7 +15,7 @@ APPROVED_PUBLISHERS = {
     "gomhuriaonline.com": frozenset({"almessa.gomhuriaonline.com"}),
     "elbalad.news": frozenset({"www.elbalad.news"}),
     "vetogate.com": frozenset({"www.vetogate.com"}),
-    "dailynewsegypt.com": frozenset({"www.dailynewsegypt.com"}),
+    "dailynewsegypt.com": frozenset({"dailynewsegypt.com", "www.dailynewsegypt.com"}),
     "egyptindependent.com": frozenset({"www.egyptindependent.com"}),
     "egyptianstreets.com": frozenset({"egyptianstreets.com"}),
     "skynewsarabia.com": frozenset({"www.skynewsarabia.com"}),
