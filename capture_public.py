@@ -160,6 +160,41 @@ def accept_staged_image(staged: Path, destination: Path) -> dict:
             "sha256": hashlib.sha256(raw).hexdigest(), "quality": quality}
 
 
+def original_headline_h1_index(page_title: str, page_body: str,
+                               headings: list[str]) -> int | None:
+    """Locate the one publisher H1 that belongs to the actual article.
+
+    Some newspaper layouts put an unrelated sidebar H1 before the story.
+    Require a substantive heading whose leading words occur in BOTH the
+    unmodified original page title and body. Ambiguous/missing = HOLD.
+    """
+    import re
+    from monitor import _matchable_arabic
+
+    if (not isinstance(page_title, str) or
+            not isinstance(page_body, str) or not isinstance(headings, list)):
+        return None
+
+    def normalized_words(value: str) -> list[str]:
+        normalized = _matchable_arabic(value)
+        return re.sub(r"[^\w]+", " ", normalized).split()
+
+    title = " ".join(normalized_words(page_title))
+    body = " ".join(normalized_words(page_body))
+    matches = []
+    for index, heading in enumerate(headings):
+        if not isinstance(heading, str) or len(heading.strip()) < 18:
+            continue
+        words = normalized_words(heading)
+        if len(words) < 4:
+            continue
+        leading = " ".join(words[:min(6, len(words))])
+        pattern = r"(?<!\w)" + re.escape(leading) + r"(?!\w)"
+        if re.search(pattern, title) and re.search(pattern, body):
+            matches.append(index)
+    return matches[0] if len(matches) == 1 else None
+
+
 def headline_visible_in_viewport(box: dict | None, viewport: dict | None) -> bool:
     """Visual frame must contain real, readable publisher headline geometry."""
     try:
@@ -192,6 +227,34 @@ def visible_article_image_missing(rows: list[dict]) -> bool:
         if row["visible"] and not row["loaded"]:
             return True
     return False
+
+
+def original_article_images_loaded(page) -> bool:
+    """Give visible first-party lazy photos ONE short chance to finish loading.
+
+    Browser request allowlists, no redirects and original-page image checks
+    remain unchanged. Never use a substitute image or ignore a failed load.
+    """
+    state_script = """() => {
+        const imgs = document.querySelectorAll(
+            'article img, .entry-content img, .post-content img, .article-content img');
+        return Array.from(imgs).map(img => {
+            const r = img.getBoundingClientRect();
+            const style = getComputedStyle(img);
+            const visible = r.width >= 300 && r.height >= 150 &&
+                r.bottom > 0 && r.top < innerHeight &&
+                r.right > 0 && r.left < innerWidth &&
+                style.visibility !== 'hidden' && style.display !== 'none';
+            return {visible: visible,
+                    loaded: img.complete && img.naturalWidth >= 80};
+        });
+    }"""
+    if not visible_article_image_missing(page.evaluate(state_script)):
+        return True
+    # A single bounded wait on the SAME approved publisher page. Any error
+    # propagates to the existing fail-closed capture exception handling.
+    page.wait_for_timeout(1000)
+    return not visible_article_image_missing(page.evaluate(state_script))
 
 
 def capture_publisher(url: str, publisher: str, destination: Path,
@@ -229,14 +292,14 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                 # Scroll the ORIGINAL publisher page so its genuine H1
                 # and article lead, not a large ad masthead, fill the
                 # screenshot. Never alter DOM text, source or access rights.
-                headline = page.locator("h1").first
-                if not headline.count():
+                headings = page.locator("h1")
+                if not headings.count():
                     return {"ok": False, "reason": "missing_original_headline"}
-                actual_headline = " ".join(
-                    headline.inner_text(timeout=8000).split())
-                if (len(actual_headline) < 18 or
-                        actual_headline not in " ".join(body.split())):
+                matched_index = original_headline_h1_index(
+                    title, body, headings.all_inner_texts())
+                if matched_index is None:
                     return {"ok": False, "reason": "original_headline_not_in_article"}
+                headline = headings.nth(matched_index)
                 headline.scroll_into_view_if_needed(timeout=4000)
                 headline.evaluate(
                     """element => window.scrollTo(
@@ -247,25 +310,16 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                 # from the already-approved publisher origin. No outside CDN,
                 # retry of a 401/403, DOM alteration or generated replacement.
                 page.wait_for_timeout(1600)
+                # Reposition this same authenticated heading after late reflow.
+                headline.evaluate(
+                    """element => window.scrollTo(0,
+                       Math.max(0, window.scrollY +
+                       element.getBoundingClientRect().top - 120))""")
+                page.wait_for_timeout(250)
                 if not headline_visible_in_viewport(
                         headline.bounding_box(), page.viewport_size):
                     return {"ok": False, "reason": "original_headline_out_of_frame"}
-                photo_states = page.evaluate("""() => {
-                    const imgs = document.querySelectorAll(
-                        'article img, .entry-content img, .post-content img, .article-content img');
-                    return Array.from(imgs).map(img => {
-                        const r = img.getBoundingClientRect();
-                        const style = getComputedStyle(img);
-                        const visible = r.width >= 300 && r.height >= 150 &&
-                            r.bottom > 0 && r.top < innerHeight &&
-                            r.right > 0 && r.left < innerWidth &&
-                            style.visibility !== 'hidden' &&
-                            style.display !== 'none';
-                        return {visible: visible,
-                                loaded: img.complete && img.naturalWidth >= 80};
-                    });
-                }""")
-                if visible_article_image_missing(photo_states):
+                if not original_article_images_loaded(page):
                     return {"ok": False, "reason": "original_article_image_not_loaded"}
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 with TemporaryDirectory(prefix=".rasd-capture-", dir=destination.parent) as temp:
