@@ -1,0 +1,61 @@
+name: RASD — Masrawy relevant original dates and complete feed QA (NO SEND)
+on:
+  push:
+    branches:
+      - 'fix-rasd-masrawy-irrelevant-date-*'
+permissions:
+  contents: read
+jobs:
+  masrawy-original-first-party:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Strict offline proof boundary regression
+        run: python -m unittest discover -s tests -p test_masrawy_relevant_original_date_only.py -v
+      - name: Validate actual approved Masrawy RSS and all matching original dates (NO SEND)
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_REPORT_CC: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from monitor import parse_rss, read_feed
+          cfg=json.loads(Path("sources_newsroom_active.json").read_text("utf-8"))
+          feed=next(x for x in cfg["feeds"] if x["id"]=="masrawy")
+          result={"mode":"MASRAWY_RELEVANT_DATE_ORIGINAL_QA_NO_SEND",
+                  "source_id":"masrawy","status":"HOLD",
+                  "rss_original_links":0,"relevant_articles_with_original_dates":0,
+                  "no_email":True,"changed_production_feeds":False,
+                  "unrelated_rss_dates_assigned_timezone":False}
+          try:
+              raw=read_feed(feed["url"],cfg["max_feed_bytes"])
+              links,matched=parse_rss(raw,feed,cfg["keywords"],
+                    datetime.now(timezone.utc),cfg["recent_hours"],
+                    require_complete_items=True)
+              result.update(status="ORIGINAL_RSS_MATCH_DATE_VERIFIED",
+                            rss_original_links=links,
+                            relevant_articles_with_original_dates=len(matched))
+          except Exception as exc:
+              from xml.etree.ElementTree import ParseError
+              safe={"rss_original_item_date_unverifiable",
+                    "rss_original_item_identity_unverifiable",
+                    "rss_original_duplicate_conflict","not_rss",
+                    "DTD_or_entity_forbidden","feed_redirect_blocked"}
+              reason=str(exc) if type(exc) in (RuntimeError,ValueError) else ""
+              result["hold_reason"]=(reason if reason in safe else
+                   type(exc).__name__ if type(exc).__name__ in
+                   {"HTTPError","URLError","TimeoutError","ParseError"} else "other")
+          print(json.dumps(result,ensure_ascii=False,sort_keys=True))
+          if result["status"]!="ORIGINAL_RSS_MATCH_DATE_VERIFIED":
+              sys.exit("MASRAWY ORIGINAL RSS QA HOLD: NO PRODUCTION RELEASE")
+          PY

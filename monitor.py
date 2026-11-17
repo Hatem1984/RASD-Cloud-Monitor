@@ -140,10 +140,12 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
         raise ValueError("not_rss")
     verified_dates = {}
     def publisher_timestamp(node):
-        # Existing RSS sources still MUST have timezone-aware publisher
-        # timestamps. Masrawy alone omits zone in RSS; corroborate EVERY
-        # article with publisher ORIGINAL NewsArticle JSON-LD, including the
-        # exact title and same local clock, never assume Cairo/UTC.
+        # Every SELECTED news article must have a timezone-aware publisher
+        # timestamp. Masrawy's RSS omits its zone, so corroborate each
+        # RELEVANT article with the publisher's own NewsArticle JSON-LD
+        # (exact title and same wall clock). Never infer Cairo/UTC.
+        # Unrelated items receive strict RSS format validation below, with
+        # no article-page fetch or inclusion in a report.
         if node in verified_dates:
             return verified_dates[node]
         dated = _publisher_timestamp(node)
@@ -171,13 +173,39 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
             link = (item.findtext("link") or "").strip()
             if not title or not is_publisher_link(link, feed["allowed_article_hosts"]):
                 raise ValueError("rss_original_item_identity_unverifiable")
-            dated = publisher_timestamp(item)
-            if dated is None:
-                raise ValueError("rss_original_item_date_unverifiable")
+            # The original Masrawy RSS has unzoned pubDate. Fetching EVERY
+            # unrelated article's HTML made one unrelated NewsArticle
+            # discrepancy block all ministry coverage (confirmed Nov 17
+            # original RSS: one hold out of 10 items, zero ministry matches).
+            # Do not relax the requirement for any relevant/published item.
+            description = _native_text(
+                (item.findtext("description") or "")[:3500])[:850]
+            relevant = (_ministry_term_present(title[:300], keywords)
+                        or _ministry_term_present(description, keywords))
+            if feed.get("id") == "masrawy" and not relevant:
+                verified = _publisher_timestamp(item)
+                if verified is not None:
+                    # A future valid timezone-aware RSS date is itself proof.
+                    date_identity = verified[1]
+                else:
+                    # Syntax check only. No timezone is inferred, no original
+                    # page is fetched, and this item CANNOT enter a report.
+                    raw_date = (item.findtext("pubDate") or "").strip()
+                    try:
+                        datetime.strptime(raw_date, "%m/%d/%Y %I:%M:%S %p")
+                    except ValueError:
+                        raise ValueError(
+                            "rss_original_item_date_unverifiable") from None
+                    date_identity = raw_date
+            else:
+                dated = publisher_timestamp(item)
+                if dated is None:
+                    raise ValueError("rss_original_item_date_unverifiable")
+                date_identity = dated[1]
             # Conflicting duplicate URLs cannot be silently resolved by
             # relevance filtering or first-wins deduplication.
             key = canonical_url(link)
-            signature = (title, dated[1])
+            signature = (title, date_identity)
             if key in identities and identities[key] != signature:
                 raise ValueError("rss_original_duplicate_conflict")
             identities[key] = signature
@@ -265,6 +293,12 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
                         row.get("match_origin") == "publisher_description"
                         for row in matches),
                 )
+                if require_complete_items and feed.get("id") == "masrawy":
+                    # This is exact about the proof boundary: RSS formatting
+                    # for unrelated items, original page timestamps for
+                    # every article matching the saved ministry phrases.
+                    record["date_verification_scope"] = (
+                        "original_page_for_relevant_items_only")
                 record.pop("error", None)
                 for entry in matches:
                     if entry["id"] not in ids:
