@@ -117,7 +117,29 @@ def suspicious_flat_lead_media(photo: Image.Image) -> bool:
             and max(deviations) <= 2.4)
 
 
-def image_quality(path: Path) -> dict:
+def suspicious_flat_massa_original_lead(photo: Image.Image) -> bool:
+    """Reject the measured 17-Nov missing-hero Al-Massa original-page frame.
+
+    Scope is enforced by the caller: ONLY a reviewed gomhuriaonline.com
+    article. Not a substitute image, not an OCR claim and not used on other
+    publishers. A full-width, genuine article image should vary in this main
+    region, unlike the captured 246-grey missing publisher photo.
+    """
+    width, height = photo.size
+    if width < 900 or height < 700:
+        return False
+    region = photo.convert("RGB").crop((
+        int(width * 0.37), int(height * 0.43),
+        int(width * 0.95), int(height * 0.82),
+    ))
+    region.thumbnail((160, 100))
+    stats = ImageStat.Stat(region)
+    return (233 <= min(stats.mean) and max(stats.mean) <= 252
+            and max(stats.mean) - min(stats.mean) <= 3.0
+            and max(stats.stddev) <= 3.2)
+
+
+def image_quality(path: Path, *, publisher: str | None = None) -> dict:
     """Detect near-blank browser frames without OCR or external AI."""
     try:
         with Image.open(path) as photo:
@@ -129,9 +151,18 @@ def image_quality(path: Path) -> dict:
             dark_fraction = sum(hist[:180]) / (240 * 180)
             valid = stddev >= 12.0 and dark_fraction >= 0.01
             flat_lead = suspicious_flat_lead_media(photo) if valid else False
+            # In the genuine 17-Nov daily Word, the Al-Massa original page
+            # had a valid heading, sidebar and advertisement, but its large
+            # central publisher image was an unloaded flat grey placeholder.
+            # The legacy LEFT crop mixes a lively sidebar with that hero, so
+            # it never caught the defective screenshot. This RIGHT/MAIN
+            # region applies ONLY to the approved Al-Massa publisher.
+            massa_empty = (valid and publisher == "gomhuriaonline.com"
+                           and suspicious_flat_massa_original_lead(photo))
             reason = ("blank_or_low_content" if not valid else
-                      "suspicious_flat_original_lead_media" if flat_lead else "ok")
-            return {"accepted": valid and not flat_lead,
+                      "suspicious_flat_original_lead_media" if flat_lead else
+                      "unloaded_massa_article_lead_media" if massa_empty else "ok")
+            return {"accepted": valid and not flat_lead and not massa_empty,
                     "reason": reason,
                     "luminance_stddev": round(stddev, 2),
                     "dark_fraction": round(dark_fraction, 4)}
@@ -139,7 +170,8 @@ def image_quality(path: Path) -> dict:
         return {"accepted": False, "reason": "invalid_image"}
 
 
-def accept_staged_image(staged: Path, destination: Path) -> dict:
+def accept_staged_image(staged: Path, destination: Path, *,
+                        publisher: str | None = None) -> dict:
     """Commit a newly captured JPEG only after passing all visual checks.
 
     Validation errors never overwrite an existing screenshot at destination.
@@ -147,7 +179,7 @@ def accept_staged_image(staged: Path, destination: Path) -> dict:
     """
     if staged.stat().st_size < 8000:
         return {"ok": False, "reason": "screenshot_too_small"}
-    quality = image_quality(staged)
+    quality = image_quality(staged, publisher=publisher)
     if not quality["accepted"]:
         return {"ok": False, "reason": "visual_qa_" + quality["reason"],
                 "quality": quality}
@@ -326,7 +358,8 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                     staged = Path(temp) / "candidate.jpg"
                     page.screenshot(path=str(staged), type="jpeg",
                                     quality=80, full_page=False, timeout=15000)
-                    accepted = accept_staged_image(staged, destination)
+                    accepted = accept_staged_image(staged, destination,
+                                                   publisher=publisher)
                 if not accepted["ok"]:
                     return accepted
                 return {**accepted, "actual_url": page.url,
