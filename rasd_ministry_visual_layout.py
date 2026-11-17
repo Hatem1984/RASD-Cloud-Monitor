@@ -58,6 +58,19 @@ def _run(paragraph, label: str, *, size=10, bold=False, color=NAVY):
     run.font.name = "DejaVu Sans"
     run.font.size = Pt(size)
     run.font.color.rgb = RGBColor.from_string(color)
+    # Word/LibreOffice treat Arabic as a complex script. Without w:szCs
+    # headings declared as 26pt can render at the default ~11pt size.
+    properties = run._r.get_or_add_rPr()
+    cs_size = properties.find(qn("w:szCs"))
+    if cs_size is None:
+        cs_size = OxmlElement("w:szCs")
+        properties.append(cs_size)
+    cs_size.set(qn("w:val"), str(int(round(size * 2))))
+    fonts = properties.find(qn("w:rFonts"))
+    if fonts is None:
+        fonts = OxmlElement("w:rFonts")
+        properties.insert(0, fonts)
+    fonts.set(qn("w:cs"), "DejaVu Sans")
     return run
 
 
@@ -130,10 +143,17 @@ def _cover(doc, *, date_label: str, period_label: str, stories: int, sites: int)
     p.paragraph_format.space_before = Pt(16)
     _run(p, "بتاريخ " + date_label, size=11, color=GOLD)
     p = cell.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p, "الفترة: " + period_label, size=10, color=GOLD)
+    _run(p, "فترة الرصد:", size=11, bold=True, color=GOLD)
+    # Split the 22:00 Cairo window into two short, readable lines rather
+    # than one line of long mixed Arabic/Latin digits crossing cell edges.
+    for endpoint in period_label.split(" إلى ", 1):
+        p = cell.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(p, endpoint.strip(), size=10, color=GOLD)
     p = cell.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p.paragraph_format.space_before = Pt(45)
-    _run(p, f"{stories}  تغطية مصوّرة     |     {sites}  مواقع", size=15, bold=True, color=GOLD)
+    p.paragraph_format.space_before = Pt(30)
+    _run(p, f"التغطيات المصوّرة: {stories}    |    المواقع الممثلة: {sites}",
+         size=14, bold=True, color=GOLD)
     doc.add_page_break()
 
 
@@ -199,7 +219,9 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
     p=doc.add_paragraph(); _rtl(p); _run(p, display_title, size=10, color="777777")
     p=doc.add_paragraph(); _rtl(p); _run(p, "تحليل الرصد", size=20, bold=True)
     p=doc.add_paragraph(); _rtl(p)
-    _run(p, f"الملخص: {len(report['articles'])} تغطية موثقة من {len(distribution)} موقعًا داخل سجل التسليم.", size=11, bold=True)
+    _run(p, f"الملخص: إجمالي التغطيات الموثقة {len(report['articles'])}؛ "
+          f"عدد المواقع الممثلة {len(distribution)}، وفق سجل التسليم فقط.",
+          size=11, bold=True)
     p=doc.add_paragraph(); _rtl(p)
     _run(p, "توزيع التغطيات على المواقع", size=14, bold=True)
     summary=doc.add_table(rows=1, cols=3)
@@ -257,7 +279,7 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
     doc.add_page_break()
 
 
-def _card(cell, item: dict, index: int) -> None:
+def _card(cell, item: dict, index: int, *, wide: bool = False) -> None:
     source=SOURCE_NAMES.get(item["source"],item["source"])
     cell.vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.TOP
     _border(cell,"DFD0A9")
@@ -270,7 +292,9 @@ def _card(cell, item: dict, index: int) -> None:
         width,height=pic.size
         if width<100 or height<100:
             raise ValueError("rasd_visual_original_image_invalid")
-    max_w,max_h=7.65,7.2
+    # A single original clipping should be readable, not half-width
+    # beside a blank second column. Multi-clipping spreads stay 2-column.
+    max_w,max_h=(16.0,14.2) if wide else (7.65,7.2)
     fitted_w=min(max_w,max_h*width/height)
     fitted_h=fitted_w*height/width
     p=cell.add_paragraph();p.alignment=WD_ALIGN_PARAGRAPH.CENTER
@@ -375,13 +399,20 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
         _run(p,"المواقع الإلكترونية — صور صفحات الأخبار الأصلية",size=15,bold=True)
         p.paragraph_format.space_after=Pt(8)
         segment=articles[start:start+4]
-        table=doc.add_table(rows=ceil(len(segment)/2),cols=2)
-        table.autofit=False
-        table.columns[0].width=Cm(9)
-        table.columns[1].width=Cm(9)
-        for offset,item in enumerate(segment):
-            cell=table.rows[offset//2].cells[offset%2]
-            _card(cell,item,start+offset+1)
+        if len(segment) == 1:
+            table = doc.add_table(rows=1, cols=1)
+            table.autofit = False
+            table.columns[0].width = Cm(18)
+            _card(table.rows[0].cells[0], segment[0], start + 1,
+                  wide=True)
+        else:
+            table=doc.add_table(rows=ceil(len(segment)/2),cols=2)
+            table.autofit=False
+            table.columns[0].width=Cm(9)
+            table.columns[1].width=Cm(9)
+            for offset,item in enumerate(segment):
+                cell=table.rows[offset//2].cells[offset%2]
+                _card(cell,item,start+offset+1)
         if start+4<len(articles):
             doc.add_page_break()
     doc.core_properties.title="رصد | تقرير رصد المواقع الإلكترونية"
