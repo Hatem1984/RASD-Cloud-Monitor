@@ -1,0 +1,45 @@
+name: RASD — 100-source RESEARCH catalog and bounded homepage evidence (NO SEND)
+on:
+  push:
+    branches:
+      - 'gate-rasd-100-sources-web-method-*'
+permissions:
+  contents: read
+concurrency:
+  group: rasd-source100-research-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  research-only-source-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install existing offline test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Validate 100 sources, no auto-activation, unique publisher clippings and JPEG integrity
+        run: |
+          python -m unittest discover -s tests -p test_research_sources_100.py -v
+          python -m unittest discover -s tests -p test_publisher_coverage_retention.py -v
+          python -m unittest discover -s tests -p test_verified_web_report.py -v
+      - name: Inspect 12 additional first-party landing pages without following redirects (NO SEND)
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_REPORT_CC: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: python rasd_candidate_homepage_qa.py
+      - name: Do not advertise 100 active sources
+        run: |
+          python - <<'PY'
+          import json
+          from research_source_queries_100 import load_100_sources
+          d=load_100_sources()
+          assert d['total_research_origins']==100
+          assert d['approved_automated_rss_sources']==13
+          assert d['not_scheduled_research_candidates']==87
+          print('RESEARCH_ORIGINS=100; SCHEDULED_FEEDS=13; CANDIDATE_ONLY=87; SENT=0')
+          PY
