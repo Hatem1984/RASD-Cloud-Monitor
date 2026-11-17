@@ -1,0 +1,49 @@
+name: RASD — Daily News Egypt direct original RSS acceptance (NO SEND)
+on:
+  push:
+    branches:
+      - 'gate-rasd-dailynewsegypt-direct-feed-*'
+permissions:
+  contents: read
+jobs:
+  strict-original-rss:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline direct-host and no-redirect acceptance
+        run: python -m unittest discover -s tests -p test_dailynewsegypt_direct_feed.py -v
+      - name: Strict real first-party feed check (NO SEND)
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from datetime import datetime, timezone
+          from monitor import parse_rss, read_feed
+          cfg = json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
+          feed = next(f for f in cfg["feeds"] if f["id"] == "dailynewsegypt")
+          data = read_feed(feed["url"], cfg["max_feed_bytes"])
+          count, matches = parse_rss(data, feed, cfg["keywords"],
+                                    datetime.now(timezone.utc),
+                                    cfg["recent_hours"],
+                                    require_complete_items=True)
+          if not 1 <= count <= 500:
+              raise RuntimeError("original_feed_invalid")
+          print(json.dumps({
+            "status": "STRICT_FIRST_PARTY_RSS_ONLY",
+            "publisher_id": "dailynewsegypt",
+            "verified_original_links": count,
+            "relevant_keyword_matches": len(matches),
+            "article_screenshots_verified": 0,
+            "email_sent": False,
+            "production_activated_by_test": False,
+          }))
+          PY
