@@ -583,9 +583,9 @@ def smart_interval_no_mail(*, config: dict, health: list[dict],
         raise RuntimeError("source_health_metadata_missing_or_untrusted")
     # Never present an incomplete observation as proof of no new news.
     # Feed IDs are existing, approved config identifiers, not publisher text.
-    if (len(expected) != len(set(expected)) or
-            any(not isinstance(fid, str) or not re.fullmatch(
-                r"[a-z][a-z0-9_-]{0,49}", fid) for fid in expected)):
+    if (any(not isinstance(fid, str) or not re.fullmatch(
+            r"[a-z][a-z0-9_-]{0,49}", fid) for fid in expected)
+            or len(expected) != len(set(expected))):
         raise RuntimeError("source_health_metadata_missing_or_untrusted")
     failed_ids = [entry["feed_id"] for entry in health
                   if entry["status"] == "failed"]
