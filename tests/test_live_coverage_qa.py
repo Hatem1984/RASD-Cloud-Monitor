@@ -52,7 +52,8 @@ class LiveCoverageContract(unittest.TestCase):
     def test_no_fake_screenshots_when_publisher_refuses(self):
         url = "https://original.example/story"
         matched = [{"source": "Original QA Publisher A", "url": url,
-                    "headline": "وزارة التخطيط تعلن تفاصيل مبادرة تنموية جديدة"}]
+                    "headline": "وزارة التخطيط تعلن تفاصيل مبادرة تنموية جديدة",
+                    "published": "Tue, 17 Nov 2026 07:00:00 +0000"}]
         article = {"id": article_id(url), "url": url,
                    "source": "Original QA Publisher A",
                    "headline": matched[0]["headline"],
@@ -75,7 +76,8 @@ class LiveCoverageContract(unittest.TestCase):
         url = "https://original.example/story"
         candidate = {"id": article_id(url), "url": url,
                      "source": "Original QA Publisher A",
-                     "headline": "وزارة التخطيط تعلن تفاصيل مبادرة تنموية جديدة"}
+                     "headline": "وزارة التخطيط تعلن تفاصيل مبادرة تنموية جديدة",
+                     "published": "Tue, 17 Nov 2026 07:00:00 +0000"}
         with patch("rasd_live_coverage_qa.candidate_from_feed",
                    return_value=candidate):
             result = run_coverage_qa(
