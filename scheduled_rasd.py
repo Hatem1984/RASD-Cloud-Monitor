@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 from cloud_proof_report import proof_capture, word_images_match_capture_digests
 from daily_report import CAIRO, cairo_display_time, render_docx
 from delivery_bridge import PrivateGitHubLedger, now_iso, reserve_entry
-from monitor import article_id, inspect
+from monitor import SOURCE_FAILURE_CODES, article_id, inspect
 from gate11_runner import candidate_from_feed
 
 EXPECTED_WORKFLOW = (
@@ -250,7 +250,10 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
     if source_records is not None:
         source_records.extend({
             "feed_id": s["feed_id"], "status": s["status"],
-            "verified_links": s.get("verified_links", 0)
+            "verified_links": s.get("verified_links", 0),
+            **({"failure_code": s["error_code"]}
+               if s.get("status") == "failed" and "error_code" in s
+               else {}),
         } for s in observed["sources"])
     if not allow_degraded and any(s["status"] != "ok" for s in observed["sources"]):
         raise RuntimeError("source_not_healthy")
@@ -589,6 +592,13 @@ def smart_interval_no_mail(*, config: dict, health: list[dict],
         raise RuntimeError("source_health_metadata_missing_or_untrusted")
     failed_ids = [entry["feed_id"] for entry in health
                   if entry["status"] == "failed"]
+    if any(entry.get("failure_code", "other") not in SOURCE_FAILURE_CODES
+           for entry in health if entry["status"] == "failed"):
+        raise RuntimeError("source_health_failure_code_untrusted")
+    failure_codes = {
+        entry["feed_id"]: entry.get("failure_code", "other")
+        for entry in health if entry["status"] == "failed"
+    }
     degraded = len(failed_ids)
     pending = held_articles + waiting_articles
     result = {
@@ -602,6 +612,7 @@ def smart_interval_no_mail(*, config: dict, health: list[dict],
         "sources_checked": len(expected),
         "sources_failed": degraded,
         "failed_source_ids": failed_ids,
+        "failed_source_reasons": failure_codes,
         "coverage_status": "PARTIAL" if degraded else "HEALTHY",
         "smtp_accepted": False,
         "inbox_delivery_verified": False,
