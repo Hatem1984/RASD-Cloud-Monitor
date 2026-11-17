@@ -422,7 +422,7 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
         "held_candidates": held_items or [],
         "scope_note": (
             f"{len(config['feeds'])} مصدرًا من قنوات RSS المفعّلة"
-            " ضمن سجل بحث يضم 50 مصدرًا؛ والبقية قيد التأهيل وليست"
+            " ضمن سجل بحث يضم 100 مصدرًا؛ والبقية قيد التأهيل وليست"
             " مرصودة تلقائيًا. عدد الروابط لا يعني شمول السوق."
         ),
     }
@@ -681,7 +681,7 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
         "held_candidates": held_items or [],
         "scope_note": (
             f"{len(config['feeds'])} مصدرًا من قنوات RSS المفعّلة"
-            " ضمن سجل بحث يضم 50 مصدرًا؛ والبقية قيد التأهيل وليست"
+            " ضمن سجل بحث يضم 100 مصدرًا؛ والبقية قيد التأهيل وليست"
             " مرصودة تلقائيًا. عدد الروابط لا يعني شمول السوق."
         ),
         "limitations": (
