@@ -41,6 +41,40 @@ APPROVED_FEED_URLS = frozenset({
 })
 
 
+
+# Only these reviewed codes can enter public run logs. Never publish an
+# upstream exception string, raw URL, response HTML, request headers, or token.
+SOURCE_FAILURE_CODES = frozenset({
+    "feed_redirect_blocked", "feed_endpoint_not_reviewed",
+    "feed_http_or_redirect_error", "rss_size_limit_exceeded",
+    "DTD_or_entity_forbidden", "not_rss",
+    "rss_channel_unverifiable", "rss_original_item_identity_unverifiable",
+    "rss_original_item_date_unverifiable", "rss_original_duplicate_conflict",
+    "rss_xml_malformed", "network_timeout", "upstream_network_error",
+    "http_301", "http_302", "http_303", "http_307", "http_308",
+    "http_400", "http_401", "http_403", "http_404", "http_408",
+    "http_429", "http_500", "http_502", "http_503", "http_504",
+    "other",
+})
+
+
+def safe_source_failure_code(exc: Exception) -> str:
+    """A bounded diagnostic, never the network/publisher's arbitrary text."""
+    if isinstance(exc, HTTPError):
+        code = f"http_{exc.code}"
+        return code if code in SOURCE_FAILURE_CODES else "other"
+    if isinstance(exc, ET.ParseError):
+        return "rss_xml_malformed"
+    if isinstance(exc, TimeoutError):
+        return "network_timeout"
+    if isinstance(exc, URLError):
+        return "upstream_network_error"
+    if type(exc) in (ValueError, RuntimeError):
+        code = str(exc)
+        return code if code in SOURCE_FAILURE_CODES else "other"
+    return "other"
+
+
 class RejectRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
         raise RuntimeError("feed_redirect_blocked")
@@ -300,6 +334,7 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
                     record["date_verification_scope"] = (
                         "original_page_for_relevant_items_only")
                 record.pop("error", None)
+                record.pop("error_code", None)
                 for entry in matches:
                     if entry["id"] not in ids:
                         discovered.append(entry)
@@ -309,6 +344,7 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
                 # Report only bounded machine-readable diagnostics; never
                 # propagate server body, URL parameters or exception text.
                 record["error"] = type(exc).__name__
+                record["error_code"] = safe_source_failure_code(exc)
                 if isinstance(exc, ET.ParseError) and isinstance(data, bytes):
                     # Numeric Expat error code/position and two-read digest
                     # equality are safe diagnostics. NEVER include raw XML,
