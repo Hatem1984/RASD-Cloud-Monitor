@@ -1,0 +1,35 @@
+name: RASD — original publisher heading and delayed image sample (NO SEND)
+on:
+  push:
+    branches:
+      - 'gate-rasd-original-h1-*'
+permissions:
+  contents: read
+jobs:
+  real-original-publisher-sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install existing publisher-page screenshot dependencies
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --only-shell chromium
+      - name: Offline heading and native lazy-photo regression
+        run: python -m unittest discover -s tests -p test_original_publisher_h1_selection.py -v
+      - name: Read approved RSS and check ONE real publisher screenshot (NO SEND)
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_REPORT_CC: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: python rasd_original_h1_live_qa.py
+      - name: Confirm no public images or Word persisted
+        run: |
+          test ! -e original.jpg
+          test ! -e rasd-live-qa
+          echo 'QA only, no email, no archive upload, no source activation.'
