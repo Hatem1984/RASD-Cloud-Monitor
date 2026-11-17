@@ -41,6 +41,16 @@ APPROVED_FEED_URLS = frozenset({
 })
 
 
+# Only exact locally generated non-sensitive labels may reach diagnostics.
+# Never expose arbitrary publisher response bodies, URLs or exception messages.
+SAFE_SOURCE_FAILURE_CODES = frozenset({
+    "feed_redirect_blocked", "feed_endpoint_not_reviewed",
+    "feed_http_or_redirect_error", "rss_size_limit_exceeded",
+    "DTD_or_entity_forbidden", "not_rss",
+    "rss_channel_unverifiable", "rss_original_item_identity_unverifiable",
+    "rss_original_item_date_unverifiable", "rss_original_duplicate_conflict",
+})
+
 class RejectRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
         raise RuntimeError("feed_redirect_blocked")
@@ -275,6 +285,12 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
                 # Report only bounded machine-readable diagnostics; never
                 # propagate server body, URL parameters or exception text.
                 record["error"] = type(exc).__name__
+                # Exact internal diagnosis makes source outages actionable
+                # without emitting publisher text or raw exception messages.
+                record["error_code"] = (
+                    str(exc) if type(exc) in (RuntimeError, ValueError)
+                    and str(exc) in SAFE_SOURCE_FAILURE_CODES else "other"
+                )
                 if isinstance(exc, ET.ParseError) and isinstance(data, bytes):
                     # Numeric Expat error code/position and two-read digest
                     # equality are safe diagnostics. NEVER include raw XML,
