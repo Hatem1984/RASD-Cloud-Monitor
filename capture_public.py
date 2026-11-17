@@ -230,6 +230,34 @@ def visible_article_image_missing(rows: list[dict]) -> bool:
     return False
 
 
+def original_article_images_loaded(page) -> bool:
+    """Give visible first-party lazy photos ONE short chance to finish loading.
+
+    Browser request allowlists, no redirects and original-page image checks
+    remain unchanged. Never use a substitute image or ignore a failed load.
+    """
+    state_script = """() => {
+        const imgs = document.querySelectorAll(
+            'article img, .entry-content img, .post-content img, .article-content img');
+        return Array.from(imgs).map(img => {
+            const r = img.getBoundingClientRect();
+            const style = getComputedStyle(img);
+            const visible = r.width >= 300 && r.height >= 150 &&
+                r.bottom > 0 && r.top < innerHeight &&
+                r.right > 0 && r.left < innerWidth &&
+                style.visibility !== 'hidden' && style.display !== 'none';
+            return {visible: visible,
+                    loaded: img.complete && img.naturalWidth >= 80};
+        });
+    }"""
+    if not visible_article_image_missing(page.evaluate(state_script)):
+        return True
+    # A single bounded wait on the SAME approved publisher page. Any error
+    # propagates to the existing fail-closed capture exception handling.
+    page.wait_for_timeout(1000)
+    return not visible_article_image_missing(page.evaluate(state_script))
+
+
 def capture_publisher(url: str, publisher: str, destination: Path,
                       timeout_ms: int = 26000) -> dict:
     """Capture only a publicly published article within an approved publisher."""
@@ -293,22 +321,7 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                 if not headline_visible_in_viewport(
                         headline.bounding_box(), page.viewport_size):
                     return {"ok": False, "reason": "original_headline_out_of_frame"}
-                photo_states = page.evaluate("""() => {
-                    const imgs = document.querySelectorAll(
-                        'article img, .entry-content img, .post-content img, .article-content img');
-                    return Array.from(imgs).map(img => {
-                        const r = img.getBoundingClientRect();
-                        const style = getComputedStyle(img);
-                        const visible = r.width >= 300 && r.height >= 150 &&
-                            r.bottom > 0 && r.top < innerHeight &&
-                            r.right > 0 && r.left < innerWidth &&
-                            style.visibility !== 'hidden' &&
-                            style.display !== 'none';
-                        return {visible: visible,
-                                loaded: img.complete && img.naturalWidth >= 80};
-                    });
-                }""")
-                if visible_article_image_missing(photo_states):
+                if not original_article_images_loaded(page):
                     return {"ok": False, "reason": "original_article_image_not_loaded"}
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 with TemporaryDirectory(prefix=".rasd-capture-", dir=destination.parent) as temp:
