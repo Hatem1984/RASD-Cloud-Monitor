@@ -118,7 +118,9 @@ class DailyProductionDeliveryNoSend(unittest.TestCase):
             self.assertEqual(outcome["status"],
                              "daily_smtp_accepted_unconfirmed_inbox")
             self.assertEqual(outcome["items"], 2)
-            self.assertEqual(duplicate["status"], "rollup_already_reserved_or_sent")
+            self.assertEqual(duplicate["status"], "rollup_already_smtp_accepted_unconfirmed_inbox")
+            self.assertFalse(duplicate["inbox_delivery_verified"])
+            self.assertFalse(duplicate["manual_reconciliation_required"])
             self.assertEqual(len(MockTLSGmail.messages), 1)
             self.assertEqual(len(capture_proofs), 2)
             self.assertTrue(imap.selected_readonly)
