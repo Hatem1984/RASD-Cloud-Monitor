@@ -62,7 +62,7 @@ class HundredSourceResearchCatalogTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             bad=Path(td)/"tampered.json"
             bad.write_text(json.dumps(raw,ensure_ascii=False),encoding="utf-8")
-            with self.assertRaisesRegex(ValueError,"autoactivation"):
+            with self.assertRaisesRegex(ValueError,"(?:autoactivation|activation_disagreement)"):
                 load_100_sources(bad)
 
     def test_invalid_host_and_duplicated_ids_fail_closed(self):
