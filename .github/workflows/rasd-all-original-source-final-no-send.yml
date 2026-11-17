@@ -29,6 +29,15 @@ jobs:
           RASD_REPORT_CC: ''
           RASD_PRIVATE_LEDGER_TOKEN: ''
         run: python rasd_live_coverage_qa.py --max-attempts 3
+      - name: Diagnose ONE genuine National Planning Institute photo's origin and bounded loading (NO SEND)
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: |
+          python -m unittest discover -s tests -p test_inp_native_image_diagnostic_no_send.py -v
+          python rasd_inp_image_diagnostic_no_send.py
       - name: No publication, email or evidence upload
         run: |
           test ! -e original-image-QA-only.docx
