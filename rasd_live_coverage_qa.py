@@ -89,6 +89,18 @@ def run_coverage_qa(config: dict, *, inspector=inspect, capture=proof_capture,
         except (ValueError, TypeError, KeyError):
             continue
         if item is not None:
+            # The original feed date is already timezone-aware and validated
+            # by the strict parser. Preserve that publisher date in this
+            # temporary QA Word; never infer an unpublished hour.
+            from email.utils import parsedate_to_datetime
+            from zoneinfo import ZoneInfo
+            stamp = parsedate_to_datetime(row["published"])
+            if stamp.tzinfo is None or stamp.utcoffset() is None:
+                continue
+            cairo = stamp.astimezone(ZoneInfo("Africa/Cairo"))
+            item = {**item,
+                    "published_at_cairo":
+                    cairo.strftime("%Y-%m-%d %H:%M %Z")}
             qualified.append((index[row["source"]], item))
     counts = Counter(fid for fid, _ in qualified)
     receipts = []
