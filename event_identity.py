@@ -61,3 +61,35 @@ def distinct_events(incoming,history=()):
         else:
             chosen.append(item)
     return chosen,duplicates
+
+
+def distinct_publisher_coverages(incoming, history=()):
+    """Preserve each publisher's separate clipping of a shared event.
+
+    The owner-provided web model counts and displays publisher COVERAGES,
+    not just distinct events. Suppress repeated article IDs across runs;
+    dedupe near-identical titles ONLY within the same publisher. If the
+    publisher identity is absent/invalid, conservatively use legacy global
+    event dedup rather than making an untrusted new coverage claim.
+    """
+    chosen, duplicates = [], []
+    for item in incoming:
+        def duplicate(prev):
+            if not isinstance(item, dict) or not isinstance(prev, dict):
+                return False
+            if item.get("id") and item["id"] == prev.get("id"):
+                return True
+            first = item.get("source")
+            second = prev.get("source")
+            if not isinstance(first, str) or not first.strip() or (
+                    not isinstance(second, str) or not second.strip()):
+                return same_event(item, prev)
+            if first != second:
+                return False
+            return same_event(item, prev)
+
+        if any(duplicate(other) for other in (*history, *chosen)):
+            duplicates.append(item)
+        else:
+            chosen.append(item)
+    return chosen, duplicates
