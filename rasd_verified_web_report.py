@@ -67,7 +67,7 @@ def render_verified_web_report(report: dict, proofs: list[dict],
                 proof.get("status") != "verified"):
             raise ValueError("rasd_web_unverified_image")
         photo = Path(image_path).read_bytes()
-        if (not photo.startswith(b"\\xff\\xd8") or
+        if (not photo.startswith(b"\xff\xd8") or
                 hashlib.sha256(photo).hexdigest() != digest):
             raise ValueError("rasd_web_image_digest_mismatch")
         with Image.open(io.BytesIO(photo)) as pic:
