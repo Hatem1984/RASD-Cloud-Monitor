@@ -40,7 +40,7 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
             "https://almessa.gomhuriaonline.com/feed/",
             "https://www.elbalad.news/rss.aspx",
             "https://www.vetogate.com/rss.aspx",
-            "https://www.dailynewsegypt.com/feed/",
+            "https://dailynewsegypt.com/feed/",
             "https://www.egyptindependent.com/feed/",
             "https://egyptianstreets.com/feed/",
             "https://www.skynewsarabia.com/rss.xml",
