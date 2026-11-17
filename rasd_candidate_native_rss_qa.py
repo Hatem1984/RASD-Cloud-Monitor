@@ -7,7 +7,34 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from monitor import parse_rss, read_feed
+from monitor import parse_rss
+from urllib.parse import urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+class NoCandidateRedirects(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        raise RuntimeError("candidate_redirect_blocked")
+
+def read_candidate_original(url: str, limit: int) -> bytes:
+    """Exactly one reviewed original HTTPS feed; NEVER alter active RSS pins."""
+    allowed = {row[2]: set(row[3]) for row in CANDIDATES}
+    if url not in allowed:
+        raise ValueError("feed_endpoint_not_reviewed")
+    p = urlsplit(url)
+    if (p.scheme != "https" or p.hostname not in allowed[url] or
+            p.port not in (None, 443) or p.username or p.password or
+            p.fragment or not 100_000 <= limit <= MAX_BYTES):
+        raise ValueError("candidate_url_untrusted")
+    req = Request(url, headers={"User-Agent": "RASD-public-original-RSS-research/1.0",
+                                "Accept": "application/rss+xml,application/xml,text/xml"})
+    with build_opener(NoCandidateRedirects()).open(req, timeout=13) as response:
+        if response.status != 200 or response.geturl() != url:
+            raise ValueError("original_http200_required")
+        data = response.read(limit + 1)
+    if len(data) > limit:
+        raise ValueError("rss_size_limit_exceeded")
+    return data
+
 
 CANDIDATES = (
     ("soutalomma", "صوت الأمة", "https://www.soutalomma.com/rss/rss",
@@ -20,7 +47,7 @@ CANDIDATES = (
      ("www.youm7.com",)),
 )
 MAX_BYTES=1_500_000
-def try_source(entry, keywords, now, fetch=read_feed):
+def try_source(entry, keywords, now, fetch=read_candidate_original):
     sid, name, url, hosts=entry
     result={"publisher_id":sid,"status":"HOLD","original_rss_links":0,
             "matched_with_saved_terms":0,"original_jpeg_verified":False,
@@ -39,7 +66,7 @@ def try_source(entry, keywords, now, fetch=read_feed):
                           reason="original_screenshot_and_review_still_required")
     except Exception as error:
         cause=str(error) if type(error) in (ValueError,RuntimeError) else ""
-        approved={"feed_redirect_blocked","not_rss","DTD_or_entity_forbidden",
+        approved={"candidate_redirect_blocked","feed_redirect_blocked","not_rss","DTD_or_entity_forbidden",
             "rss_channel_unverifiable","rss_original_item_date_unverifiable",
             "rss_original_item_identity_unverifiable",
             "rss_original_duplicate_conflict","feed_endpoint_not_reviewed",
