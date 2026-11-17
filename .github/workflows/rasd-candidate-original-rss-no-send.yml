@@ -1,0 +1,28 @@
+name: RASD — six first-party publisher RSS candidates (NO SEND)
+on:
+  push:
+    branches:
+      - 'gate-rasd-new-rss-origin-admission-*'
+permissions:
+  contents: read
+jobs:
+  six-original-urls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Regression on RSS origins and explicit publication zones
+        run: python -m unittest discover -s tests -p test_candidate_native_source_admission.py -v
+      - name: Read six fixed original publisher RSS endpoints only
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_REPORT_CC: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: python rasd_candidate_native_source_admission_no_send.py
+      - name: Confirm no approval or delivery
+        run: echo 'Only research candidates; no production activation or email. Live admission requires JPEG and owner review.'
