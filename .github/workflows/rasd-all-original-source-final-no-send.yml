@@ -1,0 +1,36 @@
+name: RASD — all 13 live sources, original JPEGs and Word QA (NO SEND)
+on:
+  push:
+    branches:
+      - 'gate-rasd-full-source-and-jpeg-acceptance-*'
+permissions:
+  contents: read
+concurrency:
+  group: rasd-all-original-sources-qa-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  all-original-publishers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install existing original-site capture dependencies
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --only-shell chromium
+      - name: Read ALL approved RSS feeds and at most 3 original news pages with temporary Word
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_REPORT_CC: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: python rasd_live_coverage_qa.py --max-attempts 3
+      - name: No publication, email or evidence upload
+        run: |
+          test ! -e original-image-QA-only.docx
+          test ! -e original-page.jpg
+          echo 'All sampled publisher JPEGs and Word exist only in a temporary directory.'
