@@ -23,7 +23,9 @@ def terms(title):
         if word.startswith("ال") and len(word)>=6:
             word=word[2:]
         word=_ALIAS.get(word,word)
-        if len(word)>2 and word not in _STOP:
+        # Numeric claims matter even for a single digit (1%, 3 projects).
+        # Dropping them caused distinct same-publisher headlines to collapse.
+        if (word.isdigit() or len(word)>2) and word not in _STOP:
             found.add(word)
     return found
 
