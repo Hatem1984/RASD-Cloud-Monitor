@@ -65,6 +65,19 @@ def run_coverage_qa(config: dict, *, inspector=inspect, capture=proof_capture,
         "xml_error_code": (source.get("xml_error_code")
                            if type(source.get("xml_error_code")) is int and
                            1 <= source["xml_error_code"] <= 99 else None),
+        "safe_failure_code": (source.get("error_code")
+                              if source.get("error_code") in (
+                                  "feed_redirect_blocked",
+                                  "feed_endpoint_not_reviewed",
+                                  "feed_http_or_redirect_error",
+                                  "rss_size_limit_exceeded",
+                                  "DTD_or_entity_forbidden", "not_rss",
+                                  "rss_channel_unverifiable",
+                                  "rss_original_item_identity_unverifiable",
+                                  "rss_original_item_date_unverifiable",
+                                  "rss_original_duplicate_conflict",
+                                  "other") else "other")
+        if source["status"] == "failed" else None,
     } for source in source_rows]
     index = {f["name"]: f["id"] for f in feeds}
     qualified = []
