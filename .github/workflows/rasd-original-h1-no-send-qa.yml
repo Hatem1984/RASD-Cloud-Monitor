@@ -2,7 +2,7 @@ name: RASD — original publisher heading and delayed image sample (NO SEND)
 on:
   push:
     branches:
-      - 'gate-rasd-original-h1-*'
+      - 'gate-rasd-capture-modern-main-*'
 permissions:
   contents: read
 jobs:
