@@ -265,6 +265,13 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
     p=doc.add_paragraph();_rtl(p)
     _run(p,"تنبيه توثيق: جميع الصور المعروضة محفوظة من ملفات أصلية سبق إرسالها، "
           "ويجري فحص تطابق بصمات JPEG مع كل خبر قبل تسليم هذا المستند.",size=9)
+    scope = report.get("scope_note")
+    if scope is not None:
+        if not isinstance(scope, str) or len(scope) > 1200:
+            raise ValueError("rasd_visual_source_scope_untrusted")
+        if scope.strip():
+            p=doc.add_paragraph();_rtl(p)
+            _run(p,"نطاق المصادر الفعلي: "+scope,size=9,bold=True)
     if report.get("limitations"):
         p=doc.add_paragraph();_rtl(p);_run(p,"حدود التقرير: "+report["limitations"],size=8.5)
     # Editorial index also makes the original publisher titles selectable and
