@@ -190,7 +190,13 @@ def descriptive_topic_counts(articles: list[dict]) -> Counter:
 
 
 def _summary(doc, report: dict, distribution: Counter) -> None:
-    p=doc.add_paragraph(); _rtl(p); _run(p, report["title"], size=10, color="777777")
+    # The legacy SMTP subject is a transport label, NOT the Ministry Word
+    # identity. Display the independent RASD brand within this report only;
+    # never change the SMTP subject or recipient mailbox rules here.
+    title = report["title"]
+    display_title = ("رصد | " + title[len("مآل | "):]
+                     if title.startswith("مآل | ") else title)
+    p=doc.add_paragraph(); _rtl(p); _run(p, display_title, size=10, color="777777")
     p=doc.add_paragraph(); _rtl(p); _run(p, "تحليل الرصد", size=20, bold=True)
     p=doc.add_paragraph(); _rtl(p)
     _run(p, f"الملخص: {len(report['articles'])} تغطية موثقة من {len(distribution)} موقعًا داخل سجل التسليم.", size=11, bold=True)
