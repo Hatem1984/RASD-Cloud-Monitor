@@ -1,0 +1,38 @@
+name: RASD — all 13 native newsroom sources + publisher screenshot QA (NO SEND)
+on:
+  push:
+    branches:
+      - 'gate-rasd-source-coverage-qa-*'
+permissions:
+  contents: read
+concurrency:
+  group: rasd-source-coverage-qa-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  first-party-source-and-image-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install reviewed local Word and screenshot dependencies
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --only-shell chromium
+      - name: Offline strict QA contract tests (no network, no mail)
+        run: python -m unittest discover -s tests -p test_live_coverage_qa.py -v
+      - name: Check all approved publisher RSS sources and up to 3 original screenshots (NO SEND)
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_REPORT_CC: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: |
+          python rasd_live_coverage_qa.py --max-attempts 3
+      - name: Enforce no-report-publication boundary
+        run: |
+          echo 'Read-only QA only. No private state, no SMTP, no saved screenshots or Word artifacts.'
+          echo 'Any source or screenshot HOLD remains excluded from production delivery.'
