@@ -170,7 +170,7 @@ def descriptive_topic_counts(articles: list[dict]) -> Counter:
         if not isinstance(value, str):
             return ""
         return re.sub(
-            r"[\\u0610-\\u061a\\u064b-\\u065f\\u0670\\u0640]",
+            r"[\u0610-\u061a\u064b-\u065f\u0670\u0640]",
             "", value).translate(str.maketrans(
                 {"أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي"}
             )).casefold()
