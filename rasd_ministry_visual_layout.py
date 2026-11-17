@@ -137,6 +137,58 @@ def _cover(doc, *, date_label: str, period_label: str, stories: int, sites: int)
     doc.add_page_break()
 
 
+
+def descriptive_topic_counts(articles: list[dict]) -> Counter:
+    """Count headline/excerpt topics only; no AI, inference or sentiment scores.
+
+    One publisher coverage may match several topics. Totals are deliberately
+    NOT presented as an exhaustive partition of distinct news events.
+    """
+    import re
+
+    topics = (
+        ("ريادة الأعمال والشركات الناشئة",
+         ("الشركات الناشئة", "شركات ناشئة", "ريادة الاعمال",
+          "رواد الاعمال", "مسرعات الاعمال")),
+        ("الاستثمار والقطاع الخاص",
+         ("الاستثمار", "استثمارات", "القطاع الخاص",
+          "الصندوق السيادي", "الطروحات الحكومية")),
+        ("خطط التنمية والمؤشرات",
+         ("خطة التنمية", "النمو الاقتصادي", "مؤشرات النمو",
+          "التحول الاقتصادي", "السردية الوطنية", "الاصلاحات الهيكلية")),
+        ("الشراكات والتمويل",
+         ("تمويل", "شراكة", "شراكات", "البنك الدولي",
+          "البنك الاسيوي", "المؤسسات الدولية")),
+        ("التحول الرقمي والمعرفة",
+         ("الذكاء الاصطناعي", "التحول الرقمي", "الرقمنة",
+          "تكنولوجيا المعلومات", "الابتكار الرقمي")),
+        ("التنمية البشرية والاجتماعية",
+         ("التنمية البشرية", "حياة كريمة", "الفقر",
+          "الحماية الاجتماعية", "الصحة", "التعليم")),
+    )
+    def norm(value):
+        if not isinstance(value, str):
+            return ""
+        return re.sub(
+            r"[\u0610-\u061a\u064b-\u065f\u0670\u0640]",
+            "", value).translate(str.maketrans(
+                {"أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي"}
+            )).casefold()
+
+    counts = Counter()
+    for article in articles:
+        text = norm(article.get("headline")) + " " + norm(
+            article.get("publisher_excerpt"))
+        matched = False
+        for label, terms in topics:
+            if any(norm(term) in text for term in terms):
+                counts[label] += 1
+                matched = True
+        if not matched:
+            counts["متابعات أخرى غير مصنفة"] += 1
+    return counts
+
+
 def _summary(doc, report: dict, distribution: Counter) -> None:
     p=doc.add_paragraph(); _rtl(p); _run(p, report["title"], size=10, color="777777")
     p=doc.add_paragraph(); _rtl(p); _run(p, "تحليل الرصد", size=20, bold=True)
@@ -159,6 +211,19 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
         for i,v in enumerate(vals):
             if i==0:_shade(cells[i],CREAM)
             p=cells[i].paragraphs[0];_rtl(p);_run(p,v,size=9.5,bold=i==0)
+    topic_counts=descriptive_topic_counts(report["articles"])
+    if topic_counts:
+        p=doc.add_paragraph();_rtl(p)
+        _run(p,"المحاور الموضوعية — تحليل وصفي",size=13,bold=True)
+        for topic,count in sorted(topic_counts.items(),
+                                  key=lambda row:(-row[1],row[0])):
+            p=doc.add_paragraph();_rtl(p)
+            _run(p,f"{topic}: {count} تغطية",size=9.5)
+        p=doc.add_paragraph();_rtl(p)
+        _run(p,"تصنيف بالكلمات الواردة في عناوين الناشرين وموجزاتهم. "
+              "قد تنتمي التغطية لأكثر من محور؛ لا يُعد هذا "
+              "تحليلًا للمشاعر أو قياسًا للأثر أو حصرًا للأحداث المستقلة.",
+              size=8.5,color="666666")
     p=doc.add_paragraph();_rtl(p)
     _run(p,"حالة التغطية: ",size=11,bold=True)
     _run(p,"هذه حصيلة الأخبار التي سبق تسليمها بصورها والتحقق من ملفاتها؛ لا تثبت شمول كل ما نُشر خلال اليوم.",size=10)
