@@ -459,7 +459,8 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
                 _card(cell,item,start+offset+1)
         if start+4<len(articles):
             doc.add_page_break()
-    doc.core_properties.title=report["title"]
+    doc.core_properties.title=(report["title"] if report.get("report_period") == "interval"
+                               else "رصد | تقرير رصد المواقع الإلكترونية")
     doc.core_properties.author="RASD"
     destination.parent.mkdir(parents=True,exist_ok=True)
     doc.save(destination)
