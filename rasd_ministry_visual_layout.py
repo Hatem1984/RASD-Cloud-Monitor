@@ -122,7 +122,7 @@ def _section_header(section) -> None:
 
 
 def _cover(doc, *, date_label: str, period_label: str, stories: int, sites: int,
-           report_period: str = "daily") -> None:
+           report_period: str = "daily", report_kind: str = "") -> None:
     table = doc.add_table(rows=1, cols=1)
     table.autofit = False
     table.columns[0].width = Cm(18)
@@ -142,7 +142,9 @@ def _cover(doc, *, date_label: str, period_label: str, stories: int, sites: int,
     _run(p, "المواقع الإلكترونية", size=25, bold=True, color=WHITE)
     if report_period == "interval":
         p = cell.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        _run(p, "التقرير الساعي", size=17, bold=True, color=GOLD)
+        period_label_ar = ("تقرير المتابعة النصف ساعية" if report_kind == "half_hourly"
+                           else "تقرير المتابعة الساعية")
+        _run(p, period_label_ar, size=17, bold=True, color=GOLD)
     p = cell.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_before = Pt(16)
     _run(p, "بتاريخ " + date_label, size=11, color=GOLD)
@@ -405,6 +407,7 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
             raise ValueError("rasd_visual_layout_requires_accepted_sent_originals")
     elif period == "interval":
         if (report.get("ministry_media_grid") is not True or
+                report.get("report_kind") not in {"half_hourly", "hourly"} or
                 report.get("coverage") not in {"HEALTHY", "SOURCE_LIMITED"}):
             raise ValueError("rasd_visual_interval_status_untrusted")
     else:
@@ -436,7 +439,8 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
     period=report.get("display_window_start", "غير محدد")+" إلى "+end
     _cover(doc,date_label=end,period_label=period,
            stories=len(articles),sites=len(distribution),
-           report_period=report.get("report_period", "daily"))
+           report_period=report.get("report_period", "daily"),
+           report_kind=report.get("report_kind", ""))
     _summary(doc,report,distribution)
     for start in range(0,len(articles),4):
         p=doc.add_paragraph();_rtl(p)
