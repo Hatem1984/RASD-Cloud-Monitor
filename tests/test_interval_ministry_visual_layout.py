@@ -23,6 +23,7 @@ class IntervalSameFinalWordLayout(unittest.TestCase):
                 "coverage": "SOURCE_LIMITED",
                 "ministry_media_grid": True,
                 "report_period": "interval",
+                "report_kind": "half_hourly",
                 "sources": [
                     {"feed_id": "hapi", "status": "ok", "verified_links": 1},
                     {"feed_id": "masrawy", "status": "failed", "verified_links": 0},
@@ -45,7 +46,7 @@ class IntervalSameFinalWordLayout(unittest.TestCase):
             self.assertIn("مواد مطابقة معلّقة ولم تُسلّم: 1", text)
             self.assertNotIn("سبق إرسالها", text)
             self.assertNotIn("وفق سجل التسليم فقط", text)
-            self.assertIn("التقرير الساعي", hourly.tables[0].cell(0, 0).text)
+            self.assertIn("تقرير المتابعة النصف ساعية", hourly.tables[0].cell(0, 0).text)
 
     def test_unknown_or_unverified_interval_cannot_claim_final_grid(self):
         with tempfile.TemporaryDirectory() as directory:
