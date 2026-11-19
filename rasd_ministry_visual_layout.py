@@ -1,6 +1,6 @@
 """Arabic RASD media-clipping layout matching the approved visual reference.
 
-Used ONLY for a validated archive of delivered original publisher screenshots.
+Used for original screenshot-verified hourly bulletins AND accepted daily archives.
 No discovery, network, private ledger, email or PDF conversion happens here.
 All JPEG bytes are embedded unchanged and independently checked by the caller.
 """
@@ -121,7 +121,8 @@ def _section_header(section) -> None:
     footer._p.append(field)
 
 
-def _cover(doc, *, date_label: str, period_label: str, stories: int, sites: int) -> None:
+def _cover(doc, *, date_label: str, period_label: str, stories: int, sites: int,
+           report_period: str = "daily") -> None:
     table = doc.add_table(rows=1, cols=1)
     table.autofit = False
     table.columns[0].width = Cm(18)
@@ -139,6 +140,9 @@ def _cover(doc, *, date_label: str, period_label: str, stories: int, sites: int)
     _run(p, "تقرير رصد", size=26, bold=True, color=WHITE)
     p = cell.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p, "المواقع الإلكترونية", size=25, bold=True, color=WHITE)
+    if report_period == "interval":
+        p = cell.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(p, "التقرير الساعي", size=17, bold=True, color=GOLD)
     p = cell.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_before = Pt(16)
     _run(p, "بتاريخ " + date_label, size=11, color=GOLD)
@@ -213,14 +217,17 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
     # The legacy SMTP subject is a transport label, NOT the Ministry Word
     # identity. Display the independent RASD brand within this report only;
     # never change the SMTP subject or recipient mailbox rules here.
+    period = report.get("report_period", "daily")
     title = report["title"]
     display_title = ("رصد | " + title[len("مآل | "):]
                      if title.startswith("مآل | ") else title)
     p=doc.add_paragraph(); _rtl(p); _run(p, display_title, size=10, color="777777")
     p=doc.add_paragraph(); _rtl(p); _run(p, "تحليل الرصد", size=20, bold=True)
     p=doc.add_paragraph(); _rtl(p)
+    basis = ("من روابط الناشرين الأصلية المستوفية خلال فترة المتابعة."
+             if period == "interval" else "وفق سجل التسليم فقط.")
     _run(p, f"الملخص: إجمالي التغطيات الموثقة {len(report['articles'])}؛ "
-          f"عدد المواقع الممثلة {len(distribution)}، وفق سجل التسليم فقط.",
+          f"عدد المواقع الممثلة {len(distribution)}، {basis}",
           size=11, bold=True)
     p=doc.add_paragraph(); _rtl(p)
     _run(p, "توزيع التغطيات على المواقع", size=14, bold=True)
@@ -254,7 +261,9 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
               size=8.5,color="666666")
     p=doc.add_paragraph();_rtl(p)
     _run(p,"حالة التغطية: ",size=11,bold=True)
-    _run(p,"هذه حصيلة الأخبار التي سبق تسليمها بصورها والتحقق من ملفاتها؛ لا تثبت شمول كل ما نُشر خلال اليوم.",size=10)
+    _run(p, ("هذه حصيلة الأخبار التي ثبتت صور صفحاتها الأصلية خلال فترة المتابعة؛ لا تثبت شمول كل ما نُشر أو سلامة المصادر المتعذرة."
+             if period == "interval" else
+             "هذه حصيلة الأخبار التي سبق تسليمها بصورها والتحقق من ملفاتها؛ لا تثبت شمول كل ما نُشر خلال اليوم."),size=10)
     p=doc.add_paragraph();_rtl(p)
     _run(p,"بيان الوزارة: ",size=11,bold=True)
     _run(p,"غير محسوم من سجل البريد؛ يتطلب مطابقة المصدر الرسمي مباشرة.",size=10)
@@ -263,8 +272,27 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
         site,count=max(distribution.items(),key=lambda x:x[1])
         _run(p,f"أكثر المواقع حضورًا في النشرة: {site} ({count} تغطية).",size=11,bold=True)
     p=doc.add_paragraph();_rtl(p)
-    _run(p,"تنبيه توثيق: جميع الصور المعروضة محفوظة من ملفات أصلية سبق إرسالها، "
-          "ويجري فحص تطابق بصمات JPEG مع كل خبر قبل تسليم هذا المستند.",size=9)
+    _run(p, ("تنبيه توثيق: صور هذه المتابعة ملتقطة من صفحات الناشرين الأصلية، "
+             "ويُتحقق من بصمات JPEG داخل ملف Word قبل إرسال التقرير."
+             if period == "interval" else
+             "تنبيه توثيق: جميع الصور المعروضة محفوظة من ملفات أصلية سبق إرسالها، "
+             "ويجري فحص تطابق بصمات JPEG مع كل خبر قبل تسليم هذا المستند."),size=9)
+    if period == "interval":
+        sources = report.get("sources")
+        if (not isinstance(sources, list) or not sources or
+                any(row.get("status") not in {"ok", "failed"} for row in sources)):
+            raise ValueError("rasd_visual_interval_health_missing_hold")
+        healthy = sum(row["status"] == "ok" for row in sources)
+        p=doc.add_paragraph();_rtl(p)
+        _run(p,f"حالة مصادر الرصد: {healthy} متاح من {len(sources)}؛ "
+              f"{len(sources)-healthy} متعذر. المصدر المتعذر لا يعني عدم وجود أخبار.",size=9,bold=True)
+        held = report.get("held_candidates", [])
+        if not isinstance(held, list):
+            raise ValueError("rasd_visual_interval_held_untrusted")
+        if held:
+            p=doc.add_paragraph();_rtl(p)
+            _run(p,f"مواد مطابقة معلّقة ولم تُسلّم: {len(held)}؛ "
+                  "لم تُحسب ضمن التغطيات الموثقة.",size=9,bold=True)
     scope = report.get("scope_note")
     if scope is not None:
         if not isinstance(scope, str) or len(scope) > 1200:
@@ -370,9 +398,17 @@ def render_ministry_no_accepted_word(report: dict, destination: Path) -> None:
 
 
 def render_ministry_visual_word(report: dict, destination: Path) -> None:
-    """Format previously SENT verified screenshots; never infer missing news."""
-    if report.get("coverage")!="CONSOLIDATED_PREVIOUSLY_SENT_ORIGINALS":
-        raise ValueError("rasd_visual_layout_requires_accepted_sent_originals")
+    """Share ONE layout; keep interval captures separate from accepted daily archive."""
+    period = report.get("report_period", "daily")
+    if period == "daily":
+        if report.get("coverage") != "CONSOLIDATED_PREVIOUSLY_SENT_ORIGINALS":
+            raise ValueError("rasd_visual_layout_requires_accepted_sent_originals")
+    elif period == "interval":
+        if (report.get("ministry_media_grid") is not True or
+                report.get("coverage") not in {"HEALTHY", "SOURCE_LIMITED"}):
+            raise ValueError("rasd_visual_interval_status_untrusted")
+    else:
+        raise ValueError("rasd_visual_period_untrusted")
     articles=report.get("articles",[])
     if not articles or len(articles)>60:
         raise ValueError("rasd_visual_invalid_article_count")
@@ -399,7 +435,8 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
     end=report.get("display_window_end", "فترة غير محددة")
     period=report.get("display_window_start", "غير محدد")+" إلى "+end
     _cover(doc,date_label=end,period_label=period,
-           stories=len(articles),sites=len(distribution))
+           stories=len(articles),sites=len(distribution),
+           report_period=report.get("report_period", "daily"))
     _summary(doc,report,distribution)
     for start in range(0,len(articles),4):
         p=doc.add_paragraph();_rtl(p)
@@ -422,7 +459,7 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
                 _card(cell,item,start+offset+1)
         if start+4<len(articles):
             doc.add_page_break()
-    doc.core_properties.title="رصد | تقرير رصد المواقع الإلكترونية"
+    doc.core_properties.title=report["title"]
     doc.core_properties.author="RASD"
     destination.parent.mkdir(parents=True,exist_ok=True)
     doc.save(destination)
