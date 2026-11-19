@@ -7,6 +7,7 @@ for separate original-page/date/screenshot QA, never a production success.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -16,6 +17,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, build_opener
+from xml.etree.ElementTree import ParseError
 
 from monitor import RejectRedirect, parse_rss
 from research_source_queries_100 import load_100_sources
@@ -30,9 +32,18 @@ _TIMEOUT = 7
 def same_publisher(url: str, host: str) -> bool:
     """Keep every request first-party HTTPS, without credentials or odd ports."""
     try:
+        if (not isinstance(host, str) or
+                host.endswith((".local", ".localhost", ".internal", ".test", ".invalid"))):
+            return False
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            pass
+        else:
+            return False
         p = urlsplit(url)
         return bool(
-            isinstance(host, str) and re.fullmatch(r"[a-z0-9.-]{4,180}", host)
+            re.fullmatch(r"[a-z0-9.-]{4,180}", host)
             and host.count(".") >= 1
             and p.scheme == "https" and p.hostname in {host, "www." + host}
             and p.port in (None, 443)
@@ -126,14 +137,8 @@ def inspect_candidate(row: dict, active: dict, keywords: list[str],
                 recent_hours=72, require_complete_items=True)
             if count <= 0:
                 continue
-        except (HTTPError, URLError, OSError, TimeoutError,
+        except (HTTPError, URLError, OSError, TimeoutError, ParseError,
                 RuntimeError, ValueError, TypeError, AttributeError):
-            continue
-        except Exception as exc:
-            # The upstream XML parser may raise ParseError; never leak text.
-            from xml.etree.ElementTree import ParseError
-            if not isinstance(exc, ParseError):
-                raise
             continue
         outcome["rss_items"] = count
         outcome["matched_recent_items"] = len(matched)
