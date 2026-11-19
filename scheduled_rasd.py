@@ -418,6 +418,8 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
     report = {
         "title": title + (" — نطاق جزئي" if degraded else ""),
         "display_window_start": start, "display_window_end": end,
+        "ministry_media_grid": True,
+        "report_period": "interval",
         "coverage": "SOURCE_LIMITED" if degraded else "HEALTHY",
         "verified_links": sum(x["verified_links"] for x in source_rows),
         "articles": selected,
