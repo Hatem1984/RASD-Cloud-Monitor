@@ -43,7 +43,7 @@ class AlmalOriginalHtmlQA(unittest.TestCase):
             original_story(ARTICLE,article(date="2026-11-10T17:01:20+02:00"),KW,now=NOW)
 
     def test_no_original_article_date_no_approved_story(self):
-        without = b'<html><h1>وزير التخطيط يبحث مشروع بورسعيد</h1></html>'
+        without = '<html><h1>وزير التخطيط يبحث مشروع بورسعيد</h1></html>'.encode()
         with self.assertRaisesRegex(ValueError,"published_meta_missing"):
             original_story(ARTICLE,without,KW,now=NOW)
 
