@@ -44,7 +44,7 @@ class Youm7TagResearchNoSend(unittest.TestCase):
 
     def test_publisher_tag_is_not_publication_proof_by_itself(self):
         def fetcher(url,limit):
-            return self.fixture() if url==TAG_URL else b"<html><h1>وزير التخطيط</h1></html>"
+            return self.fixture() if url==TAG_URL else " <html><h1>وزير التخطيط</h1></html>".strip().encode("utf-8")
         result=research(now=NOW,downloader=fetcher,keywords=KW)
         self.assertEqual(result["ministry_tag_first_party_links"],1)
         self.assertEqual(result["original_pages_dated"],0)
