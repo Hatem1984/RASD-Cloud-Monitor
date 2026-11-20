@@ -24,16 +24,16 @@ class HundredSourceResearchCatalogTests(unittest.TestCase):
 
     def test_only_13_are_active_not_one_hundred(self):
         data = load_100_sources()
-        self.assertEqual(data["approved_automated_rss_sources"], 13)
-        self.assertEqual(data["not_scheduled_research_candidates"], 87)
+        self.assertEqual(data["approved_automated_rss_sources"], 14)
+        self.assertEqual(data["not_scheduled_research_candidates"], 86)
         self.assertEqual(sum(r["research_status"]=="active_native_rss"
-                             for r in data["sources"]),13)
+                             for r in data["sources"]),14)
         for row in data["sources"][50:]:
             self.assertEqual(row["rss_status"], "not_verified_no_feed_approved")
             self.assertEqual(row["original_article_screenshot_status"], "not_verified")
             self.assertIsNone(row["last_individual_live_check"])
         active = json.loads((ROOT/"sources_newsroom_active.json").read_text("utf-8"))
-        self.assertEqual(len(active["feeds"]),13)
+        self.assertEqual(len(active["feeds"]),14)
 
     def test_owner_reference_publishers_are_prioritized(self):
         sources = {r["id"]:r for r in load_100_sources()["sources"]}
