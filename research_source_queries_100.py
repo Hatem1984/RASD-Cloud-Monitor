@@ -29,7 +29,7 @@ def load_100_sources(extension: Path = EXTENSION) -> dict:
             [r["priority"] for r in rows] != list(range(1, 101)) or
             len({r["id"] for r in rows}) != 100 or
             len({r["homepage_url"] for r in rows}) != 100 or
-            len(expected_active) != 13 or len(active["feeds"]) != 13):
+            len(expected_active) != 14 or len(active["feeds"]) != 14):
         raise ValueError("rasd_catalog_100_integrity_hold")
     catalog_active = {
         r["id"] for r in rows if r["research_status"] == "active_native_rss"}
