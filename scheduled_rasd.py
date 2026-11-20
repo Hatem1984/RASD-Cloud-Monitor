@@ -27,6 +27,7 @@ from monitor import SOURCE_FAILURE_CODES, article_id, inspect
 from gate11_runner import candidate_from_feed
 from rasd_original_html_source_gate import (
     all_newsroom_origins, collection_origins, html_collection_enabled,
+    youm7_collection_enabled,
 )
 from rasd_hourly_delivery import (hourly_period, hourly_slot_key,
                                   hourly_delivery_eligible, reserve_hourly_originals)
@@ -231,6 +232,42 @@ def validate_story(item: dict, config: dict) -> None:
         raise ValueError("incomplete_story")
 
 
+def _merge_first_party_html_items(
+    html_result: dict, config: dict, checked: datetime,
+    age_hours: int, published_before: datetime | None,
+    newest: dict,
+) -> None:
+    """Preserve exact publisher/original dates and one story ID per URL.
+
+    The caller only catches source fetch failures; an identity spoofing,
+    conflicting date or non-approved host is a hard stop.
+    """
+    for original in html_result["stories"]:
+        stamp=parsedate_to_datetime(original["published"])
+        if stamp.tzinfo is None or stamp.utcoffset() is None:
+            raise RuntimeError("publisher_date_unverifiable")
+        stamp=stamp.astimezone(timezone.utc)
+        if published_before is not None and stamp >= published_before.astimezone(timezone.utc):
+            continue
+        if not checked - timedelta(hours=age_hours) <= stamp <= checked:
+            continue
+        row={
+            "id":original["id"], "headline":original["headline"],
+            "publisher_excerpt":original.get("publisher_excerpt",""),
+            "source":original["source"], "url":original["url"],
+            "published_at_cairo":stamp.astimezone(CAIRO).strftime(
+                "%Y-%m-%d %H:%M %Z"),
+            "published_display_cairo":cairo_display_time(stamp),
+        }
+        validate_story(row,config)
+        if published_before is not None:
+            row["hourly_publication_bucket"]=(
+                "within_previous_hour" if stamp >=
+                published_before.astimezone(timezone.utc)-timedelta(hours=1)
+                else "recovered_older")
+        newest.setdefault(row["id"],(stamp,row))
+
+
 def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                            allow_degraded: bool = False,
                            source_records: list[dict] | None = None,
@@ -309,36 +346,35 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
         status["verified_links"] = html_result["original_page_verified"]
         if html_result["original_page_hold"]:
             status.update(status="failed", failure_code="other")
-        # Identity failures in the returned items are NEVER downgraded to a
-        # network HOLD: a spoofed article must fail the whole delivery.
-        for original in html_result["stories"]:
-            stamp = parsedate_to_datetime(original["published"])
-            if stamp.tzinfo is None or stamp.utcoffset() is None:
-                raise RuntimeError("publisher_date_unverifiable")
-            stamp = stamp.astimezone(timezone.utc)
-            if published_before is not None and stamp >= published_before.astimezone(timezone.utc):
-                continue
-            if not checked - timedelta(hours=age_hours) <= stamp <= checked:
-                continue
-            row = {
-                "id": original["id"], "headline": original["headline"],
-                "publisher_excerpt": original.get("publisher_excerpt", ""),
-                "source": original["source"], "url": original["url"],
-                "published_at_cairo": stamp.astimezone(CAIRO).strftime(
-                    "%Y-%m-%d %H:%M %Z"),
-                "published_display_cairo": cairo_display_time(stamp),
-            }
-            validate_story(row, config)
-            if published_before is not None:
-                row["hourly_publication_bucket"] = (
-                    "within_previous_hour" if stamp >=
-                    published_before.astimezone(timezone.utc)-timedelta(hours=1)
-                    else "recovered_older")
-            newest.setdefault(row["id"], (stamp, row))
+        # Security failures in returned items are hard HOLD, never
+        # suppressed as routine publisher network trouble.
+        _merge_first_party_html_items(
+            html_result,config,checked,age_hours,published_before,newest)
         if source_records is not None:
             source_records.append(status)
         if not allow_degraded and status["status"] != "ok":
             raise RuntimeError("original_html_publisher_partial_hold")
+    if youm7_collection_enabled(config):
+        # Publisher-specific Ministry tag; source page and date are verified
+        # independently, not inferred from a tag or third-party RSS.
+        from rasd_youm7_tag_original_research import research as youm7_research
+        record={"feed_id":"youm7_html","status":"ok","verified_links":0}
+        try:
+            result=youm7_research(now=checked)
+        except (OSError,TimeoutError,ValueError,RuntimeError):
+            if not allow_degraded:
+                raise RuntimeError("youm7_original_publisher_unavailable") from None
+            record.update(status="failed",failure_code="other")
+            result={"original_pages_dated":0,"original_page_hold":0,"stories":[]}
+        record["verified_links"]=result["original_pages_dated"]
+        if result["original_page_hold"]:
+            record.update(status="failed",failure_code="other")
+        _merge_first_party_html_items(
+            result,config,checked,age_hours,published_before,newest)
+        if source_records is not None:
+            source_records.append(record)
+        if not allow_degraded and record["status"]!="ok":
+            raise RuntimeError("youm7_original_publisher_partial_hold")
     return [x[1] for x in sorted(newest.values(), key=lambda x: x[0], reverse=True)]
 
 
