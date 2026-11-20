@@ -28,6 +28,7 @@ SOURCE_NAMES = {
     "Masrawy native Egypt news RSS": "مصراوي", "Al Massa native news RSS": "المساء",
     "Al Nahar Egypt native news RSS": "النهار",
     "Al Mal native publisher HTML": "المال",
+    "Youm7 first-party Ministry tag HTML": "اليوم السابع",
     "Sada El Balad native news RSS": "صدى البلد", "Veto native news RSS": "فيتو",
     "Daily News Egypt native RSS": "ديلي نيوز إيجيبت", "Egypt Independent native RSS": "إيجيبت إندبندنت",
     "Egyptian Streets native RSS": "إيجيبشن ستريتس", "Sky News Arabia native RSS": "سكاي نيوز عربية",
