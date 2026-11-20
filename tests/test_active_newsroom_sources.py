@@ -25,7 +25,7 @@ class ActiveNewsroomProfile(unittest.TestCase):
         self.assertEqual(active["feeds"][2:3], s["feeds"])
         self.assertEqual(active["feeds"][3]["id"], "alborsa")
         self.assertEqual([x["id"] for x in active["feeds"]],
-                         ["hapi", "almasryalyoum", "shorouk", "alborsa", "masrawy"] + ['almessa', 'elbalad', 'vetogate', 'dailynewsegypt', 'egyptindependent', 'egyptianstreets', 'skynewsarabia', 'inp_official'])
+                         ["hapi", "almasryalyoum", "shorouk", "alborsa", "masrawy"] + ['almessa', 'elbalad', 'vetogate', 'dailynewsegypt', 'egyptindependent', 'egyptianstreets', 'skynewsarabia', 'inp_official', 'alnaharegypt'])
         self.assertEqual(active["recent_hours"], a["recent_hours"])
         self.assertEqual(active["max_feed_bytes"], a["max_feed_bytes"])
         self.assertEqual(len(active["feeds"]), 14)
@@ -37,6 +37,7 @@ class ActiveNewsroomProfile(unittest.TestCase):
                 domain in {"hapijournal.com", "www.hapijournal.com",
                            "almasryalyoum.com", "www.almasryalyoum.com",
                            "www.shorouknews.com", "www.alborsaanews.com",
+                           "www.alnaharegypt.com", "alnaharegypt.com",
                            "alborsaanews.com", "masrawy.com",
                            "www.masrawy.com", "almessa.gomhuriaonline.com", "www.elbalad.news", "www.vetogate.com", "www.dailynewsegypt.com", "dailynewsegypt.com", "www.egyptindependent.com", "enterpriseam.com", "egyptianstreets.com", "www.skynewsarabia.com", "inp.edu.eg"}
                 for domain in item["allowed_article_hosts"]))
