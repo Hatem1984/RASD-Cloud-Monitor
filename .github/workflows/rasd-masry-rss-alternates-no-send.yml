@@ -1,0 +1,30 @@
+name: RASD — Al Masry Al Youm first-party RSS alternatives — no send
+
+on:
+  push:
+    branches:
+      - 'gate-rasd-source-hourly*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-masry-rss-shadow-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-rss-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compare same-publisher HTTPS RSS versions without altering XML
+        run: python rasd_masry_rss_alternates_no_send.py
