@@ -57,6 +57,7 @@ jobs:
           # Never publish unverified original URLs or article text.
           print("RASD_RESEARCH_CHECKED=" + str(summary["sources_checked_or_listed"]))
           print("RASD_RESEARCH_CATEGORIES=" + json.dumps(summary["status_counts"], sort_keys=True))
+          print("RASD_PREVIOUS_COMPLETE_HOUR_NATIVE_RSS_MATCHES_UNVERIFIED=" + str(summary["previous_complete_hour_rss_matches_not_approved_news"]))
           for row in summary["sources"]:
               print("SOURCE_ID=" + row["id"] + " STAGE=" + row["stage"])
           print("RASD_PRODUCTION_SOURCES_UNCHANGED=13; 100 SUCCESSFUL SOURCES NOT PROVEN")
