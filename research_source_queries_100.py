@@ -54,7 +54,7 @@ def load_100_sources(extension: Path = EXTENSION) -> dict:
         "as_of": extra["as_of"],
         "total_research_origins": 100,
         "approved_automated_rss_sources": len(expected_active),
-        "not_scheduled_research_candidates": 87,
+        "not_scheduled_research_candidates": 86,
         "sources": rows,
     }
 
@@ -89,8 +89,8 @@ def main() -> None:
     data = load_100_sources()
     print(json.dumps({
         "scope": "RESEARCH_QUERIES_NOT_100_AUTOMATED_SOURCES",
-        "total_origins": 100, "automated_active": 13,
-        "candidate_only": 87,
+        "total_origins": 100, "automated_active": 14,
+        "candidate_only": 86,
         "queries": generate_100_queries(data, limit=args.limit,
                                          official_only=args.official_only),
     }, ensure_ascii=False, indent=2))
