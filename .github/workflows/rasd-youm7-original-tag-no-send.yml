@@ -1,0 +1,32 @@
+name: RASD — Youm7 original Ministry tag discovery — NO SEND
+
+on:
+  push:
+    branches:
+      - 'gate-rasd-source-hourly*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-youm7-original-tag-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  first-party-tag-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline strict publisher title/date/host proof
+        run: python -m unittest discover -s tests -p test_youm7_tag_original_research_no_send.py -v
+      - name: Live publisher-owned Ministry tag and exact original article metadata
+        run: python rasd_youm7_tag_original_research.py
