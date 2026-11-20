@@ -30,3 +30,20 @@ Run offline tests via \`python -m unittest discover -s tests -v\`; the gate CI a
 
 ## Release criteria
 Keep this work in a PR for review; do not claim \`100 successful sources\`, a completed Ministry report or actual email delivery until real source-by-source evidence supports each claim. Production changes and any cost-bearing services require owner approval.
+
+
+## 20 Nov owner correction — HOURLY production, 6–7 real relevant news items per hour target
+
+- Output: at most one production news email per hour, not two. Keep redundant original-source scan opportunities, but hourly reporting is eligible only in first half of each hour. One private CAS write atomically reserves the hourly slot and all included news article IDs; an uncertain slot is never blindly retried.
+
+- Period: previous completed UTC/Cairo clock hour. Relevant previously unsent 72-hour backlog may also be recovered, with original publication dates still shown; news published since current hour boundary is deferred to the next report.
+
+- Cairo 22:00 is still the daily rollup window, not an extra competing hourly email. A final-hour story can be picked up by the next hourly scan, so perfectly uninterrupted hourly mail is not yet proven.
+
+- Visual contract: hourly Word uses the final Ministry navy/gold cover, analysis, distribution and original JPEG/link cards. Explicit title: تقرير المتابعة الساعية. It does not claim current images were previously delivered.
+
+- News target 6–7 per hour: performance objective, NEVER a fabrication or unrelated-news quota. Source health, exact original publisher date and original image remain mandatory. Read-only source audit now reports previous complete-hour RSS match volume without treating this as delivered news.
+
+- Capacity HOLD: 6–7 news cards per hour imply 144–168 per day, while current daily rollup is capped at 60 stories and Word at 8MB. No auto-lifting, hidden truncation, historical edit or invented photos. A separately reviewed multi-volume daily archive design is needed before claiming complete daily rollup at this rate.
+
+- Deployment: production steps stage environment flag RASD_HOURLY_REPORTS_ENABLED=true for reviewed merge. Source list, 29 original phrases, recipients, SMTP, private CAS data, existing cron expressions and Cloudflare identities are unchanged. No production merge or live email test.
