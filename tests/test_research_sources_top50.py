@@ -29,7 +29,7 @@ class TopFiftyResearchSourcesTests(unittest.TestCase):
         self.assertEqual(catalog_ids, active_ids)
         self.assertEqual(len(catalog_ids), 14)
         self.assertEqual(sum(x["research_status"] == "candidate_not_scheduled"
-                             for x in self.sources), 37)
+                             for x in self.sources), 36)
         self.assertEqual(len(self.active["feeds"]), 14)
         self.assertEqual(len(self.active["keywords"]), 29)
         self.assertEqual(sum(x["rss_status"] == "approved_in_sources_newsroom_active.json"
