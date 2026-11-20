@@ -300,37 +300,41 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                   "verified_links": 0}
         try:
             html_result = research(now=checked)
-            status["verified_links"] = html_result["original_page_verified"]
-            if html_result["original_page_hold"]:
-                status.update(status="failed", failure_code="other")
-            for original in html_result["stories"]:
-                stamp = parsedate_to_datetime(original["published"])
-                if stamp.tzinfo is None or stamp.utcoffset() is None:
-                    raise RuntimeError("publisher_date_unverifiable")
-                stamp = stamp.astimezone(timezone.utc)
-                if published_before is not None and stamp >= published_before.astimezone(timezone.utc):
-                    continue
-                if not checked - timedelta(hours=age_hours) <= stamp <= checked:
-                    continue
-                row = {
-                    "id": original["id"], "headline": original["headline"],
-                    "publisher_excerpt": original.get("publisher_excerpt", ""),
-                    "source": original["source"], "url": original["url"],
-                    "published_at_cairo": stamp.astimezone(CAIRO).strftime(
-                        "%Y-%m-%d %H:%M %Z"),
-                    "published_display_cairo": cairo_display_time(stamp),
-                }
-                validate_story(row, config)
-                if published_before is not None:
-                    row["hourly_publication_bucket"] = (
-                        "within_previous_hour" if stamp >=
-                        published_before.astimezone(timezone.utc)-timedelta(hours=1)
-                        else "recovered_older")
-                newest.setdefault(row["id"], (stamp, row))
         except (OSError, TimeoutError, ValueError, RuntimeError):
             if not allow_degraded:
                 raise RuntimeError("original_html_publisher_unavailable") from None
-            status.update(status="failed", verified_links=0, failure_code="other")
+            status.update(status="failed", failure_code="other")
+            html_result = {"original_page_verified": 0,
+                           "original_page_hold": 0, "stories": []}
+        status["verified_links"] = html_result["original_page_verified"]
+        if html_result["original_page_hold"]:
+            status.update(status="failed", failure_code="other")
+        # Identity failures in the returned items are NEVER downgraded to a
+        # network HOLD: a spoofed article must fail the whole delivery.
+        for original in html_result["stories"]:
+            stamp = parsedate_to_datetime(original["published"])
+            if stamp.tzinfo is None or stamp.utcoffset() is None:
+                raise RuntimeError("publisher_date_unverifiable")
+            stamp = stamp.astimezone(timezone.utc)
+            if published_before is not None and stamp >= published_before.astimezone(timezone.utc):
+                continue
+            if not checked - timedelta(hours=age_hours) <= stamp <= checked:
+                continue
+            row = {
+                "id": original["id"], "headline": original["headline"],
+                "publisher_excerpt": original.get("publisher_excerpt", ""),
+                "source": original["source"], "url": original["url"],
+                "published_at_cairo": stamp.astimezone(CAIRO).strftime(
+                    "%Y-%m-%d %H:%M %Z"),
+                "published_display_cairo": cairo_display_time(stamp),
+            }
+            validate_story(row, config)
+            if published_before is not None:
+                row["hourly_publication_bucket"] = (
+                    "within_previous_hour" if stamp >=
+                    published_before.astimezone(timezone.utc)-timedelta(hours=1)
+                    else "recovered_older")
+            newest.setdefault(row["id"], (stamp, row))
         if source_records is not None:
             source_records.append(status)
         if not allow_degraded and status["status"] != "ok":
