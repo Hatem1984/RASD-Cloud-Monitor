@@ -30,14 +30,10 @@ def extract_sent_grid_originals(document, expected: list[dict],
         raise RuntimeError("daily_sent_grid_cover_identity_hold")
     if len(document.tables) < 3 or len(document.inline_shapes) != len(expected):
         raise RuntimeError("daily_sent_grid_image_count_hold")
-    recorded = []
-    seen_cells = set()
+    recorded = {}
     for table in document.tables[2:]:
         for row in table.rows:
             for cell in row.cells:
-                if id(cell._tc) in seen_cells:
-                    continue
-                seen_cells.add(id(cell._tc))
                 paragraphs = cell.paragraphs
                 if not paragraphs:
                     continue
@@ -51,7 +47,7 @@ def extract_sent_grid_originals(document, expected: list[dict],
                 if not match or len(images) != 1 or len(paragraphs) < 4:
                     raise RuntimeError("daily_sent_grid_card_identity_hold")
                 index = int(match.group(1))
-                if index != len(recorded) + 1 or index > len(expected):
+                if index < 1 or index > len(expected) or index in recorded:
                     raise RuntimeError("daily_sent_grid_card_order_hold")
                 item = expected[index - 1]
                 outlet = SOURCE_NAMES.get(item["source"], item["source"])
@@ -82,8 +78,8 @@ def extract_sent_grid_originals(document, expected: list[dict],
                 destination.write_bytes(blob)
                 if not image_quality(destination)["accepted"]:
                     raise RuntimeError("daily_sent_grid_original_visual_hold")
-                recorded.append((
-                    item, str(destination), hashlib.sha256(blob).hexdigest()))
-    if len(recorded) != len(expected):
+                recorded[index] = (
+                    item, str(destination), hashlib.sha256(blob).hexdigest())
+    if set(recorded) != set(range(1, len(expected) + 1)):
         raise RuntimeError("daily_sent_grid_missing_originals_hold")
-    return recorded
+    return [recorded[i] for i in range(1, len(expected) + 1)]
