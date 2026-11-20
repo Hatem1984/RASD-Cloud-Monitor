@@ -9,7 +9,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from rasd_hourly_delivery import hourly_period, hourly_slot_key, reserve_hourly_originals
+from rasd_hourly_delivery import (
+    hourly_period, hourly_slot_key, hourly_delivery_eligible, reserve_hourly_originals)
 import scheduled_rasd as worker
 
 
@@ -51,6 +52,45 @@ class HourlyProductionNoSend(unittest.TestCase):
                             hourly_slot_key("2026-11-19T19:00Z"))
         with self.assertRaises(ValueError):
             hourly_slot_key("https://example.org/foo")
+
+    def test_2200_cairo_daily_rollup_has_unique_later_hourly_opportunity(self):
+        from daily_report import CAIRO
+        # Winter UTC+2: Cairo 22:05 is reserved for daily, 22:37 for
+        # the immediately preceding full hour, followed by 23:07 next slot.
+        winter_daily = datetime(2026, 11, 20, 20, 5, tzinfo=timezone.utc)
+        winter_hourly = datetime(2026, 11, 20, 20, 37, tzinfo=timezone.utc)
+        winter_next = datetime(2026, 11, 20, 21, 7, tzinfo=timezone.utc)
+        self.assertFalse(hourly_delivery_eligible(winter_daily, CAIRO))
+        self.assertTrue(hourly_delivery_eligible(winter_hourly, CAIRO))
+        self.assertTrue(hourly_delivery_eligible(winter_next, CAIRO))
+        self.assertEqual(hourly_period(winter_hourly)[2],
+                         "2026-11-20T20:00Z")
+        self.assertEqual(hourly_period(winter_next)[2],
+                         "2026-11-20T21:00Z")
+        self.assertNotEqual(hourly_slot_key(hourly_period(winter_hourly)[2]),
+                            hourly_slot_key(hourly_period(winter_next)[2]))
+        # Summer UTC+3 Cairo: the same behavior with different UTC wall time.
+        summer_daily = datetime(2026, 7, 20, 19, 5, tzinfo=timezone.utc)
+        summer_hourly = datetime(2026, 7, 20, 19, 37, tzinfo=timezone.utc)
+        self.assertFalse(hourly_delivery_eligible(summer_daily, CAIRO))
+        self.assertTrue(hourly_delivery_eligible(summer_hourly, CAIRO))
+        self.assertEqual(hourly_period(summer_hourly)[2],
+                         "2026-07-20T19:00Z")
+        # All other half-hour reruns are forbidden for SMTP.
+        self.assertFalse(hourly_delivery_eligible(winter_next + timedelta(minutes=30), CAIRO))
+
+    def test_protected_2237_cairo_hourly_enters_normal_no_send_path(self):
+        from daily_report import CAIRO
+        at_2237 = datetime(2026, 11, 20, 20, 37, tzinfo=timezone.utc)
+        self.assertEqual(worker.scheduled_phase(worker.HALF_HOUR_CRON, at_2237),
+                         "interval")
+        with patch.object(worker, "require_github_scheduler"), \
+             patch.object(worker, "protected_credentials") as credential_probe:
+            with self.assertRaises(ValueError):
+                # No fake credentials in this test; proving that it reaches
+                # authentication gate, rather than the previous silent skip.
+                worker.run_scheduled("interval", at_2237)
+        credential_probe.assert_called_once()
 
     def test_seven_news_and_one_hour_share_single_atomic_private_CAS(self):
         ledger = MagicMock()
