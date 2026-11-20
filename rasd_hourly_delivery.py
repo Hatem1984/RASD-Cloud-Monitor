@@ -1,8 +1,9 @@
 """Hourly RASD delivery gate: one protected batch per UTC/Cairo clock hour.
 
 The source reader can still run on redundant half-hour GitHub/Cloudflare
-ticks. Only the *first half of each hour* is a permitted hourly dispatch
-opportunity. Reserved slot + article keys share ONE private CAS transaction.
+ticks. Only the *first half of each hour* normally permits dispatch, except
+22:00 Cairo: the protected 22:00 daily rollup goes first, and the 22:30+
+hourly opportunity recovers 21:00-22:00 originals without overlap. Reserved slot + article keys share ONE private CAS transaction.
 No network, SMTP or automatic retry is performed by this module.
 """
 from __future__ import annotations
@@ -12,6 +13,19 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from delivery_bridge import now_iso, reserve_entry
+
+
+def hourly_delivery_eligible(now: datetime, cairo) -> bool:
+    """One half-hour per Cairo hour; 22:00 daily is a separate reservation.
+
+    22:37 sends the 21:00-22:00 news after the 22:00 daily cutoff, so it
+    belongs to the NEXT day's accepted-news rollup, never retroactive edit.
+    """
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("hourly_clock_timezone_required")
+    local = now.astimezone(cairo)
+    return (local.hour == 22 and local.minute >= 30) or (
+        local.hour != 22 and local.minute < 30)
 
 
 def hourly_period(now: datetime) -> tuple[datetime, datetime, str]:
