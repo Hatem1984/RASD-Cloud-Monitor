@@ -281,6 +281,10 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                "source": candidate["source"], "url": candidate["url"],
                "published_at_cairo": stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
                "published_display_cairo": cairo_display_time(stamp)}
+        if published_before is not None:
+            row["hourly_publication_bucket"] = (
+                "within_previous_hour" if stamp >= published_before.astimezone(timezone.utc)
+                - timedelta(hours=1) else "recovered_older")
         newest.setdefault(row["id"], (stamp, row))
     return [x[1] for x in sorted(newest.values(), key=lambda x: x[0], reverse=True)]
 
@@ -347,6 +351,10 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
     """
     if report_kind not in {"hourly", "half_hourly"}:
         raise ValueError("source_limited_report_kind_invalid")
+    if report_kind == "hourly" and any(
+            item.get("hourly_publication_bucket") not in
+            {"within_previous_hour", "recovered_older"} for item in items):
+        raise ValueError("hourly_publication_bucket_missing")
     if not items or len(items) > MAX_BATCH:
         raise ValueError("invalid_source_limited_batch")
     if len({a.get("id") for a in items}) != len(items):
@@ -432,6 +440,12 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
         "ministry_media_grid": True,
         "report_period": "interval",
         "report_kind": report_kind,
+        **({"hourly_in_period": sum(
+               item["hourly_publication_bucket"] == "within_previous_hour"
+               for item in selected),
+            "hourly_recovered": sum(
+               item["hourly_publication_bucket"] == "recovered_older"
+               for item in selected)} if report_kind == "hourly" else {}),
         "coverage": "SOURCE_LIMITED" if degraded else "HEALTHY",
         "verified_links": sum(x["verified_links"] for x in source_rows),
         "articles": selected,
@@ -875,6 +889,10 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             # solely because newer feed items repeatedly take priority.
             stories = sorted(stories,
                              key=lambda a: (a["published_at_cairo"], a["id"]))
+            if hourly_enabled and any(
+                    row.get("hourly_publication_bucket") not in
+                    {"within_previous_hour", "recovered_older"} for row in stories):
+                raise RuntimeError("hourly_publication_classification_missing")
             waiting = max(0, len(stories) - MAX_BATCH)
             if waiting:
                 print("::warning::RASD_VERIFIED_STORIES_BACKLOG_PENDING="
@@ -929,9 +947,13 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     held_items=held_items)
             # Only successfully captured/embedded originals enter private CAS.
             # A volume target is diagnostic only: never insert invented extras.
+            hourly_in_period = sum(
+                row.get("hourly_publication_bucket") == "within_previous_hour"
+                for row in delivered) if hourly_enabled else 0
+            hourly_recovered = len(delivered) - hourly_in_period if hourly_enabled else 0
             if hourly_enabled:
-                print(f"RASD_HOURLY_VERIFIED_NEWS={len(delivered)} TARGET_MIN=6 TARGET_STRETCH=7",
-                      flush=True)
+                print(f"RASD_HOURLY_VERIFIED_NEWS={hourly_in_period} RECOVERED_OLDER={hourly_recovered} "
+                      "TARGET_MIN=6 TARGET_STRETCH=7", flush=True)
             # Blocked items remain unsent, so later scheduled scans can retry.
             if hourly_enabled:
                 message_key = reserve_hourly_originals(ledger, delivered, day, window)
@@ -951,7 +973,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             return {"status": "smtp_accepted_unconfirmed_inbox",
                     "items": len(delivered),
                     **({"hourly_target_minimum": 6,
-                        "hourly_target_shortfall": max(0, 6 - len(delivered))}
+                        "hourly_new_within_period": hourly_in_period,
+                        "hourly_recovered_older": hourly_recovered,
+                        "hourly_target_shortfall": max(0, 6 - hourly_in_period)}
                        if hourly_enabled else {}),
                     "source_limited": bool(limited or waiting),
                     "original_screenshots_held": held_count,
