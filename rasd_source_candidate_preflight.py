@@ -228,8 +228,9 @@ def inspect_candidate(row: dict, active: dict, keywords: list[str],
                 outcome["matched_previous_complete_hour"] += 1
             if checked - timedelta(hours=24) <= stamp <= checked:
                 outcome["matched_last_24_hours"] += 1
-        outcome["stage"] = ("NATIVE_MATCH_PENDING_ORIGINAL_PAGE_IMAGE_QA"
-                            if matched else "NATIVE_VALID_NO_RECENT_MINISTRY_MATCH")
+        outcome["stage"] = (
+            f"{native_kind}_MATCH_PENDING_ORIGINAL_PAGE_IMAGE_QA" if matched
+            else f"{native_kind}_VALID_NO_RECENT_MINISTRY_MATCH")
         outcome.pop("hold_reason", None)
         break
     if outcome["stage"] == "HOLD":
