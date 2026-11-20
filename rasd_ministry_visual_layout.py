@@ -434,7 +434,8 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
     else:
         raise ValueError("rasd_visual_period_untrusted")
     articles=report.get("articles",[])
-    if not articles or len(articles)>60:
+    # 7 publisher coverages/hour * 24h = 168. Bounded at 180.
+    if not articles or len(articles)>180:
         raise ValueError("rasd_visual_invalid_article_count")
     if any(not isinstance(row.get("evidence_image_path"),str) or
            not Path(row["evidence_image_path"]).is_file() or
