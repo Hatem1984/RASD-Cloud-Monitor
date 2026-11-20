@@ -1,0 +1,37 @@
+name: RASD — actual 15-origin hourly original Word integration — NO SEND
+
+on:
+  push:
+    branches:
+      - 'gate-rasd-source-hourly*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-fifteen-origins-no-send-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actual-hourly-discover-proof-word:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_ALMAL_ORIGINAL_HTML_ENABLED: 'true'
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+      RASD_GATE11_SEND_APPROVED: ''
+      RASD_HOURLY_REPORTS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install protected first-party news and Word dependencies
+        run: |
+          python -m pip install -r requirements-test.txt 'playwright>=1.50,<2'
+          python -m playwright install --only-shell chromium
+      - name: Run actual interval discovery plus Al Mal HTML and genuine publisher page screenshot
+        run: python rasd_almal_actual_hourly_integration_no_send.py
