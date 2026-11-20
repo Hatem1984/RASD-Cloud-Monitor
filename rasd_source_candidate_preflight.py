@@ -11,7 +11,8 @@ import ipaddress
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -114,7 +115,9 @@ def inspect_candidate(row: dict, active: dict, keywords: list[str],
     host = row["publisher_host"]
     homepage = row["homepage_url"]
     outcome = {"id": ident, "stage": "HOLD", "rss_items": 0,
-               "matched_recent_items": 0, "production_approved": ident in active}
+               "matched_recent_items": 0, "matched_previous_complete_hour": 0,
+               "matched_last_24_hours": 0,
+               "production_approved": ident in active}
     if not same_publisher(homepage, host):
         return outcome
     if ident in active:
@@ -142,6 +145,17 @@ def inspect_candidate(row: dict, active: dict, keywords: list[str],
             continue
         outcome["rss_items"] = count
         outcome["matched_recent_items"] = len(matched)
+        checked = now.astimezone(timezone.utc)
+        completed_hour_end = checked.replace(minute=0, second=0, microsecond=0)
+        completed_hour_start = completed_hour_end - timedelta(hours=1)
+        for article in matched:
+            # Publisher timestamp already strictly parsed from the ORIGINAL RSS.
+            # This is only RSS evidence, never original-page/photo verification.
+            stamp = parsedate_to_datetime(article["published"]).astimezone(timezone.utc)
+            if completed_hour_start <= stamp < completed_hour_end:
+                outcome["matched_previous_complete_hour"] += 1
+            if checked - timedelta(hours=24) <= stamp <= checked:
+                outcome["matched_last_24_hours"] += 1
         outcome["stage"] = ("RSS_MATCH_PENDING_ORIGINAL_PAGE_IMAGE_QA"
                             if matched else "RSS_VALID_NO_RECENT_MINISTRY_MATCH")
         break
@@ -176,12 +190,16 @@ def audit_catalog(*, limit: int, live: bool = False, fetch=_fetch,
     stages = {}
     for result in results:
         stages[result["stage"]] = stages.get(result["stage"], 0) + 1
+    previous_hour_rss = sum(row.get("matched_previous_complete_hour", 0)
+                            for row in results)
     return {
         "scope": "RESEARCH_ONLY_NEVER_AUTOMATIC_SOURCE_APPROVAL",
         "sources_in_catalog": catalog["total_research_origins"],
         "sources_checked_or_listed": limit, "live_checked": live,
         "approved_production_inventory_unchanged": len(active),
         "screenshot_verified_by_this_audit": 0,
+        "previous_complete_hour_rss_matches_not_approved_news": previous_hour_rss,
+        "previous_complete_hour_6_to_7_original_photo_news_proven": False,
         "production_mail_sent": False, "schedule_changed": False,
         "status_counts": stages, "sources": results,
     }
