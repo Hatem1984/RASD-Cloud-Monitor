@@ -4,7 +4,9 @@ from datetime import datetime, timezone
 
 from rasd_source_candidate_preflight import (
     audit_catalog, feed_candidates, inspect_candidate, same_publisher,
+    KNOWN_FIRST_PARTY_RESEARCH_FEEDS,
 )
+from rasd_candidate_atom import parse_first_party_atom
 
 
 class ResearchCandidatePreflight(unittest.TestCase):
@@ -67,6 +69,67 @@ class ResearchCandidatePreflight(unittest.TestCase):
         self.assertEqual(result["matched_previous_complete_hour"], 1)
         self.assertEqual(result["matched_last_24_hours"], 1)
         self.assertFalse(result["production_approved"])
+
+    def test_known_youm7_first_party_feed_remains_research_only(self):
+        self.assertIn("youm7", KNOWN_FIRST_PARTY_RESEARCH_FEEDS)
+        self.assertTrue(same_publisher(
+            "https://m.youm7.com/rss/SectionRss?SectionID=297",
+            "youm7.com"))
+        self.assertFalse(same_publisher(
+            "https://youm7.com.evil.org/rss/", "youm7.com"))
+        self.assertFalse(same_publisher(
+            "https://127.0.0.1/rss/", "127.0.0.1"))
+
+    def test_diagnose_html_instead_of_rss_without_publisher_data(self):
+        result = inspect_candidate(
+            self.ROW, {}, ["Egypt Ministry of Planning"], self.NOW,
+            fetch=lambda url, size: b"<html><body>login</body></html>")
+        self.assertEqual(result["stage"], "HOLD")
+        self.assertEqual(result["hold_reason"], "HTML_NOT_RSS_OR_ATOM")
+        self.assertGreater(result["feed_endpoint_candidates_checked"], 0)
+
+    def test_diagnose_unverifiable_publisher_date(self):
+        rss = (b'<rss><channel><item><title>Egypt Ministry of Planning</title>'
+               b'<link>https://example.org/valid-url</link></item></channel></rss>')
+        result = inspect_candidate(
+            self.ROW, {}, ["Egypt Ministry of Planning"], self.NOW,
+            fetch=lambda url, size: rss)
+        self.assertEqual(result["hold_reason"],
+                         "ORIGINAL_ITEM_IDENTITY_OR_DATE_HOLD")
+
+    def test_original_first_party_atom_requires_exact_url_and_published_date(self):
+        atom = (b'<feed xmlns="http://www.w3.org/2005/Atom">'
+                b'<entry><title>Egypt Ministry of Planning issues plan</title>'
+                b'<link rel="alternate" type="text/html" '
+                b'href="https://example.org/news/2026"/>'
+                b'<published>2026-11-19T17:42:00Z</published>'
+                b'<summary>Official original source</summary>'
+                b'</entry></feed>')
+        source = {"id": "example_publisher", "name_ar": "ناشر مصطنع",
+                  "allowed_article_hosts": ["example.org"]}
+        count, matches = parse_first_party_atom(
+            atom, source, ["Egypt Ministry of Planning"], self.NOW)
+        self.assertEqual(count, 1)
+        self.assertEqual(len(matches), 1)
+        self.assertTrue(matches[0]["published"].endswith("+0000"))
+        result = inspect_candidate(
+            self.ROW, {}, ["Egypt Ministry of Planning"], self.NOW,
+            fetch=lambda url, size: atom)
+        self.assertEqual(result["stage"], "ATOM_MATCH_PENDING_ORIGINAL_PAGE_IMAGE_QA")
+        self.assertEqual(result["matched_previous_complete_hour"], 1)
+        self.assertFalse(result["production_approved"])
+
+        no_published = atom.replace(
+            b'<published>2026-11-19T17:42:00Z</published>',
+            b'<updated>2026-11-19T17:42:00Z</updated>')
+        with self.assertRaisesRegex(ValueError, "identity_or_date"):
+            parse_first_party_atom(
+                no_published, source, ["Egypt Ministry of Planning"], self.NOW)
+        cross_domain = atom.replace(b"https://example.org/news/2026",
+                                    b"https://other.org/news/2026")
+        with self.assertRaisesRegex(ValueError, "identity_or_date"):
+            parse_first_party_atom(
+                cross_domain, source, ["Egypt Ministry of Planning"], self.NOW)
 
     def test_missing_original_publisher_date_is_hold(self):
         rss = (b'<rss><channel><item><title>Egypt Ministry of Planning</title>'
