@@ -59,6 +59,9 @@ jobs:
           print("RASD_RESEARCH_CATEGORIES=" + json.dumps(summary["status_counts"], sort_keys=True))
           print("RASD_RESEARCH_HOLD_CAUSES=" + json.dumps(summary["hold_reason_counts"], sort_keys=True))
           print("RASD_PREVIOUS_COMPLETE_HOUR_NATIVE_RSS_MATCHES_UNVERIFIED=" + str(summary["previous_complete_hour_rss_matches_not_approved_news"]))
+          for candidate in summary["sources"]:
+              if candidate["id"] == "alnaharegypt" and candidate["stage"] != "HOLD":
+                  print("RASD_ALNAHAR_SHADOW_NATIVE_FEED=" + candidate["qualified_feed_url"])
           for row in summary["sources"]:
               print("SOURCE_ID=" + row["id"] + " STAGE=" + row["stage"] +
                     (" HOLD_REASON=" + row["hold_reason"]
