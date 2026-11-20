@@ -13,7 +13,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit, quote
 from urllib.request import Request, build_opener
 
 from monitor import RejectRedirect, _ministry_term_present, article_id
@@ -38,12 +38,17 @@ def permitted(url: str) -> bool:
 def download(url: str, max_bytes: int) -> bytes:
     if not permitted(url) or max_bytes not in (MAX_INDEX_BYTES, MAX_PAGE_BYTES):
         raise ValueError("publisher_original_not_allowed")
-    req = Request(url, headers={
+    parsed = urlsplit(url)
+    # Native Arabic article slugs are IRIs, not ASCII HTTP request targets.
+    # Encode only path characters; do not follow redirects or alter content.
+    transport_url = urlunsplit((parsed.scheme, parsed.netloc,
+                                quote(parsed.path, safe="/%"), parsed.query, ""))
+    req = Request(transport_url, headers={
         "User-Agent": "RASD-Original-Publisher-Research/1.0",
         "Accept": "text/html",
     })
     with build_opener(RejectRedirect()).open(req, timeout=12) as response:
-        if response.status != 200 or response.geturl() != url:
+        if response.status != 200 or response.geturl() != transport_url:
             raise ValueError("publisher_page_not_original_response")
         data = response.read(max_bytes+1)
     if len(data) > max_bytes or not data:
