@@ -25,6 +25,9 @@ from daily_report import CAIRO, cairo_display_time, render_docx
 from delivery_bridge import PrivateGitHubLedger, now_iso, reserve_entry
 from monitor import SOURCE_FAILURE_CODES, article_id, inspect
 from gate11_runner import candidate_from_feed
+from rasd_original_html_source_gate import (
+    all_newsroom_origins, collection_origins, html_collection_enabled,
+)
 from rasd_hourly_delivery import (hourly_period, hourly_slot_key,
                                   hourly_delivery_eligible, reserve_hourly_originals)
 
@@ -220,7 +223,8 @@ def protected_credentials() -> tuple[str, str, str, PrivateGitHubLedger]:
 def validate_story(item: dict, config: dict) -> None:
     if item.get("id") != article_id(item.get("url", "")):
         raise ValueError("untrusted_story_identifier")
-    matches = [f for f in config["feeds"] if f["name"] == item.get("source")]
+    matches = [f for f in all_newsroom_origins(config)
+               if f["name"] == item.get("source")]
     if len(matches) != 1 or urlsplit(item["url"]).hostname not in matches[0]["allowed_article_hosts"]:
         raise ValueError("unapproved_news_publisher")
     if not item.get("headline") or not item.get("published_at_cairo"):
@@ -287,6 +291,50 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                 "within_previous_hour" if stamp >= published_before.astimezone(timezone.utc)
                 - timedelta(hours=1) else "recovered_older")
         newest.setdefault(row["id"], (stamp, row))
+    if html_collection_enabled(config):
+        # Separate original publisher HTML endpoint, not an arbitrary feed
+        # or generic news search. Screenshot validation still runs later;
+        # parsed HTML alone never qualifies a headline for SMTP.
+        from rasd_almal_original_html_research import research
+        status = {"feed_id": "almal_html", "status": "ok",
+                  "verified_links": 0}
+        try:
+            html_result = research(now=checked)
+            status["verified_links"] = html_result["original_page_verified"]
+            if html_result["original_page_hold"]:
+                status.update(status="failed", failure_code="other")
+            for original in html_result["stories"]:
+                stamp = parsedate_to_datetime(original["published"])
+                if stamp.tzinfo is None or stamp.utcoffset() is None:
+                    raise RuntimeError("publisher_date_unverifiable")
+                stamp = stamp.astimezone(timezone.utc)
+                if published_before is not None and stamp >= published_before.astimezone(timezone.utc):
+                    continue
+                if not checked - timedelta(hours=age_hours) <= stamp <= checked:
+                    continue
+                row = {
+                    "id": original["id"], "headline": original["headline"],
+                    "publisher_excerpt": original.get("publisher_excerpt", ""),
+                    "source": original["source"], "url": original["url"],
+                    "published_at_cairo": stamp.astimezone(CAIRO).strftime(
+                        "%Y-%m-%d %H:%M %Z"),
+                    "published_display_cairo": cairo_display_time(stamp),
+                }
+                validate_story(row, config)
+                if published_before is not None:
+                    row["hourly_publication_bucket"] = (
+                        "within_previous_hour" if stamp >=
+                        published_before.astimezone(timezone.utc)-timedelta(hours=1)
+                        else "recovered_older")
+                newest.setdefault(row["id"], (stamp, row))
+        except (OSError, TimeoutError, ValueError, RuntimeError):
+            if not allow_degraded:
+                raise RuntimeError("original_html_publisher_unavailable") from None
+            status.update(status="failed", verified_links=0, failure_code="other")
+        if source_records is not None:
+            source_records.append(status)
+        if not allow_degraded and status["status"] != "ok":
+            raise RuntimeError("original_html_publisher_partial_hold")
     return [x[1] for x in sorted(newest.values(), key=lambda x: x[0], reverse=True)]
 
 
@@ -304,7 +352,7 @@ def prepare_word(items: list[dict], config: dict, output: Path,
     for index, item in enumerate(items):
         validate_story(item, config)
         screenshot = output / f"publisher-{index+1:03d}.jpg"
-        result = capture(item, config["feeds"], screenshot)
+        result = capture(item, all_newsroom_origins(config), screenshot)
         if result.get("status") != "verified":
             raise RuntimeError("publisher_screenshot_hold")
         copy = dict(item)
@@ -360,7 +408,7 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
         raise ValueError("invalid_source_limited_batch")
     if len({a.get("id") for a in items}) != len(items):
         raise ValueError("duplicate_source_limited_article")
-    expected_ids = [f["id"] for f in config["feeds"]]
+    expected_ids = [f["id"] for f in collection_origins(config)]
     if (len(source_records) != len(expected_ids) or
             [s.get("feed_id") for s in source_records] != expected_ids or
             any(s.get("status") not in {"ok", "failed"} for s in source_records)):
@@ -373,7 +421,7 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
     rejected = 0
     for index, item in enumerate(items, 1):
         screenshot = output / f"publisher-{index:03d}.jpg"
-        proof = capture(item, config["feeds"], screenshot)
+        proof = capture(item, all_newsroom_origins(config), screenshot)
         if proof.get("status") != "verified":
             # A known original-page refusal remains a traceable HOLD, not a
             # fabricated picture or an accepted ledger entry.
@@ -608,7 +656,7 @@ def smart_interval_no_mail(*, config: dict, health: list[dict],
     if (type(held_articles) is not int or type(waiting_articles) is not int or
             not 0 <= held_articles <= 200 or not 0 <= waiting_articles <= 200):
         raise RuntimeError("interval_status_invalid_hold_count")
-    expected = [item["id"] for item in config["feeds"]]
+    expected = [item["id"] for item in collection_origins(config)]
     if (len(expected) != len(health) or
             [item.get("feed_id") for item in health] != expected or
             any(item.get("status") not in ("ok", "failed") for item in health)):
@@ -676,7 +724,7 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             raise RuntimeError("invalid_held_item_reason")
     if len(held_items or []) > held_articles:
         raise RuntimeError("held_items_outnumber_hold_count")
-    expected_ids = [feed["id"] for feed in config["feeds"]]
+    expected_ids = [feed["id"] for feed in collection_origins(config)]
     if (len(health) != len(expected_ids) or
             [row.get("feed_id") for row in health] != expected_ids or
             any(row.get("status") not in ("ok", "failed") for row in health)):
