@@ -23,6 +23,10 @@ from rasd_daily_grid_extractor import (
     extract_sent_grid_originals, is_interval_ministry_grid,
 )
 
+# Under Gmail's total MIME envelope after base64 encoding.
+# Hourly originals remain capped at 8MB each; nightly Word uses 15MB.
+MAX_DAILY_WORD_BYTES = 15_000_000
+
 
 def sent_mailbox(client) -> None:
     status, items = client.list()
@@ -176,7 +180,7 @@ def consolidate_sent_words(
     explicitly verify the ordered headlines, hyperlinks and image relationships
     before releasing any merged report or reserving the daily email key.
     """
-    if not stories or len(stories) > 60:
+    if not stories or len(stories) > 180:
         raise RuntimeError("daily_consolidation_item_count_hold")
     wanted = {a["id"]: a for a in stories}
     if len(wanted) != len(stories):
@@ -256,7 +260,7 @@ def consolidate_sent_words(
     if not word_images_match_capture_digests(word, proof):
         word.unlink(missing_ok=True)
         raise RuntimeError("daily_consolidated_original_digest_hold")
-    if not 3000 <= word.stat().st_size <= 8_000_000:
+    if not 3000 <= word.stat().st_size <= MAX_DAILY_WORD_BYTES:
         word.unlink(missing_ok=True)
         raise RuntimeError("daily_consolidated_word_size_hold")
     return word, proof
