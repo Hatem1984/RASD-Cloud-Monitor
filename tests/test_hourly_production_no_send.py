@@ -112,6 +112,8 @@ class HourlyProductionNoSend(unittest.TestCase):
                           return_value="<rasd-offline-test@gmail.com>") as sent:
             outcome = worker.run_scheduled("interval", self.clock)
         self.assertEqual(outcome["items"], 7)
+        self.assertEqual(outcome["hourly_target_minimum"], 6)
+        self.assertEqual(outcome["hourly_target_shortfall"], 0)
         reserve.assert_called_once()
         sent.assert_called_once()
         ledger.mark_smtp_accepted_many.assert_called_once()
