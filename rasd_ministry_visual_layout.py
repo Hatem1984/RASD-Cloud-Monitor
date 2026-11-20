@@ -226,11 +226,28 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
     p=doc.add_paragraph(); _rtl(p); _run(p, display_title, size=10, color="777777")
     p=doc.add_paragraph(); _rtl(p); _run(p, "تحليل الرصد", size=20, bold=True)
     p=doc.add_paragraph(); _rtl(p)
-    basis = ("من روابط الناشرين الأصلية المستوفية خلال فترة المتابعة."
+    basis = ("أخبار الساعة السابقة واستدراكات من ساعات أقدم، مع تاريخ النشر الحقيقي لكل مادة."
+             if period == "interval" and report.get("report_kind") == "hourly"
+             else "من روابط الناشرين الأصلية المستوفية خلال فترة المتابعة."
              if period == "interval" else "وفق سجل التسليم فقط.")
     _run(p, f"الملخص: إجمالي التغطيات الموثقة {len(report['articles'])}؛ "
           f"عدد المواقع الممثلة {len(distribution)}، {basis}",
           size=11, bold=True)
+    if period == "interval" and report.get("report_kind") == "hourly":
+        fresh, older = report.get("hourly_in_period"), report.get("hourly_recovered")
+        if (type(fresh) is not int or type(older) is not int or
+                fresh < 0 or older < 0 or fresh + older != len(report["articles"]) or
+                any(item.get("hourly_publication_bucket") not in
+                    {"within_previous_hour", "recovered_older"}
+                    for item in report["articles"]) or
+                sum(item["hourly_publication_bucket"] == "within_previous_hour"
+                    for item in report["articles"]) != fresh):
+            raise ValueError("rasd_visual_hourly_publication_classification_hold")
+        p=doc.add_paragraph(); _rtl(p)
+        _run(p,f"نُشر خلال الساعة المكتملة السابقة: {fresh} تغطية؛ "
+              f"استدراك أخبار منشورة قبلها: {older}. "
+              "لا تُحسب الاستدراكات ضمن مستهدف الأخبار الجديدة للساعة.",
+              size=10.5,bold=True)
     p=doc.add_paragraph(); _rtl(p)
     _run(p, "توزيع التغطيات على المواقع", size=14, bold=True)
     summary=doc.add_table(rows=1, cols=3)
@@ -324,6 +341,10 @@ def _card(cell, item: dict, index: int, *, wide: bool = False) -> None:
     _run(p,f"{index:02d}  |  {source}",size=11,bold=True)
     p=cell.add_paragraph();_rtl(p)
     _run(p,item["headline"],size=8.5,bold=True)
+    if item.get("hourly_publication_bucket") == "recovered_older":
+        p=cell.add_paragraph();_rtl(p)
+        _run(p,"استدراك: نُشر قبل الساعة الحالية للرصد، ويُعرض بتاريخ نشره الأصلي.",
+             size=8,bold=True)
     image_path=Path(item["evidence_image_path"])
     with Image.open(image_path) as pic:
         width,height=pic.size
