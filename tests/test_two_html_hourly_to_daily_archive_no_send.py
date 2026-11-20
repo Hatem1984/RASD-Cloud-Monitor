@@ -97,8 +97,10 @@ class TwoGatedHtmlOriginalsDailyArchiveNoSend(unittest.TestCase):
                 for row in originals}}
             eligible=news_for_rollup(state,"2026-11-20",config)
             self.assertEqual(len(eligible),2)
-            self.assertEqual([x["id"] for x in eligible],
-                             [x["id"] for x in originals])
+            # Production rollup sorts by publisher date then article ID,
+            # not by the ordering of cards in the hourly message.
+            self.assertEqual({x["id"] for x in eligible},
+                             {x["id"] for x in originals})
             archive,proof=consolidate_sent_words(
                 eligible,state,root/"daily",
                 sender=SENDER,recipient=RECIPIENT,
@@ -110,8 +112,12 @@ class TwoGatedHtmlOriginalsDailyArchiveNoSend(unittest.TestCase):
             final=Document(archive)
             self.assertEqual(len(final.inline_shapes),2)
             self.assertTrue(word_images_match_capture_digests(archive,proof))
+            original_sha_by_id={
+                originals[i]["id"]:evidence[i][1]
+                for i in range(len(originals))
+            }
             self.assertEqual([x["sha256"] for x in proof],
-                             [sha for _,sha in evidence])
+                             [original_sha_by_id[x["id"]] for x in eligible])
             self.assertTrue(fake_sent.selected_readonly)
             self.assertEqual(fake_sent.searched,[key])
             self.assertEqual(fake_sent.logout_count,1)
