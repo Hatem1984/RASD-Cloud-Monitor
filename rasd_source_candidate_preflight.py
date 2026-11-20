@@ -215,6 +215,8 @@ def inspect_candidate(row: dict, active: dict, keywords: list[str],
             failures.append(_failure_class(exc, data))
             continue
         outcome["rss_items"] = count
+        # Research evidence only; never a source activation by itself.
+        outcome["qualified_feed_url"] = endpoint
         outcome["matched_recent_items"] = len(matched)
         outcome["native_feed_format"] = native_kind
         checked = now.astimezone(timezone.utc)
