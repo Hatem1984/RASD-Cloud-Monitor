@@ -48,6 +48,25 @@ class IntervalSameFinalWordLayout(unittest.TestCase):
             self.assertNotIn("وفق سجل التسليم فقط", text)
             self.assertIn("تقرير المتابعة النصف ساعية", hourly.tables[0].cell(0, 0).text)
 
+    def test_hourly_uses_same_daily_cover_and_original_cards(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            daily, digests = MinistryMediaLayoutNoSend()._report(root, 7)
+            hourly = {**daily, "title": "رصد | تقرير المتابعة الساعية",
+                      "report_period": "interval", "report_kind": "hourly",
+                      "ministry_media_grid": True, "coverage": "HEALTHY",
+                      "sources": [{"feed_id": "hapi", "status": "ok",
+                                   "verified_links": 7}]}
+            output = root / "hourly-seven.docx"
+            render_docx(hourly, output)
+            word = Document(output)
+            self.assertIn("تقرير المتابعة الساعية",
+                          word.tables[0].cell(0, 0).text)
+            self.assertEqual(len(word.inline_shapes), 7)
+            self.assertTrue(word_images_match_capture_digests(output, digests))
+            text = "\n".join(p.text for p in word.paragraphs)
+            self.assertNotIn("وفق سجل التسليم فقط", text)
+
     def test_unknown_or_unverified_interval_cannot_claim_final_grid(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
