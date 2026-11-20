@@ -50,7 +50,7 @@ jobs:
           from pathlib import Path
           summary = json.loads((Path(os.environ["RUNNER_TEMP"]) / "rasd-research-live.json").read_text())
           assert summary["scope"] == "RESEARCH_ONLY_NEVER_AUTOMATIC_SOURCE_APPROVAL"
-          assert summary["approved_production_inventory_unchanged"] == 13
+          assert summary["approved_production_inventory_unchanged"] == 14
           assert summary["screenshot_verified_by_this_audit"] == 0
           assert summary["production_mail_sent"] is False
           assert summary["schedule_changed"] is False
@@ -66,5 +66,5 @@ jobs:
               print("SOURCE_ID=" + row["id"] + " STAGE=" + row["stage"] +
                     (" HOLD_REASON=" + row["hold_reason"]
                      if row["stage"] == "HOLD" else ""))
-          print("RASD_PRODUCTION_SOURCES_UNCHANGED=13; 100 SUCCESSFUL SOURCES NOT PROVEN")
+          print("RASD_PRODUCTION_SOURCES_BRANCH_ONLY=14; 100 SUCCESSFUL SOURCES NOT PROVEN")
           PY
