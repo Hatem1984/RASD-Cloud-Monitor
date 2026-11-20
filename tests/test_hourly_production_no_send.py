@@ -21,6 +21,7 @@ def item(i):
         "publisher_excerpt": "", "source": "Hapi native news RSS",
         "url": url, "published_at_cairo": f"2026-11-19 19:{i:02d} EET",
         "published_display_cairo": "19 نوفمبر 2026",
+        "hourly_publication_bucket": "within_previous_hour",
     }
 
 
@@ -114,6 +115,8 @@ class HourlyProductionNoSend(unittest.TestCase):
         self.assertEqual(outcome["items"], 7)
         self.assertEqual(outcome["hourly_target_minimum"], 6)
         self.assertEqual(outcome["hourly_target_shortfall"], 0)
+        self.assertEqual(outcome["hourly_new_within_period"], 7)
+        self.assertEqual(outcome["hourly_recovered_older"], 0)
         reserve.assert_called_once()
         sent.assert_called_once()
         ledger.mark_smtp_accepted_many.assert_called_once()
