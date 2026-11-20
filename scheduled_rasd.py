@@ -25,7 +25,8 @@ from daily_report import CAIRO, cairo_display_time, render_docx
 from delivery_bridge import PrivateGitHubLedger, now_iso, reserve_entry
 from monitor import SOURCE_FAILURE_CODES, article_id, inspect
 from gate11_runner import candidate_from_feed
-from rasd_hourly_delivery import hourly_period, hourly_slot_key, reserve_hourly_originals
+from rasd_hourly_delivery import (hourly_period, hourly_slot_key,
+                                  hourly_delivery_eligible, reserve_hourly_originals)
 
 EXPECTED_WORKFLOW = (
     "Hatem1984/RASD-Cloud-Monitor/.github/workflows/"
@@ -820,7 +821,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     hourly_enabled = (os.environ.get("RASD_HOURLY_REPORTS_ENABLED") == "true"
                       and mode == "interval")
     if (hourly_enabled and phase == "interval" and
-            now.astimezone(CAIRO).minute >= 30):
+            not hourly_delivery_eligible(now, CAIRO)):
         phase = "skip"
     if phase == "skip" and not recovery:
         return {"status": "skip_non_target_cairo_slot", "smtp_accepted": False}
