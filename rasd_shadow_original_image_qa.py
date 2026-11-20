@@ -23,7 +23,7 @@ def qa_candidates(capture=capture_publisher, cases: list[dict] | None = None) ->
     production_ids = {row["id"] for row in inventory["feeds"]}
     source = json.loads(FIXTURES.read_text(encoding="utf-8"))
     checked = source["cases"] if cases is None else cases
-    if not isinstance(checked, list) or not 1 <= len(checked) <= 3:
+    if not isinstance(checked, list) or not 1 <= len(checked) <= 4:
         raise ValueError("shadow_source_count_hold")
     reports = []
     with tempfile.TemporaryDirectory(prefix="rasd-candidate-firstparty-") as directory:
@@ -36,7 +36,7 @@ def qa_candidates(capture=capture_publisher, cases: list[dict] | None = None) ->
                     or not isinstance(url, str) or
                     not url.startswith("https://") or
                     base not in {"alnaharegypt.com", "youm7.com",
-                                 "ahram.org.eg"}):
+                                 "ahram.org.eg", "almalnews.com"}):
                 raise RuntimeError("shadow_publisher_unapproved_identity_hold")
             with patch.dict(APPROVED_PUBLISHERS, {base: frozenset(hosts)}):
                 if not allowed_url(url, base):
