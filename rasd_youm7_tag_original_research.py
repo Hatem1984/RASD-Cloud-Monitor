@@ -108,15 +108,35 @@ def research(*, now: datetime, downloader=fetch, keywords: list[str]|None=None) 
     urls=discover_links(index,keywords)
     stories=[]
     holds=0
+    reason_counts={}
     for url in urls:
         try:
             result=original_news(url,downloader(url,MAX_PAGE_BYTES),keywords,now=now)
             stories.append(result)
-        except (OSError,TimeoutError,ValueError,RuntimeError):
+        except (OSError,TimeoutError,ValueError,RuntimeError) as error:
             holds+=1
+            if isinstance(error,HTTPError):
+                reason="HTTP_REJECTED"
+            elif isinstance(error,URLError):
+                reason="NETWORK_UNAVAILABLE"
+            elif isinstance(error,ValueError) and str(error) in {
+                    "youm7_original_response_invalid",
+                    "youm7_original_html_size_hold",
+                    "youm7_article_origin_invalid",
+                    "youm7_article_html_invalid",
+                    "youm7_original_headline_unrelated",
+                    "youm7_original_publication_not_unique",
+                    "youm7_original_publication_invalid",
+                    "youm7_original_publication_timezone_missing",
+                    "youm7_original_news_outside_72h"}:
+                reason=str(error)
+            else:
+                reason="OTHER_PUBLISHER_HOLD"
+            reason_counts[reason]=reason_counts.get(reason,0)+1
     return {"ministry_tag_first_party_links":len(urls),
             "original_pages_dated":len(stories),
-            "original_page_hold":holds,"stories":stories,
+            "original_page_hold":holds,"hold_reasons":reason_counts,
+            "stories":stories,
             "production_activated":False,"smtp_sent":False}
 
 
@@ -125,6 +145,7 @@ def main():
     print("RASD_YOUM7_TAG_LINKS="+str(result["ministry_tag_first_party_links"]))
     print("RASD_YOUM7_ORIGINAL_PAGES_DATED="+str(result["original_pages_dated"]))
     print("RASD_YOUM7_ORIGINAL_HOLD="+str(result["original_page_hold"]))
+    print("RASD_YOUM7_HOLD_REASONS="+str(result["hold_reasons"]))
     print("RASD_YOUM7_NO_SEND_NO_ACTIVATION=1")
 
 
