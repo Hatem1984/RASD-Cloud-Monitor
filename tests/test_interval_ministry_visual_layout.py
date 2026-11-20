@@ -52,7 +52,11 @@ class IntervalSameFinalWordLayout(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             daily, digests = MinistryMediaLayoutNoSend()._report(root, 7)
-            hourly = {**daily, "title": "رصد | تقرير المتابعة الساعية",
+            labeled = [dict(article, hourly_publication_bucket="within_previous_hour")
+                       for article in daily["articles"]]
+            hourly = {**daily, "articles": labeled,
+                      "hourly_in_period": 7, "hourly_recovered": 0,
+                      "title": "رصد | تقرير المتابعة الساعية",
                       "report_period": "interval", "report_kind": "hourly",
                       "ministry_media_grid": True, "coverage": "HEALTHY",
                       "sources": [{"feed_id": "hapi", "status": "ok",
@@ -66,6 +70,39 @@ class IntervalSameFinalWordLayout(unittest.TestCase):
             self.assertTrue(word_images_match_capture_digests(output, digests))
             text = "\n".join(p.text for p in word.paragraphs)
             self.assertNotIn("وفق سجل التسليم فقط", text)
+            self.assertIn("نُشر خلال الساعة المكتملة السابقة: 7 تغطية", text)
+
+    def test_hourly_recovery_cannot_be_misrepresented_as_fresh(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            daily, digests = MinistryMediaLayoutNoSend()._report(root, 2)
+            labeled = [
+                dict(daily["articles"][0],
+                     hourly_publication_bucket="within_previous_hour"),
+                dict(daily["articles"][1],
+                     hourly_publication_bucket="recovered_older"),
+            ]
+            hourly = {**daily, "articles": labeled, "report_period": "interval",
+                      "report_kind": "hourly", "hourly_in_period": 1,
+                      "hourly_recovered": 1, "ministry_media_grid": True,
+                      "coverage": "HEALTHY",
+                      "sources": [{"feed_id": "hapi", "status": "ok",
+                                   "verified_links": 2}]}
+            result = root / "backlog-labeled.docx"
+            render_docx(hourly, result)
+            word = Document(result)
+            self.assertEqual(len(word.inline_shapes), 2)
+            self.assertTrue(word_images_match_capture_digests(result, digests))
+            paragraph_text = "\n".join(p.text for p in word.paragraphs)
+            self.assertIn("نُشر خلال الساعة المكتملة السابقة: 1 تغطية", paragraph_text)
+            self.assertIn("استدراك أخبار منشورة قبلها: 1", paragraph_text)
+            self.assertTrue(any("استدراك: نُشر قبل الساعة الحالية" in
+                                cell.text for table in word.tables
+                                for row in table.rows for cell in row.cells))
+            hourly["hourly_in_period"] = 2
+            hourly["hourly_recovered"] = 0
+            with self.assertRaisesRegex(ValueError, "classification_hold"):
+                render_docx(hourly, root / "incorrect-backlog.docx")
 
     def test_unknown_or_unverified_interval_cannot_claim_final_grid(self):
         with tempfile.TemporaryDirectory() as directory:
