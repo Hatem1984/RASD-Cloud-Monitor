@@ -26,6 +26,7 @@ from xml.etree import ElementTree as ET
 # from modified public configuration or follow redirects to other destinations.
 APPROVED_FEED_URLS = frozenset({
     "https://almessa.gomhuriaonline.com/feed/",
+    "https://www.alnaharegypt.com/feed/",
     "https://www.elbalad.news/rss.aspx",
     "https://www.vetogate.com/rss.aspx",
     "https://dailynewsegypt.com/feed/",
