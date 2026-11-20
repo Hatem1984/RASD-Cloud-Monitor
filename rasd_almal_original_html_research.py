@@ -102,7 +102,13 @@ def candidate_links(homepage: bytes, keywords: list[str],
     page.feed(homepage.decode("utf-8", "replace"))
     out = []
     for href, anchor in page.anchors:
-        url = urljoin(base, html.unescape(href or ""))
+        raw_url = urljoin(base, html.unescape(href or ""))
+        split_url = urlsplit(raw_url)
+        # Arabic publisher slugs are IRIs: normalize to the SAME HTTPS
+        # publisher's canonical URL-encoded path before cross-tool identity.
+        url = urlunsplit((split_url.scheme, split_url.netloc,
+                          quote(split_url.path, safe="/%"), split_url.query,
+                          split_url.fragment))
         if (url not in out and permitted(url) and
                 ARTICLE_PATH.match(urlsplit(url).path)
                 and _ministry_term_present(anchor, keywords)):
