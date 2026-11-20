@@ -55,6 +55,7 @@ ARABIC_MONTHS = (
 SOURCE_LABELS = {
     "Al Massa native news RSS": "المساء",
     "Al Nahar Egypt native news RSS": "النهار",
+    "Al Mal native publisher HTML": "المال",
     "Sada El Balad native news RSS": "صدى البلد",
     "Veto native news RSS": "فيتو",
     "Daily News Egypt native RSS": "ديلي نيوز إيجيبت",
