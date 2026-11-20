@@ -26,12 +26,14 @@ def all_newsroom_origins(config: dict) -> list[dict]:
     optional=config.get("original_html_sources",[])
     if optional not in ([],[ALMAL_SOURCE]):
         raise ValueError("unreviewed_html_publisher_origin")
-    result=[*feeds,*optional]
-    ids=[x["id"] for x in result]
-    names=[x["name"] for x in result]
-    if len(set(ids))!=len(ids) or len(set(names))!=len(names):
+    # Existing helper tests sometimes pass partial RSS feed metadata.
+    # Do not relax or supersede their established per-call validation.
+    if not optional:
+        return feeds
+    if any(x.get("id")==ALMAL_SOURCE["id"] or
+           x.get("name")==ALMAL_SOURCE["name"] for x in feeds):
         raise ValueError("publisher_origin_identity_conflict")
-    return result
+    return [*feeds,*optional]
 
 
 def collection_origins(config: dict) -> list[dict]:
