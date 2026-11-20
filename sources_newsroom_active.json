@@ -153,5 +153,17 @@
     }
   ],
   "max_feed_bytes": 1500000,
-  "recent_hours": 72
+  "recent_hours": 72,
+  "original_html_sources": [
+    {
+      "id": "almal_html",
+      "name": "Al Mal native publisher HTML",
+      "homepage_url": "https://almalnews.com/",
+      "allowed_article_hosts": [
+        "almalnews.com",
+        "www.almalnews.com"
+      ],
+      "type": "original_publisher_html"
+    }
+  ]
 }
