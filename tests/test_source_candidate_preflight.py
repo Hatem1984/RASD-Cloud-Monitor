@@ -20,7 +20,7 @@ class ResearchCandidatePreflight(unittest.TestCase):
             self.fail("offline audit must not read public network")
         data = audit_catalog(limit=100, live=False, fetch=no_network)
         self.assertEqual(data["sources_in_catalog"], 100)
-        self.assertEqual(data["approved_production_inventory_unchanged"], 13)
+        self.assertEqual(data["approved_production_inventory_unchanged"], 14)
         self.assertEqual(data["status_counts"], {"NOT_CHECKED_OFFLINE": 100})
         self.assertEqual(data["screenshot_verified_by_this_audit"], 0)
         self.assertFalse(data["production_mail_sent"])
