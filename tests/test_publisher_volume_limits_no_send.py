@@ -73,19 +73,35 @@ class DeliveryCoverageStressNoSend(unittest.TestCase):
         accepted=rasd.news_for_rollup({"entries":entries},"2026-11-17",config)
         self.assertEqual(len(accepted),60)
 
-    def test_nightly_61st_not_silently_discarded_or_sent(self):
+    def test_168_actual_unique_acceptance_records_do_not_hit_old_60_limit(self):
         name="Verified Publisher"
         config={"feeds":[{"name":name,
                            "allowed_article_hosts":["news.example"]}]}
         entries={}
-        for i in range(61):
+        for i in range(168):
+            s=story(i,name,"news.example")
+            entries[s["id"]]={
+                "kind":"interval_item", "status":"smtp_accepted",
+                "accepted_at":"2026-11-17T15:00:00+02:00",
+                "news":s,
+            }
+        accepted=rasd.news_for_rollup({"entries":entries},"2026-11-17",config)
+        self.assertEqual(len(accepted),168)
+        self.assertEqual(len({x["id"] for x in accepted}),168)
+
+    def test_nightly_181st_not_silently_discarded_or_sent(self):
+        name="Verified Publisher"
+        config={"feeds":[{"name":name,
+                           "allowed_article_hosts":["news.example"]}]}
+        entries={}
+        for i in range(181):
             s=story(i,name,"news.example")
             entries[s["id"]]={
                 "kind":"interval_item","status":"smtp_accepted",
                 "accepted_at":"2026-11-17T15:00:00+02:00","news":s
             }
         with self.assertRaisesRegex(RuntimeError,
-                                    "rollup_exceeds_60_verified_items_manual_review"):
+                                    "rollup_exceeds_180_verified_items_manual_review"):
             rasd.news_for_rollup({"entries":entries},"2026-11-17",config)
 
 

@@ -125,6 +125,8 @@ jobs:
         run: python -m unittest discover -s tests -p test_scheduled_rasd.py -v
       - name: Research and email verified Word from GitHub cloud worker
         shell: bash
+        env:
+          RASD_HOURLY_REPORTS_ENABLED: ${{ vars.RASD_HOURLY_REPORTS_ENABLED || 'false' }} # owner-controlled production release; default no change
         run: |
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = push ]; then

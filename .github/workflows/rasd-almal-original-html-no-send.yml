@@ -1,0 +1,32 @@
+name: RASD — Al Mal original publisher HTML discovery QA — no send
+
+on:
+  push:
+    branches:
+      - 'gate-rasd-source-hourly*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-almal-original-html-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-firstparty-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: No-network proof that first-party HTML dates cannot be forged
+        run: python -m unittest discover -s tests -p test_almal_original_html_research_no_send.py -v
+      - name: Live original homepage and page-publication proof only
+        run: python rasd_almal_original_html_research.py

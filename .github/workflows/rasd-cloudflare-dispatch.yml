@@ -55,6 +55,8 @@ jobs:
           python -m playwright install --only-shell chromium
       - name: Run protected original-publisher newsroom interval
         shell: bash
+        env:
+          RASD_HOURLY_REPORTS_ENABLED: ${{ vars.RASD_HOURLY_REPORTS_ENABLED || 'false' }} # owner-controlled production release; default no change
         run: |
           set -euo pipefail
           interval_exit=0

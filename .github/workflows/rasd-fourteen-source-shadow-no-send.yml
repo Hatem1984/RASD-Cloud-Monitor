@@ -1,0 +1,35 @@
+name: RASD — shadow 14-source production parser and Al Nahar image QA — NO SEND
+
+on:
+  push:
+    branches:
+      - 'gate-rasd-source-hourly*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-14-source-no-send-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-original-source-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_GATE11_SEND_APPROVED: ''
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install strict original-source screenshot dependencies
+        run: |
+          python -m pip install -r requirements-test.txt 'playwright>=1.50,<2'
+          python -m playwright install --only-shell chromium
+      - name: Audit all 14 original feeds and new Al Nahar photos, ephemeral no-send
+        run: python rasd_fourteen_source_shadow_no_send.py

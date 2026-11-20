@@ -48,6 +48,8 @@ jobs:
         run: python -m unittest discover -s tests -p test_scheduled_rasd.py -q
       - name: Recover original-publisher Word interval and daily rollup safely
         shell: bash
+        env:
+          RASD_HOURLY_REPORTS_ENABLED: ${{ vars.RASD_HOURLY_REPORTS_ENABLED || 'false' }} # owner-controlled production release; default no change
         run: |
           set -euo pipefail
           # An article refused by a publisher never enters the ledger.
