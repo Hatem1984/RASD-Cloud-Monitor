@@ -141,6 +141,15 @@
       "allowed_article_hosts": [
         "inp.edu.eg"
       ]
+    },
+    {
+      "id": "alnaharegypt",
+      "name": "Al Nahar Egypt native news RSS",
+      "url": "https://www.alnaharegypt.com/feed/",
+      "allowed_article_hosts": [
+        "www.alnaharegypt.com",
+        "alnaharegypt.com"
+      ]
     }
   ],
   "max_feed_bytes": 1500000,
