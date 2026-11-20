@@ -857,6 +857,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 print("RASD_SAME_EVENT_HELD_COUNT=" + str(len(repeated_events)),
                       flush=True)
             if not stories:
+                if hourly_enabled:
+                    print("RASD_HOURLY_VERIFIED_NEWS=0 TARGET_MIN=6 TARGET_STRETCH=7",
+                          flush=True)
                 if mode == "interval_owner_once":
                     return {"status": "no_new_verified_news", "smtp_accepted": False}
                 if os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true":
@@ -901,6 +904,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 # remains a hard failure and must not be hidden.
                 if str(exc) != "no_original_publisher_page_verified":
                     raise
+                if hourly_enabled:
+                    print("RASD_HOURLY_VERIFIED_NEWS=0 TARGET_MIN=6 TARGET_STRETCH=7 IMAGE_HOLD=1",
+                          flush=True)
                 if mode == "interval_owner_once":
                     return {
                         "status": "hold_all_original_publisher_captures_unavailable",
@@ -922,6 +928,10 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     held_articles=len(stories), waiting_articles=waiting,
                     held_items=held_items)
             # Only successfully captured/embedded originals enter private CAS.
+            # A volume target is diagnostic only: never insert invented extras.
+            if hourly_enabled:
+                print(f"RASD_HOURLY_VERIFIED_NEWS={len(delivered)} TARGET_MIN=6 TARGET_STRETCH=7",
+                      flush=True)
             # Blocked items remain unsent, so later scheduled scans can retry.
             if hourly_enabled:
                 message_key = reserve_hourly_originals(ledger, delivered, day, window)
@@ -939,7 +949,11 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             if hourly_enabled:
                 ledger.mark_smtp_accepted(message_key, receipt)
             return {"status": "smtp_accepted_unconfirmed_inbox",
-                    "items": len(delivered), "source_limited": bool(limited or waiting),
+                    "items": len(delivered),
+                    **({"hourly_target_minimum": 6,
+                        "hourly_target_shortfall": max(0, 6 - len(delivered))}
+                       if hourly_enabled else {}),
+                    "source_limited": bool(limited or waiting),
                     "original_screenshots_held": held_count,
                     "waiting_approved_news": waiting}
         if mode in ("rollup", "rollup_recovery", "rollup_owner_once"):
