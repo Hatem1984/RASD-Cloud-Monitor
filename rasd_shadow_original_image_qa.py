@@ -30,7 +30,8 @@ def qa_candidates(capture=capture_publisher, cases: list[dict] | None = None) ->
         for row in checked:
             ident, base, url = row["id"], row["base"], row["url"]
             hosts = row["hosts"]
-            if (ident in production_ids or base in APPROVED_PUBLISHERS
+            if ((ident in production_ids and ident != "alnaharegypt")
+                    or (base in APPROVED_PUBLISHERS and ident != "alnaharegypt")
                     or not isinstance(hosts, list) or len(hosts) != 1
                     or not isinstance(url, str) or
                     not url.startswith("https://") or
