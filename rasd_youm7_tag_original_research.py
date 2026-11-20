@@ -108,12 +108,17 @@ def research(*, now: datetime, downloader=fetch, keywords: list[str]|None=None) 
     urls=discover_links(index,keywords)
     stories=[]
     holds=0
+    stale=0
     reason_counts={}
     for url in urls:
         try:
             result=original_news(url,downloader(url,MAX_PAGE_BYTES),keywords,now=now)
             stories.append(result)
         except (OSError,TimeoutError,ValueError,RuntimeError) as error:
+            if isinstance(error,ValueError) and str(error)=="youm7_original_news_outside_72h":
+                # A correctly dated older original is NOT a broken source.
+                stale+=1
+                continue
             holds+=1
             if isinstance(error,HTTPError):
                 reason="HTTP_REJECTED"
@@ -135,7 +140,8 @@ def research(*, now: datetime, downloader=fetch, keywords: list[str]|None=None) 
             reason_counts[reason]=reason_counts.get(reason,0)+1
     return {"ministry_tag_first_party_links":len(urls),
             "original_pages_dated":len(stories),
-            "original_page_hold":holds,"hold_reasons":reason_counts,
+            "original_page_hold":holds,"old_dated_stories_excluded":stale,
+            "hold_reasons":reason_counts,
             "stories":stories,
             "production_activated":False,"smtp_sent":False}
 
@@ -146,6 +152,7 @@ def main():
     print("RASD_YOUM7_ORIGINAL_PAGES_DATED="+str(result["original_pages_dated"]))
     print("RASD_YOUM7_ORIGINAL_HOLD="+str(result["original_page_hold"]))
     print("RASD_YOUM7_HOLD_REASONS="+str(result["hold_reasons"]))
+    print("RASD_YOUM7_OLDER_THAN_72H_EXCLUDED="+str(result["old_dated_stories_excluded"]))
     print("RASD_YOUM7_NO_SEND_NO_ACTIVATION=1")
 
 
