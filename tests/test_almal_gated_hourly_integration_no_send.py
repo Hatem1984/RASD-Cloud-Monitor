@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw
 from cloud_proof_report import word_images_match_capture_digests
 from monitor import article_id
 from rasd_original_html_source_gate import (
-    ALMAL_SOURCE, all_newsroom_origins, collection_origins)
+    ALMAL_SOURCE, YOUM7_SOURCE, all_newsroom_origins, collection_origins)
 import scheduled_rasd as worker
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -28,7 +28,7 @@ class GatedOriginalHtmlNewsroom(unittest.TestCase):
         self.config=json.loads(
             (ROOT/"sources_newsroom_active.json").read_text("utf-8"))
         self.assertEqual(len(self.config["feeds"]),14)
-        self.assertEqual(self.config["original_html_sources"],[ALMAL_SOURCE])
+        self.assertEqual(self.config["original_html_sources"],[ALMAL_SOURCE,YOUM7_SOURCE])
         self.feed_source_rows=[]
 
     def inspector(self, config, now, *, article_limit, require_complete_items):
@@ -66,7 +66,7 @@ class GatedOriginalHtmlNewsroom(unittest.TestCase):
         self.assertEqual(rows,[])
         self.assertEqual(len(observed),14)
         self.assertEqual(len(collection_origins(self.config)),14)
-        self.assertEqual(len(all_newsroom_origins(self.config)),15)
+        self.assertEqual(len(all_newsroom_origins(self.config)),16)
 
     @staticmethod
     def original_photo(article, sources, output):
