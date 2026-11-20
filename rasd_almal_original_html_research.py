@@ -146,14 +146,38 @@ def research(*, now: datetime, fetch=download) -> dict:
     links=candidate_links(fetch(ALMAL_ORIGIN,MAX_INDEX_BYTES),cfg["keywords"])
     accepted = []
     held=0
+    reasons={}
     for url in links:
         try:
             accepted.append(original_story(
                 url,fetch(url,MAX_PAGE_BYTES),cfg["keywords"],now=now))
-        except (OSError, TimeoutError, RuntimeError, ValueError):
+        except (OSError, TimeoutError, RuntimeError, ValueError) as error:
             held+=1
+            from urllib.error import HTTPError, URLError
+            if isinstance(error,HTTPError):
+                reason="HTTP_"+str(error.code) if error.code in (401,403,404,410,429,500,502,503) else "HTTP_HOLD"
+            elif isinstance(error,URLError):
+                reason="NETWORK_HOLD"
+            elif isinstance(error,ValueError) and str(error) in {
+                "publisher_page_not_original_response",
+                "publisher_published_meta_missing_or_ambiguous",
+                "publisher_published_meta_invalid",
+                "publisher_published_timezone_missing",
+                "publisher_publication_outside_window",
+                "publisher_original_headline_unrelated",
+                "publisher_article_bytes_invalid",
+                "publisher_html_unavailable_or_oversized",
+                "publisher_article_url_invalid",
+                "publisher_original_not_allowed",
+            }:
+                reason=str(error)
+            elif isinstance(error,RuntimeError) and str(error)=="feed_redirect_blocked":
+                reason="PUBLISHER_REDIRECT_HOLD"
+            else:
+                reason="UNVERIFIED_PUBLISHER_PAGE"
+            reasons[reason]=reasons.get(reason,0)+1
     return {"index_candidates":len(links), "original_page_verified":len(accepted),
-            "original_page_hold":held,"stories":accepted,
+            "original_page_hold":held,"hold_reasons":reasons,"stories":accepted,
             "screenshot_verified_by_this_research":False,
             "production_activated":False,"smtp_sent":False}
 
@@ -163,4 +187,5 @@ if __name__=="__main__":
     print("RASD_ALMAL_HTML_INDEX_CANDIDATES="+str(summary["index_candidates"]))
     print("RASD_ALMAL_HTML_ORIGINAL_PAGES_DATED="+str(summary["original_page_verified"]))
     print("RASD_ALMAL_HTML_ORIGINAL_HOLD="+str(summary["original_page_hold"]))
+    print("RASD_ALMAL_HTML_HOLD_REASONS="+str(summary["hold_reasons"]))
     print("RASD_ALMAL_HTML_NO_SEND_NO_ACTIVATION=1")
