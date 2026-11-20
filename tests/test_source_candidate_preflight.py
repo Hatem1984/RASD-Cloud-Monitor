@@ -50,6 +50,22 @@ class ResearchCandidatePreflight(unittest.TestCase):
             fetch=fake_fetch)
         self.assertEqual(result["stage"], "RSS_MATCH_PENDING_ORIGINAL_PAGE_IMAGE_QA")
         self.assertEqual(result["matched_recent_items"], 1)
+        self.assertEqual(result["matched_last_24_hours"], 1)
+        self.assertEqual(result["matched_previous_complete_hour"], 0)
+        self.assertFalse(result["production_approved"])
+
+    def test_preceding_hour_rss_yield_is_not_screenshot_confirmation(self):
+        rss = (b'<rss><channel><item>'
+               b'<title>Egypt Ministry of Planning publishes its investment plan</title>'
+               b'<link>https://example.org/news/17</link>'
+               b'<pubDate>Thu, 19 Nov 2026 17:45:00 +0000</pubDate>'
+               b'</item></channel></rss>')
+        result = inspect_candidate(
+            self.ROW, {}, ["Egypt Ministry of Planning"], self.NOW,
+            fetch=lambda url, size: rss)
+        self.assertEqual(result["stage"], "RSS_MATCH_PENDING_ORIGINAL_PAGE_IMAGE_QA")
+        self.assertEqual(result["matched_previous_complete_hour"], 1)
+        self.assertEqual(result["matched_last_24_hours"], 1)
         self.assertFalse(result["production_approved"])
 
     def test_missing_original_publisher_date_is_hold(self):
