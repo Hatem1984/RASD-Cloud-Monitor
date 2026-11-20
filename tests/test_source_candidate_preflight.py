@@ -105,7 +105,7 @@ class ResearchCandidatePreflight(unittest.TestCase):
                 b'<published>2026-11-19T17:42:00Z</published>'
                 b'<summary>Official original source</summary>'
                 b'</entry></feed>')
-        source = {"id": "example_publisher", "name_ar": "ناشر مصطنع",
+        source = {"id": "example_publisher", "name": "ناشر مصطنع",
                   "allowed_article_hosts": ["example.org"]}
         count, matches = parse_first_party_atom(
             atom, source, ["Egypt Ministry of Planning"], self.NOW)
