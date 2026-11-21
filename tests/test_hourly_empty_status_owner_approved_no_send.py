@@ -107,15 +107,36 @@ class HourlyEmptyStatusNoSend(unittest.TestCase):
                 window=slot,start=start,now=self.now,
                 output=Path(self.tmp.name),hourly=True,fresh_candidates=1)
         self.assertEqual(result["hourly_target_minimum"],10)
-        self.assertEqual(result["hourly_actual_verified"],1)
+        self.assertEqual(result["hourly_news_candidates"],1)
+        self.assertIsNone(result["hourly_actual_verified"])
         self.assertEqual(result["hourly_target_shortfall"],9)
         self.assertEqual(result["items"],0)
         self.assertIn("لم يكتمل شرط 10 أخبار",send.call_args.kwargs["subject"])
-        self.assertIn("العدد المقبول 1 فقط",send.call_args.kwargs["body_text"])
+        self.assertIn("المرشحون 1، والصور المؤكدة لم تُستكمل",send.call_args.kwargs["body_text"])
         document=Document(send.call_args.args[0])
         self.assertEqual(len(document.inline_shapes),0)
         body="\n".join(p.text for p in document.paragraphs)
-        self.assertIn("تحقق 1 فقط من أصل عشرة",body)
+        self.assertIn("وُجد 1 مرشحًا فقط",body)
+        self.assertNotIn("لم توجد أخبار جديدة مستوفية",body)
+
+    def test_twelve_candidates_with_nine_verified_original_images_is_hold(self):
+        start,end,slot=hourly_period(self.now)
+        with patch.object(worker,"send_one_word",
+                          return_value="<strict-image-shortfall@example.com>") as send:
+            result=worker.send_empty_interval_status(
+                ledger=self.ledger,sender="source@gmail.com",
+                recipient="testonly@example.com",password="offline",
+                state={"entries":{}},config=self.news,health=self.health,
+                window=slot,start=start,now=self.now,
+                output=Path(self.tmp.name),hourly=True,
+                fresh_candidates=12,original_image_verified=9,
+                held_articles=3)
+        self.assertEqual(result["hourly_news_candidates"],12)
+        self.assertEqual(result["hourly_actual_verified"],9)
+        self.assertEqual(result["hourly_target_shortfall"],1)
+        self.assertIn("الصور المؤكدة 9",send.call_args.kwargs["body_text"])
+        body="\n".join(p.text for p in Document(send.call_args.args[0]).paragraphs)
+        self.assertIn("اجتازت 9 صور أصلية",body)
         self.assertNotIn("لم توجد أخبار جديدة مستوفية",body)
 
     def test_exact_ten_cannot_be_relabeled_a_shortfall_status(self):
