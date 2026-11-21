@@ -59,8 +59,9 @@ def audit_fresh_distinct_sources(
     """Read-only count; ready means CANDIDATES, not original photos proved.
 
     Rejects untrusted URL/source identity and cross-publisher syndicated
-    versions of the same event. On shortfall, selected is empty: no
-    partial bulletin can accidentally be sent by the caller.
+    versions of the same event. Owner policy: keep 1–9 valid candidates
+    available for an HONEST partial Word, with the shortfall explicit.
+    A candidate is not photographed/accepted until downstream Word evidence.
     """
     if (not isinstance(articles, list) or not isinstance(feeds, list)
             or type(required) is not int
@@ -81,6 +82,7 @@ def audit_fresh_distinct_sources(
             raise ValueError("strict_hourly_feed_profile_invalid")
         by_name[name] = set(hosts)
 
+    decisions=[]
     rejected = {
         "unverified_source": 0,
         "wrong_original_date": 0,
@@ -92,8 +94,15 @@ def audit_fresh_distinct_sources(
     prepared=[]
     seen_article_ids=set()
     for item in articles:
+        identifier = item.get("id") if isinstance(item,dict) else None
+        def decide(reason):
+            # Keep opaque article IDs rather than private/raw page payloads.
+            decisions.append({"id": identifier if isinstance(identifier,str)
+                              and len(identifier)==24 else None,
+                              "outcome": reason})
         if not isinstance(item,dict):
             rejected["unverified_source"] += 1
+            decide("unverified_source")
             continue
         source=item.get("source")
         url=item.get("url")
@@ -102,6 +111,7 @@ def audit_fresh_distinct_sources(
                 or not isinstance(item_id,str)
                 or not isinstance(item.get("headline"),str)):
             rejected["unverified_source"] += 1
+            decide("unverified_source")
             continue
         try:
             host=urlsplit(url).hostname
@@ -115,17 +125,21 @@ def audit_fresh_distinct_sources(
             safe=False
         if not safe:
             rejected["unverified_source"] += 1
+            decide("unverified_source")
             continue
         if item_id in seen_article_ids:
             rejected["duplicate_article"] += 1
+            decide("duplicate_article")
             continue
         seen_article_ids.add(item_id)
         stamp=_published_utc(item)
         if stamp is None:
             rejected["wrong_original_date"] += 1
+            decide("wrong_original_date")
             continue
         if not start <= stamp < end:
             rejected["not_in_last_completed_hour"] += 1
+            decide("not_in_last_completed_hour")
             continue
         prepared.append((stamp, source, item))
     # Use NEWEST first and one publisher only. Without this, five stories
@@ -136,16 +150,19 @@ def audit_fresh_distinct_sources(
     for stamp, source, original in prepared:
         if source in publisher_set:
             rejected["same_publisher"] += 1
+            decisions.append({"id":original["id"],"outcome":"same_publisher"})
             continue
-        normalized={
-            **original,
-            "published_at_cairo": stamp.strftime("%Y-%m-%d %H:%M"),
-        }
+        # Keep Cairo publication time supplied by the original-source parser.
+        # UTC timestamp is ONLY for exact clock boundaries; never relabel UTC
+        # wall time as Cairo on an accepted item.
+        normalized=dict(original)
         if any(same_event(normalized, prev) for prev in accepted):
             rejected["repeated_event"] += 1
+            decisions.append({"id":original["id"],"outcome":"repeated_event"})
             continue
         accepted.append(normalized)
         publisher_set.add(source)
+        decisions.append({"id":original["id"],"outcome":"accepted_candidate"})
         if len(accepted)==max_items:
             break
     ready=len(accepted)>=required and len(publisher_set)>=required
@@ -159,36 +176,50 @@ def audit_fresh_distinct_sources(
         "window_start_utc":start.isoformat(),
         "window_end_utc":end.isoformat(),
         "rejection_counts":rejected,
-        "selected":accepted if ready else [],
+        "selected":accepted,
+        "candidate_decisions":decisions,
         "smtp_sent":False,
         "original_images_verified":False,
     }
 
 
-def originals_report_ready(candidate_audit: dict, delivered: list[dict]) -> bool:
-    """Post-picture check. Caller still must verify Word JPEGs with digests."""
-    if candidate_audit.get("status")!="CANDIDATES_NEED_ORIGINAL_IMAGES":
+def originals_selection_valid(candidate_audit: dict, delivered: list[dict]) -> bool:
+    """Validate exact original publisher evidence identity for ANY 1–15 photos.
+
+    The caller must also verify every JPEG digest inside the *actual Word*.
+    Partial reports with 1–9 originals are allowed by owner's accepted
+    shortfall policy, provided source and event identities are unchanged.
+    """
+    desired=candidate_audit.get("selected")
+    if not isinstance(desired,list) or not isinstance(delivered,list):
         return False
-    if not isinstance(delivered,list):
+    if not 1 <= len(delivered) <= len(desired) <= MAX_HOURLY_ARTICLES:
         return False
-    desired=candidate_audit["selected"]
-    delivered_ids=[item.get("id") for item in delivered if isinstance(item,dict)]
-    if len(delivered_ids)!=len(delivered):
+    desired_by_id={row.get("id"):row for row in desired}
+    if len(desired_by_id)!=len(desired):
         return False
-    if len(delivered)<TARGET_MIN_ARTICLES:
+    ids=[item.get("id") for item in delivered if isinstance(item,dict)]
+    if len(ids)!=len(delivered) or len(set(ids))!=len(ids):
         return False
-    desired_by_id={row["id"]:row for row in desired}
-    if len(set(delivered_ids))!=len(delivered_ids):
-        return False
-    if any(id not in desired_by_id for id in delivered_ids):
-        return False
-    sources=set()
+    publishers=set()
     for item in delivered:
-        original=desired_by_id[item["id"]]
-        if item.get("source")!=original["source"]:
+        original=desired_by_id.get(item["id"])
+        if original is None or item.get("source")!=original["source"]:
             return False
         if (not isinstance(item.get("evidence_image_path"),str)
                 or not item["evidence_image_path"]):
             return False
-        sources.add(original["source"])
-    return len(sources)>=TARGET_MIN_PUBLISHERS
+        publishers.add(item["source"])
+    if len(publishers)!=len(delivered):
+        return False
+    return all(
+        not same_event(delivered[i],delivered[j])
+        for i in range(len(delivered))
+        for j in range(i+1,len(delivered))
+    )
+
+
+def originals_report_ready(candidate_audit: dict, delivered: list[dict]) -> bool:
+    """Full 10/10 acceptance; valid photographed shortfalls may still send."""
+    return (originals_selection_valid(candidate_audit,delivered)
+            and len(delivered)>=TARGET_MIN_ARTICLES)
