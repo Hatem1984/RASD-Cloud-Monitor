@@ -131,6 +131,20 @@ class TenFreshDifferentNewsrooms(unittest.TestCase):
             sum(v["outcome"]=="accepted_candidate"
                 for v in audit["candidate_decisions"]),3)
 
+    def test_republished_old_event_by_new_outlet_is_not_new_event(self):
+        feeds,articles=fixture(10)
+        already={**articles[0],
+                 "published_at_cairo":"2026-11-21 19:45",
+                 "published":articles[0]["published"]}
+        articles[8]["headline"]=already["headline"]
+        with_history=audit_fresh_distinct_sources(
+            articles,feeds,NOW,previously_delivered=[already])
+        self.assertLess(with_history["fresh_distinct_candidates"],10)
+        self.assertGreater(
+            with_history["rejection_counts"]["previously_delivered_event"],0)
+        self.assertIn("previously_delivered_event",
+                      [x["outcome"] for x in with_history["candidate_decisions"]])
+
     def test_genuine_cairo_original_pubtime_is_preserved_and_conflict_held(self):
         feeds,items=fixture()
         items[0]["published_at_cairo"]="2026-11-21 19:45 EET"
