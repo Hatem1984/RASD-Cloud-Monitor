@@ -125,7 +125,8 @@ def _section_header(section) -> None:
 
 
 def _cover(doc, *, date_label: str, period_label: str, stories: int, sites: int,
-           report_period: str = "daily", report_kind: str = "") -> None:
+           report_period: str = "daily", report_kind: str = "",
+           volume_label: str = "") -> None:
     table = doc.add_table(rows=1, cols=1)
     table.autofit = False
     table.columns[0].width = Cm(18)
@@ -148,6 +149,9 @@ def _cover(doc, *, date_label: str, period_label: str, stories: int, sites: int,
         period_label_ar = ("تقرير المتابعة النصف ساعية" if report_kind == "half_hourly"
                            else "تقرير المتابعة الساعية")
         _run(p, period_label_ar, size=17, bold=True, color=GOLD)
+    if volume_label:
+        p = cell.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(p, volume_label, size=16, bold=True, color=WHITE)
     p = cell.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_before = Pt(16)
     _run(p, "بتاريخ " + date_label, size=11, color=GOLD)
@@ -462,10 +466,16 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
     distribution=Counter(SOURCE_NAMES.get(row["source"],row["source"]) for row in articles)
     end=report.get("display_window_end", "فترة غير محددة")
     period=report.get("display_window_start", "غير محدد")+" إلى "+end
+    volume_label=report.get("volume_label", "")
+    if (not isinstance(volume_label, str) or
+            (volume_label and re.fullmatch(r"الجزء [1-9][0-9]* من [1-9][0-9]*",
+                                           volume_label) is None)):
+        raise ValueError("rasd_visual_daily_volume_label_invalid")
     _cover(doc,date_label=end,period_label=period,
            stories=len(articles),sites=len(distribution),
            report_period=report.get("report_period", "daily"),
-           report_kind=report.get("report_kind", ""))
+           report_kind=report.get("report_kind", ""),
+           volume_label=volume_label)
     _summary(doc,report,distribution)
     for start in range(0,len(articles),4):
         p=doc.add_paragraph();_rtl(p)
