@@ -263,6 +263,7 @@ def _merge_first_party_html_items(
             "published_at_cairo":stamp.astimezone(CAIRO).strftime(
                 "%Y-%m-%d %H:%M %Z"),
             "published_display_cairo":cairo_display_time(stamp),
+            "discovered_display_cairo":cairo_display_time(checked),
         }
         validate_story(row,config)
         if published_before is not None:
@@ -328,7 +329,8 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                "source": candidate["source"], "url": candidate["url"],
                "published_utc":stamp.isoformat(),
                "published_at_cairo": stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
-               "published_display_cairo": cairo_display_time(stamp)}
+               "published_display_cairo": cairo_display_time(stamp),
+               "discovered_display_cairo": cairo_display_time(checked)}
         if published_before is not None:
             row["hourly_publication_bucket"] = (
                 "within_previous_hour" if stamp >= published_before.astimezone(timezone.utc)
