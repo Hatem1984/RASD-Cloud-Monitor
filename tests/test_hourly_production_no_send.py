@@ -20,7 +20,8 @@ def item(i):
     return {
         "id": article_id(url), "headline": f"وزارة التخطيط — خبر {i}",
         "publisher_excerpt": "", "source": "Hapi native news RSS",
-        "url": url, "published_at_cairo": f"2026-11-19 19:{i:02d} EET",
+        "url": url, "published_utc": f"2026-11-19T17:{i:02d}:00+00:00",
+        "published_at_cairo": f"2026-11-19 19:{i:02d} EET",
         "published_display_cairo": "19 نوفمبر 2026",
         "hourly_publication_bucket": "within_previous_hour",
     }
@@ -124,45 +125,84 @@ class HourlyProductionNoSend(unittest.TestCase):
         secrets.assert_not_called()
         discover.assert_not_called()
 
-    def test_hourly_seven_items_use_same_report_layout_with_one_mail_attempt(self):
+    def test_seven_from_one_publisher_is_one_source_and_shortfall_status(self):
         seven = [item(i) for i in range(7)]
         ledger = MagicMock()
         ledger.read.return_value = (ledger_state(), "sha")
-        source_rows = [{"feed_id": "hapi", "status": "ok"}]
-        fixture_doc = Path(tempfile.gettempdir()) / "hourly-offline-placeholder.docx"
         def discover(config, now, *, allow_degraded, source_records, published_before):
             self.assertEqual(published_before.isoformat(), "2026-11-19T18:00:00+00:00")
             self.assertTrue(allow_degraded)
-            source_records.extend(source_rows)
+            source_records.extend({"feed_id": f["id"], "status": "ok",
+                                   "verified_links": 0} for f in config["feeds"])
             return seven
-        def prepare(rows, config, out, **kwargs):
-            self.assertEqual(kwargs["report_kind"], "hourly")
-            self.assertIn("تقرير المتابعة الساعية", kwargs["title"])
-            self.assertEqual(kwargs["end"], worker.cairo_display_time(
-                datetime(2026, 11, 19, 18, tzinfo=timezone.utc)))
-            self.assertEqual(rows, seven)
-            return fixture_doc, seven, 0, False
         with patch.object(worker, "require_github_scheduler"), \
              patch.object(worker, "protected_credentials",
                           return_value=("sender@gmail.com", "owner@example.org", "pw", ledger)), \
              patch.object(worker, "discover_interval_news", side_effect=discover), \
-             patch.object(worker, "prepare_source_limited_verified_word", side_effect=prepare), \
-             patch.object(worker, "reserve_hourly_originals",
-                          return_value=hourly_slot_key("2026-11-19T18:00Z")) as reserve, \
-             patch.object(worker, "send_one_word",
-                          return_value="<rasd-offline-test@gmail.com>") as sent:
+             patch.object(worker, "send_empty_interval_status",
+                          return_value={"status":"strict_shortfall","smtp_accepted":False}) as status, \
+             patch.object(worker, "prepare_source_limited_verified_word") as prepare, \
+             patch.object(worker, "reserve_hourly_originals") as reserve, \
+             patch.object(worker, "send_one_word") as sent:
             outcome = worker.run_scheduled("interval", self.clock)
-        self.assertEqual(outcome["items"], 7)
-        self.assertEqual(outcome["hourly_target_minimum"], 6)
-        self.assertEqual(outcome["hourly_target_shortfall"], 0)
-        self.assertEqual(outcome["hourly_new_within_period"], 7)
-        self.assertEqual(outcome["hourly_recovered_older"], 0)
+        self.assertEqual(outcome["status"],"strict_shortfall")
+        self.assertEqual(status.call_args.kwargs["fresh_candidates"],1)
+        self.assertTrue(status.call_args.kwargs["hourly"])
+        prepare.assert_not_called()
+        reserve.assert_not_called()
+        sent.assert_not_called()
+
+    def test_ten_fresh_publisher_stories_use_same_word_layout_and_one_mail(self):
+        import json
+        from monitor import article_id
+        config=json.loads(Path("sources_newsroom_active.json").read_text("utf-8"))
+        ten=[]
+        for i,feed in enumerate(config["feeds"][:10]):
+            url=f"https://{feed['allowed_article_hosts'][0]}/planning-verified-{i+11}"
+            ten.append({
+                "id":article_id(url),"headline":f"وزارة التخطيط تنفذ مشروع رقم {i+11}",
+                "publisher_excerpt":"","source":feed["name"],"url":url,
+                "published_utc":f"2026-11-19T17:{i:02d}:00+00:00",
+                "published_at_cairo":f"2026-11-19 19:{i:02d} EET",
+                "published_display_cairo":"19 نوفمبر 2026",
+                "hourly_publication_bucket":"within_previous_hour",
+            })
+        ledger=MagicMock()
+        ledger.read.return_value=(ledger_state(),"sha")
+        verified_out=[]
+        def discover(config,now,*,allow_degraded,source_records,published_before):
+            source_records.extend({"feed_id":f["id"],"status":"ok",
+                                   "verified_links":1} for f in config["feeds"])
+            return ten
+        def prepare(rows,config,out,**kwargs):
+            self.assertEqual(kwargs["report_kind"],"hourly")
+            self.assertIn("تقرير المتابعة الساعية",kwargs["title"])
+            self.assertEqual(len(rows),10)
+            self.assertEqual(len({i["source"] for i in rows}),10)
+            verified_out.extend({**row,"evidence_image_path":"synthetic-only-not-a-real-photo.jpg"}
+                                for row in rows)
+            return Path(tempfile.gettempdir()) / "offline-placeholder.docx",verified_out,0,False
+        with patch.object(worker,"require_github_scheduler"), \
+             patch.object(worker,"protected_credentials",
+                          return_value=("sender@gmail.com","owner@example.org","pw",ledger)), \
+             patch.object(worker,"discover_interval_news",side_effect=discover), \
+             patch.object(worker,"prepare_source_limited_verified_word",side_effect=prepare), \
+             patch.object(worker,"reserve_hourly_originals",
+                          return_value=hourly_slot_key("2026-11-19T18:00Z")) as reserve, \
+             patch.object(worker,"send_one_word",
+                          return_value="<rasd-offline-test@gmail.com>") as sent, \
+             patch.object(worker,"send_empty_interval_status") as status:
+            result=worker.run_scheduled("interval",self.clock)
+        self.assertEqual(result["items"],10)
+        self.assertEqual(result["hourly_target_minimum"],10)
+        self.assertEqual(result["hourly_target_shortfall"],0)
+        self.assertEqual(result["hourly_new_within_period"],10)
+        self.assertEqual(result["hourly_recovered_older"],0)
         reserve.assert_called_once()
         sent.assert_called_once()
+        status.assert_not_called()
         ledger.mark_smtp_accepted_many.assert_called_once()
         ledger.mark_smtp_accepted.assert_called_once()
-        self.assertEqual(ledger.mark_smtp_accepted_many.call_args.args[0],
-                         [x["id"] for x in seven])
 
     def test_same_hour_reserved_slot_prevents_any_second_email(self):
         state = ledger_state()
