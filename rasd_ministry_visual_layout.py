@@ -422,6 +422,10 @@ def render_ministry_hourly_status_word(report: dict, destination: Path) -> None:
     p=doc.add_paragraph();_rtl(p)
     _run(p,"الصور الأصلية المقبولة والمرفقة: 0. "
          "لا يعني ذلك عدم نشر أخبار لدى جميع الناشرين.",size=11)
+    if report["coverage"]=="ORIGINAL_IMAGE_HOLD_NO_VERIFIED_DELIVERY":
+        p=doc.add_paragraph();_rtl(p)
+        _run(p,"توجد مواد مطابقة معلّقة لعدم اكتمال صور صفحات الناشرين "
+             "الأصلية، ولم تُحسب ضمن الأخبار الموثقة أو المسلّمة.",size=11)
     p=doc.add_paragraph();_rtl(p)
     _run(p,"حالة المصادر",size=14,bold=True)
     failed=sum(x.get("status")!="ok" for x in report["sources"])
