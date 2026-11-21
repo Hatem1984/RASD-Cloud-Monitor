@@ -1,0 +1,55 @@
+name: RASD — isolated hourly 1–10 and 22h daily safety release QA — NO SEND
+
+on:
+  push:
+    branches:
+      - 'release-rasd-hourly-contract-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-release-hourly-no-send-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-release-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_HOURLY_REPORTS_ENABLED: 'false'
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: 'false'
+      RASD_ALMAL_ORIGINAL_HTML_ENABLED: 'false'
+      RASD_YOUM7_ORIGINAL_HTML_ENABLED: 'false'
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install original Word and image validation dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Complete original RASD suite plus scoped hourly/daily release tests
+        run: python -m unittest discover -s tests -q
+      - name: Dry-run scheduler without source, SMTP or state IO
+        run: python scheduled_rasd.py --mode dry_run
+      - name: Ensure all four protected Cron job environments disable new release paths by default
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          entries=(
+              '.github/workflows/rasd-scheduled.yml',
+              '.github/workflows/rasd-schedule-backup.yml',
+              '.github/workflows/rasd-cloudflare-dispatch.yml',
+          )
+          for path in entries:
+              text=Path(path).read_text(encoding='utf-8')
+              for flag in ('RASD_HOURLY_REPORTS_ENABLED',
+                           'RASD_DAILY_VOLUME_DELIVERY_ENABLED'):
+                  assert flag+": 'false'" in text,(path,flag)
+                  assert flag+": 'true'" not in text,(path,flag)
+          print('RASD_RELEASE_NEW_SEND_SWITCHES_EXPLICITLY_OFF=1')
+          PY
