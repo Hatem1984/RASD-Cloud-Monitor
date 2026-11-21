@@ -21,6 +21,7 @@ APPROVED_PUBLISHERS = {
     "skynewsarabia.com": frozenset({"www.skynewsarabia.com"}),
     "inp.edu.eg": frozenset({"inp.edu.eg"}),
     "hapijournal.com": frozenset({"hapijournal.com", "www.hapijournal.com"}),
+    "alnaharegypt.com": frozenset({"www.alnaharegypt.com", "alnaharegypt.com"}),
     "elwatannews.com": frozenset({"elwatannews.com", "www.elwatannews.com"}),
     "almasryalyoum.com": frozenset({"almasryalyoum.com", "www.almasryalyoum.com"}),
     "shorouknews.com": frozenset({"www.shorouknews.com"}),
@@ -177,7 +178,16 @@ def accept_staged_image(staged: Path, destination: Path, *,
     Validation errors never overwrite an existing screenshot at destination.
     Staging files are caller-owned and may be discarded on failure.
     """
-    if staged.stat().st_size < 8000:
+    try:
+        size = staged.stat().st_size
+    except OSError:
+        return {"ok": False, "reason": "invalid_image"}
+    # JPEG byte count is NOT equivalent to readable content. Legitimate
+    # sparse publisher originals can compress below 8 KB, particularly
+    # text-first articles. Keep a 3 KB transport floor, then validate
+    # dimensions, contrast, image-load evidence and original H1 separately.
+    # A publisher refusal/blank media remains HOLD regardless of file size.
+    if size < 3000:
         return {"ok": False, "reason": "screenshot_too_small"}
     quality = image_quality(staged, publisher=publisher)
     if not quality["accepted"]:
@@ -289,6 +299,46 @@ def original_article_images_loaded(page) -> bool:
     return not visible_article_image_missing(page.evaluate(state_script))
 
 
+def capture_verified_original_frame(page, publisher: str, destination: Path,
+                                    *, requested_url: str, headline) -> dict:
+    """Bounded TWO frames of the SAME original article, never substitute media.
+
+    A publisher sometimes paints a grey skeleton before its own original
+    hero loads. Allow ONE passive wait and recapture of the very same page
+    after native image load state succeeds. On any page navigation, missing
+    H1, unchanged skeleton or third-party access error: HOLD.
+    """
+    if not allowed_url(requested_url, publisher):
+        return {"ok": False, "reason": "publisher_not_approved"}
+    if page.url != requested_url:
+        return {"ok": False, "reason": "redirect_outside_publisher"}
+    retryable = {
+        "visual_qa_suspicious_flat_original_lead_media",
+        "visual_qa_unloaded_massa_article_lead_media",
+        "screenshot_too_small",
+    }
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".rasd-capture-",dir=destination.parent) as temp:
+        staged=Path(temp)/"candidate.jpg"
+        for attempt in range(2):
+            if page.url != requested_url:
+                return {"ok": False, "reason": "redirect_outside_publisher"}
+            if not headline_visible_in_viewport(
+                    headline.bounding_box(),page.viewport_size):
+                return {"ok": False, "reason": "original_headline_out_of_frame"}
+            page.screenshot(path=str(staged),type="jpeg",
+                            quality=85,full_page=False,timeout=15000)
+            result=accept_staged_image(staged,destination,publisher=publisher)
+            if result["ok"] or attempt==1 or result["reason"] not in retryable:
+                return result
+            # Same browser page, no forced reload, no stealth, no consent
+            # manipulation, and no rewriting publisher HTML or images.
+            page.wait_for_timeout(1400)
+            if not original_article_images_loaded(page):
+                return {"ok": False,"reason":"original_article_image_not_loaded"}
+    return {"ok": False,"reason":"invalid_image"}
+
+
 def capture_publisher(url: str, publisher: str, destination: Path,
                       timeout_ms: int = 26000) -> dict:
     """Capture only a publicly published article within an approved publisher."""
@@ -353,13 +403,9 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                     return {"ok": False, "reason": "original_headline_out_of_frame"}
                 if not original_article_images_loaded(page):
                     return {"ok": False, "reason": "original_article_image_not_loaded"}
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                with TemporaryDirectory(prefix=".rasd-capture-", dir=destination.parent) as temp:
-                    staged = Path(temp) / "candidate.jpg"
-                    page.screenshot(path=str(staged), type="jpeg",
-                                    quality=80, full_page=False, timeout=15000)
-                    accepted = accept_staged_image(staged, destination,
-                                                   publisher=publisher)
+                accepted = capture_verified_original_frame(
+                    page,publisher,destination,
+                    requested_url=url,headline=headline)
                 if not accepted["ok"]:
                     return accepted
                 return {**accepted, "actual_url": page.url,

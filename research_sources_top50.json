@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "as_of": "2026-10-25",
+  "as_of": "2026-11-21",
   "scope": "Egyptian Ministry of Planning news monitoring with first-party fact corroboration",
   "ordering_note": "Owner-prioritized national press and established Egyptian newsrooms, then business/independent/international press, finally five first-party official research references. This is not a factual 1-50 traffic ranking or 1-50 credibility score.",
   "measured_audience_reference": "https://www.similarweb.com/top-websites/egypt/news-and-media/ (August 2026: only exact top five ranks recorded)",
@@ -12,7 +12,7 @@
     "https://almanassa.com/about",
     "https://english.ahram.org.eg/UI/Front/AboutUs.aspx"
   ],
-  "production_rule": "Catalog membership is neither a proof of editorial verification nor of media authenticity. Only the 13 now-validated first-party native RSS endpoints in sources_newsroom_active.json are polled. The remaining 37 research sources are NOT automatically monitored. Activation does not mean original publisher screenshot success: unmatched or failed proof remains HOLD; article originals cannot be invented. Expansion tested no-redirect HTTP 200 well-formed RSS with explicitly timezoned publisher dates on 2026-10-25. Only the National Planning Institute publisher page image passed a live original capture sample; all publisher/Word/Gmail acceptance gates are still pending per new source.",
+  "production_rule": "Catalog membership is neither proof of editorial verification nor of media authenticity. The 14 individually reviewed original-publisher RSS endpoints in sources_newsroom_active.json are now polled; the other 36 first-50 research origins are not automatically monitored. Every news story still requires a relevant original publisher title, explicit dated first-party link, real screenshot and JPEG identity. Al Nahar original RSS returned 20 fully validated first-party items on 2026-11-21, and a current relevant original publisher screenshot passed live QA on 2026-11-21. Other candidates and 50 additional research references remain unapproved until their individual verification.",
   "verification_rule": "Official original publications corroborate claimed facts, budgets and policies, but must not suppress independently reported criticism. Attribution is mandatory; identical syndicated facts are not counted as independent confirming reports.",
   "sources": [
     {
@@ -275,8 +275,8 @@
       "publisher_host": "alnaharegypt.com",
       "category": "general_press",
       "editorial_group": "alnahar",
-      "research_status": "candidate_not_scheduled",
-      "rss_status": "unapproved_or_unverified",
+      "research_status": "active_native_rss",
+      "rss_status": "approved_in_sources_newsroom_active.json",
       "similarweb_egypt_news_rank_aug_2026": null
     },
     {

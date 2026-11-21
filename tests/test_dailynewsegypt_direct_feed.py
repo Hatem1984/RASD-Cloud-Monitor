@@ -11,7 +11,7 @@ class DailyNewsEgyptDirectFeed(unittest.TestCase):
     def test_canonical_original_rss_and_same_article_hosts_only(self):
         cfg = json.loads(Path("sources_newsroom_active.json").read_text(
             encoding="utf-8"))
-        self.assertEqual(len(cfg["feeds"]), 13)
+        self.assertEqual(len(cfg["feeds"]), 14)
         feed = next(x for x in cfg["feeds"] if x["id"] == "dailynewsegypt")
         self.assertEqual(feed["url"], "https://dailynewsegypt.com/feed/")
         self.assertEqual(set(feed["allowed_article_hosts"]),
