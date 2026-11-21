@@ -104,7 +104,11 @@ jobs:
     env:
       RASD_AUTOMATION_ENABLED: 'true' # Owner-authorized production activation in signed main release
       RASD_SMART_NO_EMPTY_INTERVAL_EMAIL: 'true' # owner-requested: no empty or image-HOLD 30m mail; daily unchanged
-      RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true' # PROVEN Gmail Sent IMAP read-only, run 40093969919
+      RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
+      RASD_HOURLY_REPORTS_ENABLED: 'false' # needs separately approved live delivery switch
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: 'false' # unchanged 22 Cairo until ready
+      RASD_ALMAL_ORIGINAL_HTML_ENABLED: 'false'
+      RASD_YOUM7_ORIGINAL_HTML_ENABLED: 'false' # PROVEN Gmail Sent IMAP read-only, run 40093969919
       RASD_JOB_CRON: ${{ github.event.schedule }}
       RASD_OWNER_PUSH_CONFIRM: ${{ github.event.head_commit.message }}
       RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
