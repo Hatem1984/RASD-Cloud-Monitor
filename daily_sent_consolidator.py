@@ -173,7 +173,8 @@ def consolidate_sent_words(
     sender: str, recipient: str, app_password: str, title: str,
     start: str, end: str, config: dict,
     client_factory=None, approved_copy: str | None = None,
-) -> tuple[Path, list[dict]]:
+    volume_preflight_only: bool = False,
+) -> tuple[Path | list[dict], list[dict]]:
     """One Word from ONLY the original JPEGs of previously SMTP-accepted Word mails.
 
     Private ledger entry order is the original per-message story order. We
@@ -230,6 +231,17 @@ def consolidate_sent_words(
                  for item in stories]
     proof = [{"status": "verified", "sha256": by_id[a["id"]][1]}
              for a in stories]
+    if volume_preflight_only:
+        # Read-only, NO MAIL: the same immutable Sent originals/ledger checks
+        # as the production single daily Word. This branch never reaches
+        # send_one_word or private ledger reservation. Do NOT wire production
+        # multiparts until owner approves its distribution/recovery policy.
+        from rasd_daily_volume_preflight_no_send import (
+            create_verified_daily_volumes)
+        volumes = create_verified_daily_volumes(
+            assembled, proof, output / "RASD-DAILY-VOLUME-PREFLIGHT",
+            title=title, start=start, end=end)
+        return volumes, proof
     report = {
         "title": title,
         "display_window_start": start, "display_window_end": end,
