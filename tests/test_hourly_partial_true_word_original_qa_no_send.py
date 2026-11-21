@@ -34,6 +34,7 @@ def prepared_news(count=3):
             "source":feed["name"],"url":url,
             "published_at_cairo":f"2026-11-21 18:{i+10:02d} EET",
             "published_display_cairo":f"٢١ نوفمبر ٢٠٢٦ الساعة ١٨:{i+10:02d}",
+            "discovered_display_cairo":"٢١ نوفمبر ٢٠٢٦، الساعة ١٩:٠٧ بتوقيت القاهرة",
             "published_utc":f"2026-11-21T16:{i+10:02d}:00+00:00",
             "hourly_publication_bucket":"within_previous_hour",
         })
@@ -78,6 +79,9 @@ class ActualHourlyWordWithPartialOriginals(unittest.TestCase):
             text="\n".join(p.text for p in doc.paragraphs)
             self.assertIn("3 أخبار موثقة من أصل 10 مستهدفة",text)
             self.assertIn("النقص 7",text)
+            self.assertIn("وقت اكتشاف الرصد:", "\n".join(
+                c.text for table in doc.tables for row in table.rows
+                for c in row.cells))
             self.assertIn("تحليل الرصد",text)
             self.assertIn("توزيع التغطيات على المواقع",text)
             cover=doc.tables[0].cell(0,0).text
