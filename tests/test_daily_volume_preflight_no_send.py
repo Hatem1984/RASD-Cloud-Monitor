@@ -32,6 +32,13 @@ class BoundedLosslessDailyVolumesNoSend(unittest.TestCase):
                 brush.rectangle((0, 0, 849, 90), fill=(11, 32, 70))
                 for y in range(120, 620, 35):
                     brush.rectangle((40, y, 800, y + 11), fill=(70, 110, 150))
+            # Different original article pages must have distinct image bytes.
+            # Identical white fixtures were incorrectly being deduplicated by
+            # python-docx, which rightly violates the strict 1:1 image check.
+            x = 60 + (i % 40) * 14
+            y = 260 + (i // 40) * 27
+            ImageDraw.Draw(pic).rectangle((x, y, x + 11, y + 12),
+                                          fill=((i * 17) % 255, 30, 95))
             pic.save(image, "JPEG", quality=88)
             url = f"https://hapijournal.com/2026/11/21/real-shaped-dummy-{i}"
             articles.append({
@@ -72,11 +79,7 @@ class BoundedLosslessDailyVolumesNoSend(unittest.TestCase):
                 doc = Document(volume["path"])
                 self.assertEqual(len(doc.inline_shapes), volume["count"])
                 self.assertIn(f"الجزء {volume['part']} من {volume['parts']}",
-                              volume["path"].read_bytes().decode(
-                                  "latin1", "ignore") if False
-                              else "\n".join(
-                                  cell.text for tab in doc.tables
-                                  for row in tab.rows for cell in row.cells))
+                              doc.tables[0].cell(0, 0).text)
             self.assertTrue(all(
                 word_images_match_capture_digests(
                     v["path"], proof[sum(x["count"] for x in volumes[:i]):
