@@ -181,7 +181,7 @@ def consolidate_sent_words(
     explicitly verify the ordered headlines, hyperlinks and image relationships
     before releasing any merged report or reserving the daily email key.
     """
-    if not stories or len(stories) > 180:
+    if not stories or len(stories) > 360:
         raise RuntimeError("daily_consolidation_item_count_hold")
     wanted = {a["id"]: a for a in stories}
     if len(wanted) != len(stories):
