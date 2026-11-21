@@ -45,6 +45,7 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
             "https://egyptianstreets.com/feed/",
             "https://www.skynewsarabia.com/rss.xml",
             "https://inp.edu.eg/feed/",
+            "https://www.alnaharegypt.com/feed/",
             "https://www.almasryalyoum.com/rss/rssfeeds",
             "https://www.masrawy.com/rss/feed/35/%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1%20%D9%85%D8%B5%D8%B1-%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9",
             "https://www.shorouknews.com/Economy/rss",
