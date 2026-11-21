@@ -31,6 +31,9 @@ from rasd_original_html_source_gate import (
 )
 from rasd_hourly_delivery import (hourly_period, hourly_slot_key,
                                   hourly_delivery_eligible, reserve_hourly_originals)
+from rasd_strict_hourly_ten_source_gate import (
+    audit_fresh_distinct_sources, originals_report_ready, TARGET_MIN_ARTICLES,
+)
 
 EXPECTED_WORKFLOW = (
     "Hatem1984/RASD-Cloud-Monitor/.github/workflows/"
@@ -255,6 +258,7 @@ def _merge_first_party_html_items(
             "id":original["id"], "headline":original["headline"],
             "publisher_excerpt":original.get("publisher_excerpt",""),
             "source":original["source"], "url":original["url"],
+            "published_utc":stamp.isoformat(),
             "published_at_cairo":stamp.astimezone(CAIRO).strftime(
                 "%Y-%m-%d %H:%M %Z"),
             "published_display_cairo":cairo_display_time(stamp),
@@ -321,6 +325,7 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
         row = {"id": candidate["id"], "headline": candidate["headline"],
                "publisher_excerpt": candidate.get("publisher_excerpt", ""),
                "source": candidate["source"], "url": candidate["url"],
+               "published_utc":stamp.isoformat(),
                "published_at_cairo": stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
                "published_display_cairo": cairo_display_time(stamp)}
         if published_before is not None:
