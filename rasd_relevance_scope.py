@@ -21,6 +21,7 @@ SCOPE_VERSION = "egypt_development_v1"
 # that would scoop up irrelevant business or sports stories.
 PLANNING_SUBJECTS = (
     "الاستثمارات العامة",
+    "استثمارات عامة",
     "الاستثمار العام",
     "استثمارات حكومية",
     "الاستثمارات الحكومية",
