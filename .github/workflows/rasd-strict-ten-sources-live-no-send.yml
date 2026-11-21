@@ -1,0 +1,30 @@
+name: RASD — audit 10 news 10 original publishers same hour — NO SEND
+
+on:
+  push:
+    branches: ['qa-rasd-ten-fresh-ten-publishers-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-ten-hour-no-send-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-current-publisher-supply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_HOURLY_REPORTS_ENABLED: 'false'
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Audit publisher originals for just the last completed hour
+        run: python rasd_strict_ten_sources_live_audit_no_send.py
