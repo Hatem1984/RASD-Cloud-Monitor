@@ -56,6 +56,9 @@ class HourlyEmptyStatusNoSend(unittest.TestCase):
         self.assertIn("الساعة المكتملة",send.call_args.kwargs["body_text"])
         word=Document(send.call_args.args[0])
         self.assertEqual(len(word.inline_shapes),0)
+        self.assertIn("تقرير رصد",word.tables[0].cell(0,0).text)
+        self.assertIn("تقرير المتابعة الساعية",
+                      word.tables[0].cell(0,0).text)
         text="\n".join(p.text for p in word.paragraphs)
         self.assertIn("لا يثبت ذلك عدم نشر أخبار",text)
         self.assertIn("حالة المصادر",text)
