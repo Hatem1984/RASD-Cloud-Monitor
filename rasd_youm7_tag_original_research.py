@@ -16,6 +16,7 @@ from urllib.request import Request, build_opener
 from urllib.error import HTTPError, URLError
 
 from monitor import RejectRedirect, _ministry_term_present, article_id
+from rasd_relevance_scope import contextual_title_matches, scope_active
 from rasd_almal_original_html_research import PublisherPage
 
 TAG_URL = ("https://www.youm7.com/Tags/Index?id=33679&tag="
@@ -51,7 +52,8 @@ def fetch(url: str, limit: int) -> bytes:
     return data
 
 
-def discover_links(index: bytes, keywords: list[str],*,limit: int=20) -> list[str]:
+def discover_links(index: bytes, keywords: list[str],*,limit: int=20,
+                   contextual_scope: bool=False) -> list[str]:
     if not isinstance(index,bytes) or len(index)>MAX_INDEX_BYTES or not 1<=limit<=25:
         raise ValueError("youm7_index_unverifiable")
     page=PublisherPage()
@@ -63,13 +65,15 @@ def discover_links(index: bytes, keywords: list[str],*,limit: int=20) -> list[st
         url=urlunsplit((parsed.scheme,parsed.netloc,
                         quote(parsed.path,safe="/%"),parsed.query,parsed.fragment))
         if (allowed(url) and NEWS_PATH.fullmatch(urlsplit(url).path) and
-                _ministry_term_present(anchor,keywords) and url not in urls):
+                (_ministry_term_present(anchor,keywords) or
+                 (contextual_scope and contextual_title_matches(anchor)))
+                and url not in urls):
             urls.append(url)
     return urls[:limit]
 
 
 def original_news(url: str, article: bytes, keywords: list[str],
-                  *,now: datetime) -> dict:
+                  *,now: datetime, contextual_scope: bool=False) -> dict:
     if not allowed(url) or not NEWS_PATH.fullmatch(urlsplit(url).path):
         raise ValueError("youm7_article_origin_invalid")
     if not isinstance(article,bytes) or not 1<=len(article)<=MAX_PAGE_BYTES:
@@ -79,7 +83,9 @@ def original_news(url: str, article: bytes, keywords: list[str],
     parser=PublisherPage()
     parser.feed(article.decode("utf-8","replace"))
     title=" ".join(" ".join(parser.headline).split())
-    if not (15<=len(title)<=450 and _ministry_term_present(title,keywords)):
+    if not (15<=len(title)<=450 and
+            (_ministry_term_present(title,keywords) or
+             (contextual_scope and contextual_title_matches(title)))):
         raise ValueError("youm7_original_headline_unrelated")
     if len(parser.published)!=1:
         raise ValueError("youm7_original_publication_not_unique")
@@ -95,24 +101,33 @@ def original_news(url: str, article: bytes, keywords: list[str],
     return {"id":article_id(url),"headline":title,"url":url,
             "source":"Youm7 first-party Ministry tag HTML",
             "published":format_datetime(instant),"publisher_excerpt":"",
-            "match_origin":"publisher_original_article_title"}
+            "match_origin": ("publisher_original_article_title"
+                             if _ministry_term_present(title,keywords)
+                             else "contextual_topic_title")}
 
 
 def research(*, now: datetime, downloader=fetch, keywords: list[str]|None=None) -> dict:
     if keywords is None:
         import json
         from pathlib import Path
-        keywords=json.loads(Path("sources_newsroom_active.json").read_text(
-            encoding="utf-8"))["keywords"]
+        cfg=json.loads(Path("sources_newsroom_active.json").read_text(
+            encoding="utf-8"))
+        keywords=cfg["keywords"]
+        contextual_scope=scope_active(cfg)
+    else:
+        # Explicit injected keywords are research/test only: no widening
+        # without a reviewed config and an owner-controlled flag.
+        contextual_scope=False
     index=downloader(TAG_URL,MAX_INDEX_BYTES)
-    urls=discover_links(index,keywords)
+    urls=discover_links(index,keywords,contextual_scope=contextual_scope)
     stories=[]
     holds=0
     stale=0
     reason_counts={}
     for url in urls:
         try:
-            result=original_news(url,downloader(url,MAX_PAGE_BYTES),keywords,now=now)
+            result=original_news(url,downloader(url,MAX_PAGE_BYTES),keywords,
+                                 now=now,contextual_scope=contextual_scope)
             stories.append(result)
         except (OSError,TimeoutError,ValueError,RuntimeError) as error:
             if isinstance(error,ValueError) and str(error)=="youm7_original_news_outside_72h":
