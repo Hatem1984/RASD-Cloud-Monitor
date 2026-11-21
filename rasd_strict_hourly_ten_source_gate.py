@@ -58,6 +58,7 @@ def audit_fresh_distinct_sources(
     articles: list[dict], feeds: list[dict], now: datetime,
     *, required: int = TARGET_MIN_ARTICLES,
     max_items: int = MAX_HOURLY_ARTICLES,
+    previously_delivered: list[dict] | tuple[dict, ...] = (),
 ) -> dict:
     """Read-only count; ready means CANDIDATES, not original photos proved.
 
@@ -69,7 +70,9 @@ def audit_fresh_distinct_sources(
     if (not isinstance(articles, list) or not isinstance(feeds, list)
             or type(required) is not int
             or type(max_items) is not int
-            or not 1 <= required <= max_items <= MAX_HOURLY_ARTICLES):
+            or not 1 <= required <= max_items <= MAX_HOURLY_ARTICLES
+            or not isinstance(previously_delivered,(list,tuple))
+            or any(not isinstance(row,dict) for row in previously_delivered)):
         raise ValueError("strict_hourly_inputs_invalid")
     start, end = last_completed_hour(now)
     by_name = {}
@@ -93,6 +96,8 @@ def audit_fresh_distinct_sources(
         "duplicate_article": 0,
         "same_publisher": 0,
         "repeated_event": 0,
+        "previously_delivered_event": 0,
+        "not_selected_capacity": 0,
     }
     prepared=[]
     seen_article_ids=set()
@@ -169,6 +174,12 @@ def audit_fresh_distinct_sources(
         normalized=dict(original)
         normalized.setdefault("published_at_cairo",
                               stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M"))
+        if any(same_event(normalized, prev)
+               for prev in previously_delivered):
+            rejected["previously_delivered_event"] += 1
+            decisions.append({"id":original["id"],
+                              "outcome":"previously_delivered_event"})
+            continue
         if any(same_event(normalized, prev) for prev in accepted):
             rejected["repeated_event"] += 1
             decisions.append({"id":original["id"],"outcome":"repeated_event"})
@@ -177,6 +188,12 @@ def audit_fresh_distinct_sources(
         publisher_set.add(source)
         decisions.append({"id":original["id"],"outcome":"accepted_candidate"})
         if len(accepted)==max_items:
+            rejected["not_selected_capacity"] = max(
+                0, len(prepared) - sum(
+                    1 for row in decisions
+                    if row["outcome"] in (
+                        "accepted_candidate","same_publisher",
+                        "repeated_event","previously_delivered_event")))
             break
     ready=len(accepted)>=required and len(publisher_set)>=required
     return {
