@@ -32,7 +32,8 @@ from rasd_original_html_source_gate import (
 from rasd_hourly_delivery import (hourly_period, hourly_slot_key,
                                   hourly_delivery_eligible, reserve_hourly_originals)
 from rasd_strict_hourly_ten_source_gate import (
-    audit_fresh_distinct_sources, originals_report_ready, TARGET_MIN_ARTICLES,
+    audit_fresh_distinct_sources, originals_report_ready,
+    originals_selection_valid, TARGET_MIN_ARTICLES,
 )
 
 EXPECTED_WORKFLOW = (
@@ -1024,18 +1025,21 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             strict_hourly_audit = None
             if hourly_enabled:
                 strict_hourly_audit = audit_fresh_distinct_sources(
-                    stories, collection_origins(config), now)
+                    stories, collection_origins(config), now,
+                    previously_delivered=history)
                 print("RASD_STRICT_HOURLY_CANDIDATES=" +
                       str(strict_hourly_audit["fresh_distinct_candidates"]) +
-                      " TARGET=10 DIFFERENT_PUBLISHERS=10", flush=True)
-                if strict_hourly_audit["status"] != "CANDIDATES_NEED_ORIGINAL_IMAGES":
+                      " TARGET=10 DIFFERENT_PUBLISHERS=10 REJECTED=" +
+                      json.dumps(strict_hourly_audit["rejection_counts"],
+                                 ensure_ascii=True,sort_keys=True),flush=True)
+                stories = strict_hourly_audit["selected"]
+                if not stories:
                     return send_empty_interval_status(
                         ledger=ledger, recipient=recipient, sender=sender,
                         password=password, state=state, config=config, health=health,
                         window=window, start=start, now=now, output=output,
-                        hourly=True, fresh_candidates=
-                        strict_hourly_audit["fresh_distinct_candidates"])
-                stories = strict_hourly_audit["selected"]
+                        hourly=True, fresh_candidates=0,
+                        original_image_verified=0)
             if not stories:
                 if mode == "interval_owner_once":
                     return {"status": "no_new_verified_news", "smtp_accepted": False}
@@ -1113,24 +1117,12 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     held_items=held_items, hourly=hourly_enabled,
                     **({"fresh_candidates": strict_hourly_audit["fresh_distinct_candidates"],
                         "original_image_verified": 0} if hourly_enabled else {}))
-            # Only successfully captured/embedded originals enter private CAS.
-            # An RSS candidate is NOT enough: the actual original publisher
-            # photo + Word digest gate has already run. If some photos failed,
-            # issue a truthful SHORTFALL status, never a 1-9 news bulletin.
-            if hourly_enabled and not originals_report_ready(
+            # Only original captured pages with image SHA verified INSIDE
+            # this very Word qualify. Owner has EXPLICITLY approved sending
+            # all 1–9 valid current-hour stories as honest partial coverage.
+            if hourly_enabled and not originals_selection_valid(
                     strict_hourly_audit, delivered):
-                verified_count = len(delivered)
-                print("RASD_STRICT_HOURLY_IMAGE_VERIFIED=" +
-                      str(verified_count) + " TARGET=10 HOLD=1", flush=True)
-                return send_empty_interval_status(
-                    ledger=ledger, recipient=recipient, sender=sender,
-                    password=password, state=state, config=config, health=health,
-                    window=window, start=start, now=now, output=output,
-                    hourly=True,
-                    fresh_candidates=strict_hourly_audit["fresh_distinct_candidates"],
-                    original_image_verified=verified_count,
-                    held_articles=held_count, held_items=held_items,
-                    waiting_articles=waiting)
+                raise RuntimeError("hourly_original_photo_selection_integrity_hold")
             # The owner forbids recovering old news to meet the hourly quota.
             hourly_in_period = sum(
                 row.get("hourly_publication_bucket") == "within_previous_hour"
@@ -1145,9 +1137,30 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             else:
                 reserve_stories(ledger, delivered, day)
                 message_key = digest_key("interval:" + window + ":" + ",".join(x["id"] for x in delivered))
-            subject = title + (" [تغطية جزئية/متأخرة]" if limited or waiting else "")
+            if hourly_enabled:
+                actual=len(delivered)
+                shortfall=max(0,TARGET_MIN_ARTICLES-actual)
+                subject=(title +
+                         f" | {actual} أخبار موثقة من أصل 10 مستهدفة"
+                         + (" [تغطية جزئية]" if shortfall or limited
+                            or waiting else ""))
+                report_text=(
+                    f"رصد — تقرير المتابعة الساعية المكتملة. "
+                    f"{actual} أخبار موثقة من أصل 10 مستهدفة، "
+                    f"من {len({story['source'] for story in delivered})} "
+                    "ناشرين أصليين مستقلين داخل الساعة. "
+                    f"الأخبار المعلّقة بسبب الصورة: {held_count}. "
+                    f"المصادر المتعذرة: "
+                    f"{sum(row['status'] != 'ok' for row in health)}. "
+                    "جميع الصور المرفقة مطابقة لبصمات الناشرين "
+                    "داخل Word؛ كل خبر يحتفظ بوقت نشره الأصلي.")
+            else:
+                subject=title+(" [تغطية جزئية/متأخرة]"
+                               if limited or waiting else "")
+                report_text=None
             receipt = send_one_word(doc, sender=sender, recipient=recipient,
-                                    password=password, subject=subject, key=message_key)
+                                    password=password, subject=subject,
+                                    key=message_key, body_text=report_text)
             # SMTP accepts exactly one Word message containing N stories.
             # Persist all N receipts together in ONE private CAS commit, not
             # N separate writes that can leave a half-accepted daily rollup.
@@ -1155,7 +1168,10 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 [article["id"] for article in delivered], receipt)
             if hourly_enabled:
                 ledger.mark_smtp_accepted(message_key, receipt)
-            return {"status": "smtp_accepted_unconfirmed_inbox",
+            return {"status": (
+                        "hourly_partial_smtp_accepted_unconfirmed_inbox"
+                        if hourly_enabled and len(delivered)<TARGET_MIN_ARTICLES
+                        else "smtp_accepted_unconfirmed_inbox"),
                     "items": len(delivered),
                     **({"hourly_target_minimum": 10,
                         "hourly_required_publishers": 10,
@@ -1163,7 +1179,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         "hourly_recovered_older": hourly_recovered,
                         "hourly_target_shortfall": max(0, 10 - hourly_in_period)}
                        if hourly_enabled else {}),
-                    "source_limited": bool(limited or waiting),
+                    "source_limited": bool(limited or waiting or
+                                           (hourly_enabled and
+                                            len(delivered)<TARGET_MIN_ARTICLES)),
                     "original_screenshots_held": held_count,
                     "waiting_approved_news": waiting}
         if mode in ("rollup", "rollup_recovery", "rollup_owner_once"):
