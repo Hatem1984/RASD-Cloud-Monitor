@@ -21,6 +21,7 @@ APPROVED_PUBLISHERS = {
     "skynewsarabia.com": frozenset({"www.skynewsarabia.com"}),
     "inp.edu.eg": frozenset({"inp.edu.eg"}),
     "hapijournal.com": frozenset({"hapijournal.com", "www.hapijournal.com"}),
+    "alnaharegypt.com": frozenset({"www.alnaharegypt.com", "alnaharegypt.com"}),
     "elwatannews.com": frozenset({"elwatannews.com", "www.elwatannews.com"}),
     "almasryalyoum.com": frozenset({"almasryalyoum.com", "www.almasryalyoum.com"}),
     "shorouknews.com": frozenset({"www.shorouknews.com"}),
