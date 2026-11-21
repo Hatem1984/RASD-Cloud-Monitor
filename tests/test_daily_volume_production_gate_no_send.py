@@ -10,7 +10,7 @@ class NumberedDailyScheduledGateNoSend(unittest.TestCase):
     NOW=datetime(2026,11,21,20,7,tzinfo=timezone.utc)
     NEWS={"id":"a"*24,"headline":"وزارة التخطيط في اختبار تجريبي"}
 
-    def run(self,archive="true"):
+    def exercise_scheduled(self,archive="true"):
         ledger=MagicMock()
         ledger.read.return_value=({"entries":{}},"sha")
         with patch.object(worker,"require_github_scheduler"),\
@@ -53,10 +53,10 @@ class NumberedDailyScheduledGateNoSend(unittest.TestCase):
             ledger.reserve.assert_not_called()
 
     def test_owner_approved_numbered_path_does_not_use_old_single_smtp(self):
-        self.run()
+        self.exercise_scheduled()
 
     def test_cannot_send_new_daily_parts_without_original_sent_archive(self):
-        self.run(archive="false")
+        self.exercise_scheduled(archive="false")
 
 
 if __name__=="__main__":
