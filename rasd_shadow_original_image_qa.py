@@ -25,19 +25,27 @@ def qa_candidates(capture=capture_publisher, cases: list[dict] | None = None) ->
     checked = source["cases"] if cases is None else cases
     if not isinstance(checked, list) or not 1 <= len(checked) <= 5:
         raise ValueError("shadow_source_count_hold")
+    PINNED = {
+        "alnaharegypt": ("alnaharegypt.com", ("www.alnaharegypt.com",)),
+        "youm7": ("youm7.com", ("www.youm7.com",)),
+        "ahram_gate": ("ahram.org.eg", ("gate.ahram.org.eg",)),
+        "almal": ("almalnews.com", ("almalnews.com",)),
+        "almasdar": ("almasdar.com", ("www.almasdar.com",)),
+    }
     reports = []
     with tempfile.TemporaryDirectory(prefix="rasd-candidate-firstparty-") as directory:
         for row in checked:
             ident, base, url = row["id"], row["base"], row["url"]
             hosts = row["hosts"]
             if ((ident in production_ids and ident != "alnaharegypt")
-                    or (base in APPROVED_PUBLISHERS and ident != "alnaharegypt")
-                    or not isinstance(hosts, list) or len(hosts) != 1
-                    or not isinstance(url, str) or
-                    not url.startswith("https://") or
-                    base not in {"alnaharegypt.com", "youm7.com",
-                                 "ahram.org.eg", "almalnews.com",
-                                 "almasdar.com"}):
+                    or ident not in PINNED
+                    or base != PINNED.get(ident, ("", ()))[0]
+                    or not isinstance(hosts, list)
+                    or tuple(hosts) != PINNED[ident][1]
+                    or (base in APPROVED_PUBLISHERS and ident
+                        not in {"alnaharegypt", "youm7", "almal"})
+                    or not isinstance(url, str)
+                    or not url.startswith("https://")):
                 raise RuntimeError("shadow_publisher_unapproved_identity_hold")
             with patch.dict(APPROVED_PUBLISHERS, {base: frozenset(hosts)}):
                 if not allowed_url(url, base):
