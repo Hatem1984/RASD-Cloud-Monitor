@@ -505,7 +505,9 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
         raise RuntimeError("no_original_publisher_page_verified")
     if not 0 <= pending_approved_news <= 200:
         raise ValueError("invalid_deferred_news_count")
-    degraded = bool(rejected or pending_approved_news or
+    hourly_shortfall = (report_kind == "hourly"
+                        and len(selected) < TARGET_MIN_ARTICLES)
+    degraded = bool(rejected or pending_approved_news or hourly_shortfall or
                     any(s["status"] != "ok" for s in source_records))
     source_rows = [{
         "feed_id": row["feed_id"], "status": row["status"],
@@ -529,10 +531,36 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
             f" {pending_approved_news} أخبار جديدة معتمدة من RSS تنتظر فحص"
             " الصورة الأصلية في دورة الرصد التالية؛ ولم تُحسب مُسلّمة."
         )
+    if report_kind == "hourly":
+        limitations += (
+            f" حصيلة الساعة المكتملة: {len(selected)} أخبار موثقة "
+            f"من أصل {TARGET_MIN_ARTICLES} مستهدفة، من "
+            f"{len({story['source'] for story in selected})} ناشرين "
+            "مختلفين. لم نستخدم أخبارًا منشورة في ساعات سابقة "
+            "لاستكمال العدد. كل خبر معروض منشور خلال ساعة الرصد "
+            "وبصورة صفحة ناشره الأصلية."
+        )
+        if hourly_shortfall:
+            limitations += (
+                f" النقص {TARGET_MIN_ARTICLES-len(selected)}، "
+                f"وتعذر إثبات صور {rejected} مواد مرشحة، "
+                f"وتعذر اتصال {sum(row['status']!='ok' for row in source_records)} "
+                "مصادر؛ قد توجد أسباب نقص إضافية مرتبطة بعدم نشر "
+                "أخبار مؤهلة أصلًا أو تكرار الناشر/الحدث."
+            )
     report = {
-        "title": title + (" — نطاق جزئي" if degraded else ""),
+        "title": (title +
+                  (f" | {len(selected)} أخبار موثقة من أصل 10 مستهدفة"
+                   if report_kind == "hourly" else "") +
+                  (" — نطاق جزئي" if degraded else "")),
         "display_window_start": start, "display_window_end": end,
         "ministry_media_grid": True,
+        **({"hourly_required_articles": TARGET_MIN_ARTICLES,
+            "hourly_required_publishers": TARGET_MIN_ARTICLES,
+            "hourly_actual_images": len(selected),
+            "hourly_actual_publishers": len({x["source"] for x in selected}),
+            "hourly_shortfall": max(0,TARGET_MIN_ARTICLES-len(selected))}
+           if report_kind=="hourly" else {}),
         "report_period": "interval",
         "report_kind": report_kind,
         **({"hourly_in_period": sum(
