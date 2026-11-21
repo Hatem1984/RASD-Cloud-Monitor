@@ -753,7 +753,8 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
                                waiting_articles: int = 0,
                                held_items: list[dict] | None = None,
                                hourly: bool = False,
-                               fresh_candidates: int | None = None) -> dict:
+                               fresh_candidates: int | None = None,
+                               original_image_verified: int | None = None) -> dict:
     """One Word status per eligible empty 30m slot, not a fabricated news report.
 
     Distinct FROM the 22:00 news rollup: no 'interval_item' kind is written
@@ -765,9 +766,17 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
     if (type(held_articles) is not int or not 0 <= held_articles <= 200 or
             type(waiting_articles) is not int or not 0 <= waiting_articles <= 200):
         raise RuntimeError("interval_status_invalid_hold_count")
-    if fresh_candidates is not None and (
-            not hourly or type(fresh_candidates) is not int or
-            not 0 <= fresh_candidates < TARGET_MIN_ARTICLES):
+    if fresh_candidates is None:
+        if original_image_verified is not None:
+            raise RuntimeError("hourly_10_source_status_invalid_count")
+    elif (not hourly or type(fresh_candidates) is not int or
+          not 0 <= fresh_candidates <= MAX_BATCH or
+          (original_image_verified is None and
+           fresh_candidates >= TARGET_MIN_ARTICLES) or
+          (original_image_verified is not None and
+           (type(original_image_verified) is not int or
+            not 0 <= original_image_verified < TARGET_MIN_ARTICLES or
+            original_image_verified > fresh_candidates))):
         raise RuntimeError("hourly_10_source_status_invalid_count")
     for held_item in (held_items or []):
         validate_story(held_item, config)
@@ -833,9 +842,12 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             " عدد الروابط لا يعني شمول السوق."
         ),
         "limitations": (
-            (f"تقرير حالة: تحقق {fresh_candidates} فقط من أصل عشرة أخبار "
-             "مستقلة من عشرة ناشرين، منشورة خلال الساعة المكتملة "
-             "وتحقق الشروط المتاحة؛ لم تكتمل عتبة التقرير الإخباري، "
+            (f"تقرير حالة: وُجد {fresh_candidates} مرشحًا فقط من "
+             "ناشرين مختلفين، بتواريخ نشر أصلية خلال الساعة المكتملة. "
+             + (f"اجتازت {original_image_verified} صور أصلية فحص Word؛ "
+                if original_image_verified is not None else
+                "لم يُثبت بعد اكتمال صور المرشحين الأصلية؛ ")
+             + "لم تتحقق عشرة أخبار مستقلة مصورة، "
              "ولم تُدرج أخبار قديمة أو صور غير موثقة. "
              if fresh_candidates is not None else
              ("هذا تقرير حالة تشغيل لا يحمل أخبارًا أو صورًا غير موثقة؛ "
@@ -880,7 +892,9 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
         body_text=(("نشرة حالة الساعة المكتملة مرفقة في Word." if hourly
                     else "نشرة الحالة النصف ساعية مرفقة في Word.")
                    + (f" شرط 10 أخبار جديدة من 10 ناشرين لم يتحقق؛ "
-                      f"العدد المقبول {fresh_candidates} فقط، وليس عشرة. "
+                      f"المرشحون {fresh_candidates}، والصور المؤكدة "
+                      + (str(original_image_verified) if original_image_verified
+                         is not None else "لم تُستكمل") + ". "
                       if fresh_candidates is not None else "")
                    + (" بعض المواد المطابقة معلّقة لعدم توافر صور ناشرين أصلية؛"
                       " لا تُعد أخبارًا مُسلّمة." if pending else
@@ -897,8 +911,11 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             "waiting_articles": waiting_articles,
             "source_limited": bool(degraded or pending or fresh_candidates is not None),
             **({"hourly_target_minimum": TARGET_MIN_ARTICLES,
-                "hourly_actual_verified": fresh_candidates,
-                "hourly_target_shortfall": TARGET_MIN_ARTICLES - fresh_candidates}
+                "hourly_news_candidates": fresh_candidates,
+                "hourly_actual_verified": original_image_verified,
+                "hourly_target_shortfall": TARGET_MIN_ARTICLES - (
+                    original_image_verified if original_image_verified is not None
+                    else fresh_candidates)}
                if fresh_candidates is not None else {}),
             "smtp_accepted": True}
 
@@ -1094,7 +1111,8 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     window=window, start=start, now=now, output=output,
                     held_articles=len(stories), waiting_articles=waiting,
                     held_items=held_items, hourly=hourly_enabled,
-                    **({"fresh_candidates": 0} if hourly_enabled else {}))
+                    **({"fresh_candidates": strict_hourly_audit["fresh_distinct_candidates"],
+                        "original_image_verified": 0} if hourly_enabled else {}))
             # Only successfully captured/embedded originals enter private CAS.
             # An RSS candidate is NOT enough: the actual original publisher
             # photo + Word digest gate has already run. If some photos failed,
@@ -1108,7 +1126,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     ledger=ledger, recipient=recipient, sender=sender,
                     password=password, state=state, config=config, health=health,
                     window=window, start=start, now=now, output=output,
-                    hourly=True, fresh_candidates=verified_count,
+                    hourly=True,
+                    fresh_candidates=strict_hourly_audit["fresh_distinct_candidates"],
+                    original_image_verified=verified_count,
                     held_articles=held_count, held_items=held_items,
                     waiting_articles=waiting)
             # The owner forbids recovering old news to meet the hourly quota.
