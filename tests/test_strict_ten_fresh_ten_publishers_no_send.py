@@ -8,7 +8,7 @@ from email.utils import format_datetime
 from monitor import article_id
 from rasd_strict_hourly_ten_source_gate import (
     audit_fresh_distinct_sources, last_completed_hour,
-    originals_report_ready,
+    originals_report_ready, originals_selection_valid,
 )
 
 NOW=datetime(2026,11,21,18,7,tzinfo=timezone.utc)
@@ -42,12 +42,12 @@ class TenFreshDifferentNewsrooms(unittest.TestCase):
         self.assertFalse(result["original_images_verified"])
         self.assertFalse(result["smtp_sent"])
 
-    def test_only_nine_real_publishers_is_hold_no_partial_report(self):
+    def test_only_nine_real_publishers_are_retained_for_honest_partial_word(self):
         feeds,items=fixture(9)
         result=audit_fresh_distinct_sources(items,feeds,NOW)
         self.assertEqual(result["fresh_distinct_candidates"],9)
         self.assertEqual(result["status"],"HOLD_NOT_ENOUGH_FRESH_INDEPENDENT_SOURCES")
-        self.assertEqual(result["selected"],[])
+        self.assertEqual(len(result["selected"]),9)
 
     def test_old_news_must_not_be_imported_to_fill_ten(self):
         feeds,items=fixture()
@@ -55,7 +55,7 @@ class TenFreshDifferentNewsrooms(unittest.TestCase):
         result=audit_fresh_distinct_sources(items,feeds,NOW)
         self.assertEqual(result["fresh_distinct_candidates"],9)
         self.assertEqual(result["rejection_counts"]["not_in_last_completed_hour"],1)
-        self.assertEqual(result["selected"],[])
+        self.assertEqual(len(result["selected"]),9)
 
     def test_unzoned_publisher_time_is_not_a_fresh_news_proof(self):
         feeds,items=fixture()
@@ -89,7 +89,7 @@ class TenFreshDifferentNewsrooms(unittest.TestCase):
         items[0]["updated_at"]=format_datetime(END-timedelta(minutes=5))
         result=audit_fresh_distinct_sources(items,feeds,NOW)
         self.assertEqual(result["fresh_distinct_candidates"],9)
-        self.assertEqual(result["selected"],[])
+        self.assertEqual(len(result["selected"]),9)
 
     def test_wrong_host_or_recycled_id_cannot_forge_a_publisher(self):
         feeds,items=fixture()
@@ -97,7 +97,7 @@ class TenFreshDifferentNewsrooms(unittest.TestCase):
         items[3]["id"]=article_id(items[3]["url"])
         result=audit_fresh_distinct_sources(items,feeds,NOW)
         self.assertEqual(result["rejection_counts"]["unverified_source"],1)
-        self.assertEqual(result["selected"],[])
+        self.assertEqual(len(result["selected"]),9)
 
     def test_one_missing_original_screenshot_fails_final_ten(self):
         feeds,items=fixture()
@@ -117,6 +117,33 @@ class TenFreshDifferentNewsrooms(unittest.TestCase):
         items[0]["published"]=format_datetime(END)
         self.assertEqual(audit_fresh_distinct_sources(
             items,feeds,NOW)["fresh_distinct_candidates"],9)
+
+    def test_three_distinct_original_publishers_can_appear_in_partial_word(self):
+        feeds,items=fixture(3)
+        audit=audit_fresh_distinct_sources(items,feeds,NOW)
+        self.assertEqual(audit["status"],"HOLD_NOT_ENOUGH_FRESH_INDEPENDENT_SOURCES")
+        self.assertEqual(len(audit["selected"]),3)
+        delivered=[{**x,"evidence_image_path":"fixture-only.jpg"}
+                   for x in audit["selected"]]
+        self.assertTrue(originals_selection_valid(audit,delivered))
+        self.assertFalse(originals_report_ready(audit,delivered))
+        self.assertEqual(
+            sum(v["outcome"]=="accepted_candidate"
+                for v in audit["candidate_decisions"]),3)
+
+    def test_genuine_cairo_original_pubtime_is_preserved_and_conflict_held(self):
+        feeds,items=fixture()
+        items[0]["published_at_cairo"]="2026-11-21 19:45 EET"
+        audit=audit_fresh_distinct_sources(items,feeds,NOW)
+        self.assertEqual(audit["fresh_distinct_candidates"],10)
+        self.assertEqual(audit["selected"][0]["published_at_cairo"][:16],
+                         "2026-11-21 19:45")
+        items[0]["published_at_cairo"]="2026-11-21 18:45 EET"
+        reject=audit_fresh_distinct_sources(items,feeds,NOW)
+        self.assertEqual(reject["rejection_counts"]["wrong_original_date"],1)
+        self.assertEqual(reject["fresh_distinct_candidates"],9)
+        self.assertIn("published_cairo_utc_conflict",
+                      [x["outcome"] for x in reject["candidate_decisions"]])
 
     def test_clock_daylight_offset_is_utc_stable(self):
         self.assertEqual(last_completed_hour(
