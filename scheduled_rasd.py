@@ -752,7 +752,8 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
                                output: Path, held_articles: int = 0,
                                waiting_articles: int = 0,
                                held_items: list[dict] | None = None,
-                               hourly: bool = False) -> dict:
+                               hourly: bool = False,
+                               fresh_candidates: int | None = None) -> dict:
     """One Word status per eligible empty 30m slot, not a fabricated news report.
 
     Distinct FROM the 22:00 news rollup: no 'interval_item' kind is written
@@ -764,6 +765,10 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
     if (type(held_articles) is not int or not 0 <= held_articles <= 200 or
             type(waiting_articles) is not int or not 0 <= waiting_articles <= 200):
         raise RuntimeError("interval_status_invalid_hold_count")
+    if fresh_candidates is not None and (
+            not hourly or type(fresh_candidates) is not int or
+            not 0 <= fresh_candidates < TARGET_MIN_ARTICLES):
+        raise RuntimeError("hourly_10_source_status_invalid_count")
     for held_item in (held_items or []):
         validate_story(held_item, config)
         if not isinstance(held_item.get("reason"), str):
@@ -804,7 +809,9 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             "verified_links": count if row["status"] == "ok" else 0,
             "error_type": None if row["status"] == "ok" else "original_feed_unavailable",
         })
-    title = (("رصد | تقرير حالة المتابعة الساعية | " if hourly
+    title = (("رصد | تقرير حالة: لم يكتمل شرط 10 أخبار من 10 مصادر | "
+              if fresh_candidates is not None else
+              "رصد | تقرير حالة المتابعة الساعية | " if hourly
               else "رصد | تقرير حالة المتابعة النصف ساعية | ")
              + cairo_display_time(start))
     pending = held_articles + waiting_articles
@@ -826,7 +833,13 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             " عدد الروابط لا يعني شمول السوق."
         ),
         "limitations": (
-            ("هذا تقرير حالة تشغيل لا يحمل أخبارًا أو صورًا غير موثقة؛ "
+            (f"تقرير حالة: تحقق {fresh_candidates} فقط من أصل عشرة أخبار "
+             "مستقلة من عشرة ناشرين، منشورة خلال الساعة المكتملة "
+             "وبما يطابق شروط الأدلة الأصلية المتاحة؛ لم تتحقق "
+             "عتبة التقرير الإخباري، ولذلك لم تُرسل أخبار "
+             "قديمة أو تقرير مصور ناقص. "
+             if fresh_candidates is not None else
+             "هذا تقرير حالة تشغيل لا يحمل أخبارًا أو صورًا غير موثقة؛ "
              f"ظهرت {pending} مواد مطابقة غير مُسلّمة بسبب تعذّر "
              "توثيق صور صفحات الناشرين الأصلية؛ ستظل قابلة لإعادة الفحص. "
              if pending else
@@ -836,6 +849,9 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             " عدّاد روابط RSS يعبّر عن عناصر التغذيات المقروءة فعلًا"
             " في هذه الدورة، وليس عدد الأخبار المتعلقة بالوزارة أو"
             " دليلًا على اكتمال سوق الأخبار."
+            + (f" تعذّر إثبات {held_articles} صور ناشرين أصلية، "
+               "ولا تُحسب تقاريرًا مسلّمة." if fresh_candidates is not None
+               and held_articles else "")
             + (f" تعذّر فحص {degraded} مصادر أصلية؛ التغطية جزئية وليست"
                " شهادة خلو المصادر من الأخبار." if degraded else "")
         ),
@@ -864,6 +880,9 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
         subject=title, key=key,
         body_text=(("نشرة حالة الساعة المكتملة مرفقة في Word." if hourly
                     else "نشرة الحالة النصف ساعية مرفقة في Word.")
+                   + (f" شرط 10 أخبار جديدة من 10 ناشرين لم يتحقق؛ "
+                      f"العدد المقبول {fresh_candidates} فقط، وليس عشرة. "
+                      if fresh_candidates is not None else "")
                    + (" بعض المواد المطابقة معلّقة لعدم توافر صور ناشرين أصلية؛"
                       " لا تُعد أخبارًا مُسلّمة." if pending else
                       " لا توجد أخبار جديدة موثقة مُسلّمة في هذه الدورة.")
@@ -871,11 +890,17 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
     )
     ledger.mark_smtp_accepted(key, receipt)
     return {"status": (
+                "hourly_minimum_10_unmet_status_smtp_accepted_unconfirmed_inbox"
+                if fresh_candidates is not None else
                 "interval_evidence_hold_status_smtp_accepted_unconfirmed_inbox"
                 if pending else "interval_status_smtp_accepted_unconfirmed_inbox"),
             "items": 0, "held_articles": held_articles,
             "waiting_articles": waiting_articles,
-            "source_limited": bool(degraded or pending),
+            "source_limited": bool(degraded or pending or fresh_candidates is not None),
+            **({"hourly_target_minimum": TARGET_MIN_ARTICLES,
+                "hourly_actual_verified": fresh_candidates,
+                "hourly_target_shortfall": TARGET_MIN_ARTICLES - fresh_candidates}
+               if fresh_candidates is not None else {}),
             "smtp_accepted": True}
 
 
