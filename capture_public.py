@@ -178,7 +178,16 @@ def accept_staged_image(staged: Path, destination: Path, *,
     Validation errors never overwrite an existing screenshot at destination.
     Staging files are caller-owned and may be discarded on failure.
     """
-    if staged.stat().st_size < 8000:
+    try:
+        size = staged.stat().st_size
+    except OSError:
+        return {"ok": False, "reason": "invalid_image"}
+    # JPEG byte count is NOT equivalent to readable content. Legitimate
+    # sparse publisher originals can compress below 8 KB, particularly
+    # text-first articles. Keep a 3 KB transport floor, then validate
+    # dimensions, contrast, image-load evidence and original H1 separately.
+    # A publisher refusal/blank media remains HOLD regardless of file size.
+    if size < 3000:
         return {"ok": False, "reason": "screenshot_too_small"}
     quality = image_quality(staged, publisher=publisher)
     if not quality["accepted"]:
