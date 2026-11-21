@@ -109,6 +109,44 @@ class NewHourlySentGridDailyCompatibility(unittest.TestCase):
             self.assertTrue(imap.selected_readonly)
             self.assertEqual(imap.searched, [message_id])
 
+    def test_verified_gmail_sent_originals_generate_volume_preview_without_smtp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw, sources, digests = self.build_hourly(root, count=7)
+            message_id = "<rasd-" + "d"*24 + "@gmail.com>"
+            imap = FakeSent({
+                message_id: MergeActualDeliveredWord().mail(message_id, raw)})
+            state = {"entries": {
+                row["id"]: {
+                    "kind": "interval_item", "status": "smtp_accepted",
+                    "news": row, "message_id": message_id}
+                for row in sources
+            }}
+            volumes, original_proofs = consolidate_sent_words(
+                sources, state, root / "preview",
+                sender=SENDER, recipient=RECIPIENT,
+                app_password="offline-only",
+                start="22:00 أمس", end="22:00 اليوم",
+                title="رصد | التقرير اليومي — لا إرسال",
+                config={"feeds": [{"id": "alborsa"}]},
+                client_factory=lambda: imap,
+                volume_preflight_only=True)
+            self.assertEqual(sum(v["count"] for v in volumes), 7)
+            self.assertEqual([i for v in volumes for i in v["article_ids"]],
+                             [x["id"] for x in sources])
+            self.assertEqual([sha for v in volumes for sha in v["sha256"]],
+                             [x["sha256"] for x in digests])
+            self.assertEqual(original_proofs, digests)
+            self.assertTrue(all(
+                word_images_match_capture_digests(
+                    volume["path"],
+                    original_proofs[sum(v["count"] for v in volumes[:n]):
+                                    sum(v["count"] for v in volumes[:n+1])])
+                for n, volume in enumerate(volumes)))
+            self.assertTrue(imap.selected_readonly)
+            self.assertEqual(imap.searched, [message_id])
+
+
     def test_title_url_date_or_source_mismatch_never_enters_daily(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
