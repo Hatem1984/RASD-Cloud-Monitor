@@ -16,7 +16,7 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit
 
 from event_identity import same_event
-from monitor import article_id, canonical_url
+from monitor import article_id
 
 TARGET_MIN_ARTICLES = 10
 TARGET_MIN_PUBLISHERS = 10
@@ -110,8 +110,7 @@ def audit_fresh_distinct_sources(
                   and not urlsplit(url).username
                   and not urlsplit(url).password
                   and host in by_name[source]
-                  and article_id(url)==item_id
-                  and canonical_url(url)==url)
+                  and article_id(url)==item_id)
         except (ValueError,TypeError):
             safe=False
         if not safe:
