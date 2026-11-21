@@ -17,6 +17,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit, quote
 from urllib.request import Request, build_opener
 
 from monitor import RejectRedirect, _ministry_term_present, article_id
+from rasd_relevance_scope import contextual_title_matches, scope_active
 
 ALMAL_ORIGIN = "https://almalnews.com/"
 ALMAL_HOSTS = frozenset({"almalnews.com", "www.almalnews.com"})
@@ -95,7 +96,8 @@ class PublisherPage(HTMLParser):
 
 
 def candidate_links(homepage: bytes, keywords: list[str],
-                    *, base: str = ALMAL_ORIGIN, limit: int = 16) -> list[str]:
+                    *, base: str = ALMAL_ORIGIN, limit: int = 16,
+                    contextual_scope: bool = False) -> list[str]:
     if type(limit) is not int or not 1 <= limit <= 20 or len(homepage) > MAX_INDEX_BYTES:
         raise ValueError("publisher_candidate_limit_invalid")
     page = PublisherPage()
@@ -111,13 +113,15 @@ def candidate_links(homepage: bytes, keywords: list[str],
                           split_url.fragment))
         if (url not in out and permitted(url) and
                 ARTICLE_PATH.match(urlsplit(url).path)
-                and _ministry_term_present(anchor, keywords)):
+                and (_ministry_term_present(anchor, keywords) or
+                     (contextual_scope and contextual_title_matches(anchor)))):
             out.append(url)
     return out[:limit]
 
 
 def original_story(url: str, data: bytes, keywords: list[str],
-                   *, now: datetime, hours: int = 72) -> dict:
+                   *, now: datetime, hours: int = 72,
+                   contextual_scope: bool = False) -> dict:
     if not permitted(url) or not ARTICLE_PATH.match(urlsplit(url).path):
         raise ValueError("publisher_article_url_invalid")
     if not isinstance(data, bytes) or not 1 <= len(data) <= MAX_PAGE_BYTES:
@@ -128,7 +132,8 @@ def original_story(url: str, data: bytes, keywords: list[str],
     page.feed(data.decode("utf-8", "replace"))
     title = " ".join(" ".join(page.headline).split())
     if (not title or len(title) > 450 or
-            not _ministry_term_present(title, keywords)):
+            not (_ministry_term_present(title, keywords) or
+                 (contextual_scope and contextual_title_matches(title)))):
         raise ValueError("publisher_original_headline_unrelated")
     if len(page.published) != 1:
         raise ValueError("publisher_published_meta_missing_or_ambiguous")
@@ -145,7 +150,9 @@ def original_story(url: str, data: bytes, keywords: list[str],
         "id": article_id(url), "headline": title,
         "source": "Al Mal native publisher HTML",
         "url": url, "published": format_datetime(when),
-        "publisher_excerpt": "", "match_origin": "original_page_headline",
+        "publisher_excerpt": "", "match_origin": (
+            "original_page_headline" if _ministry_term_present(title, keywords)
+            else "contextual_topic_title"),
     }
 
 
@@ -154,14 +161,17 @@ def research(*, now: datetime, fetch=download) -> dict:
     from pathlib import Path
     import json
     cfg=json.loads(Path("sources_newsroom_active.json").read_text("utf-8"))
-    links=candidate_links(fetch(ALMAL_ORIGIN,MAX_INDEX_BYTES),cfg["keywords"])
+    approved_scope=scope_active(cfg)
+    links=candidate_links(fetch(ALMAL_ORIGIN,MAX_INDEX_BYTES),cfg["keywords"],
+                          contextual_scope=approved_scope)
     accepted = []
     held=0
     reasons={}
     for url in links:
         try:
             accepted.append(original_story(
-                url,fetch(url,MAX_PAGE_BYTES),cfg["keywords"],now=now))
+                url,fetch(url,MAX_PAGE_BYTES),cfg["keywords"],now=now,
+                contextual_scope=approved_scope))
         except (OSError, TimeoutError, RuntimeError, ValueError) as error:
             held+=1
             from urllib.error import HTTPError, URLError
