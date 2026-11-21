@@ -21,7 +21,7 @@ from docx import Document
 from cloud_proof_report import word_images_match_capture_digests
 from daily_report import render_docx
 
-MAX_STORIES = 180
+MAX_STORIES = 360
 DEFAULT_MAX_WORD_BYTES = 7_500_000
 MAX_DAILY_VOLUMES = 32
 DOCUMENT_OVERHEAD_RESERVE = 750_000
