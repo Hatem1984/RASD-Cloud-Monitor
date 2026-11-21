@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from math import ceil
+import re
 from pathlib import Path
 
 from docx import Document
