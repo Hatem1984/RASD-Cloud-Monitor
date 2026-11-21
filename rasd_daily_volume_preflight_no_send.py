@@ -162,6 +162,7 @@ def _report(group: list, title: str, start: str, end: str,
             part: int, parts: int) -> dict:
     return {
         "title": title + f" | الجزء {part} من {parts}",
+        "volume_label": f"الجزء {part} من {parts}",
         "display_window_start": start,
         "display_window_end": end,
         "ministry_media_grid": True,
