@@ -162,12 +162,15 @@ def _publisher_timestamp(node) -> tuple[datetime, str] | None:
     return timestamp, format_datetime(timestamp)
 
 
-def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hours=72, *, require_complete_items=False) -> tuple[int, list[dict]]:
+def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hours=72, *, require_complete_items=False, expanded_scope: bool = False) -> tuple[int, list[dict]]:
     """Match saved Ministry phrases in native publisher title OR excerpt.
 
     RSS is a bounded CURRENT feed, not a full publisher archive. Only
     explicitly timezone-aware publication dates may become report stories.
     """
+    if type(expanded_scope) is not bool:
+        raise ValueError("context_scope_flag_invalid")
+    from rasd_relevance_scope import contextual_title_matches
     if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
         raise ValueError("DTD_or_entity_forbidden")
     root = ET.fromstring(data)
@@ -216,7 +219,9 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
             description = _native_text(
                 (item.findtext("description") or "")[:3500])[:850]
             relevant = (_ministry_term_present(title[:300], keywords)
-                        or _ministry_term_present(description, keywords))
+                        or _ministry_term_present(description, keywords)
+                        or (expanded_scope and contextual_title_matches(
+                            title[:300], description)))
             if feed.get("id") == "masrawy" and not relevant:
                 verified = _publisher_timestamp(item)
                 if verified is not None:
@@ -260,7 +265,8 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
         description = _native_text((node.findtext("description") or "")[:3500])[:850]
         title_match = _ministry_term_present(title, keywords)
         description_match = _ministry_term_present(description, keywords)
-        if not title_match and not description_match:
+        contextual = expanded_scope and contextual_title_matches(title, description)
+        if not title_match and not description_match and not contextual:
             continue
         dated = publisher_timestamp(node)
         if dated is None:
@@ -277,7 +283,9 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
             "id": item_id, "source": feed["name"],
             "headline": title, "url": url, "published": published,
             "publisher_excerpt": description,
-            "match_origin": "title" if title_match else "publisher_description",
+            "match_origin": ("title" if title_match else
+                             "publisher_description" if description_match else
+                             "contextual_topic_title"),
         })
     return eligible, matched
 
@@ -306,6 +314,8 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
     if checked.tzinfo is None or checked.utcoffset() is None:
         raise ValueError("naive_monitor_clock_forbidden")
     checked = checked.astimezone(timezone.utc)
+    from rasd_relevance_scope import scope_active
+    expanded_scope = scope_active(config)
     sources = []
     discovered = []
     ids = set()
@@ -320,7 +330,8 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
                 data = fetch(feed["url"], config["max_feed_bytes"])
                 count, matches = parse_rss(data, feed, config["keywords"], checked,
                                            config["recent_hours"],
-                                           require_complete_items=require_complete_items)
+                                           require_complete_items=require_complete_items,
+                                           expanded_scope=expanded_scope)
                 record.update(
                     status="ok", verified_links=count,
                     headline_matches=len(matches),
@@ -410,6 +421,10 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
         "native_description_matches": sum(
             row.get("match_origin") == "publisher_description"
             for row in discovered),
+        "contextual_topic_matches_unverified_images": sum(
+            row.get("match_origin") == "contextual_topic_title"
+            for row in discovered),
+        "owner_context_scope_enabled": expanded_scope,
         "rss_feed_is_exhaustive_archive": False,
         "sources": sources,
         "matched_public_articles": discovered[:article_limit],
