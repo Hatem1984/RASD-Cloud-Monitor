@@ -125,32 +125,49 @@ class HourlyProductionNoSend(unittest.TestCase):
         secrets.assert_not_called()
         discover.assert_not_called()
 
-    def test_seven_from_one_publisher_is_one_source_and_shortfall_status(self):
-        seven = [item(i) for i in range(7)]
-        ledger = MagicMock()
-        ledger.read.return_value = (ledger_state(), "sha")
-        def discover(config, now, *, allow_degraded, source_records, published_before):
-            self.assertEqual(published_before.isoformat(), "2026-11-19T18:00:00+00:00")
-            self.assertTrue(allow_degraded)
-            source_records.extend({"feed_id": f["id"], "status": "ok",
-                                   "verified_links": 0} for f in config["feeds"])
+    def test_seven_from_one_publisher_become_one_genuine_partial_word(self):
+        seven=[item(i) for i in range(7)]
+        ledger=MagicMock()
+        ledger.read.return_value=(ledger_state(),"sha")
+        def discover(config,now,*,allow_degraded,source_records,published_before):
+            self.assertEqual(published_before.isoformat(),
+                             "2026-11-19T18:00:00+00:00")
+            source_records.extend({
+                "feed_id":f["id"],"status":"ok","verified_links":0
+            } for f in config["feeds"])
             return seven
-        with patch.object(worker, "require_github_scheduler"), \
-             patch.object(worker, "protected_credentials",
-                          return_value=("sender@gmail.com", "owner@example.org", "pw", ledger)), \
-             patch.object(worker, "discover_interval_news", side_effect=discover), \
-             patch.object(worker, "send_empty_interval_status",
-                          return_value={"status":"strict_shortfall","smtp_accepted":False}) as status, \
-             patch.object(worker, "prepare_source_limited_verified_word") as prepare, \
-             patch.object(worker, "reserve_hourly_originals") as reserve, \
-             patch.object(worker, "send_one_word") as sent:
-            outcome = worker.run_scheduled("interval", self.clock)
-        self.assertEqual(outcome["status"],"strict_shortfall")
-        self.assertEqual(status.call_args.kwargs["fresh_candidates"],1)
-        self.assertTrue(status.call_args.kwargs["hourly"])
-        prepare.assert_not_called()
-        reserve.assert_not_called()
-        sent.assert_not_called()
+        def prepare(rows,config,out,**kwargs):
+            self.assertEqual(len(rows),1)
+            self.assertEqual(kwargs["report_kind"],"hourly")
+            return (Path(tempfile.gettempdir())/"offline-one.docx",
+                    [{**rows[0],"evidence_image_path":"synthetic-only.jpg"}],
+                    0,True)
+        with patch.object(worker,"require_github_scheduler"), \
+             patch.object(worker,"protected_credentials",
+                          return_value=("sender@gmail.com","owner@example.org",
+                                        "pw",ledger)), \
+             patch.object(worker,"discover_interval_news",side_effect=discover), \
+             patch.object(worker,"prepare_source_limited_verified_word",
+                          side_effect=prepare) as prepared, \
+             patch.object(worker,"send_empty_interval_status") as status, \
+             patch.object(worker,"reserve_hourly_originals",
+                          return_value=hourly_slot_key("2026-11-19T18:00Z")) as reserve, \
+             patch.object(worker,"send_one_word",
+                          return_value="<rasd-test-one@gmail.com>") as sent:
+            result=worker.run_scheduled("interval",self.clock)
+        self.assertEqual(result["items"],1)
+        self.assertEqual(result["hourly_target_minimum"],10)
+        self.assertEqual(result["hourly_target_shortfall"],9)
+        self.assertEqual(result["status"],
+                         "hourly_partial_smtp_accepted_unconfirmed_inbox")
+        self.assertIn("1 أخبار موثقة من أصل 10",
+                      sent.call_args.kwargs["subject"])
+        prepared.assert_called_once()
+        status.assert_not_called()
+        reserve.assert_called_once()
+        sent.assert_called_once()
+        ledger.mark_smtp_accepted_many.assert_called_once()
+        ledger.mark_smtp_accepted.assert_called_once()
 
     def test_ten_fresh_publisher_stories_use_same_word_layout_and_one_mail(self):
         import json
