@@ -1153,6 +1153,30 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 no_news = True
             else:
                 title = "رصد | التقرير المجمع للأخبار المرسلة | " + day_label
+                if os.environ.get("RASD_DAILY_VOLUME_DELIVERY_ENABLED") == "true":
+                    # Owner approved numbered parts, but this release
+                    # remains disabled unless an explicit variable is set.
+                    # Never claim unverified replacement pictures or
+                    # restart SMTP automatically after uncertain receipt.
+                    if os.environ.get("RASD_DAILY_SENT_ARCHIVE_ENABLED") != "true":
+                        raise RuntimeError("daily_volume_requires_original_sent_archive")
+                    from daily_sent_consolidator import consolidate_sent_words
+                    from rasd_daily_volume_delivery import deliver_numbered_daily_volumes
+                    volumes, proof = consolidate_sent_words(
+                        stories, state, output, sender=sender,
+                        recipient=recipient, app_password=password,
+                        approved_copy=approved_report_copy(sender, recipient),
+                        title=title,
+                        start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
+                        end=end_label, config=config,
+                        volume_preflight_only=True)
+                    if sum(v["count"] for v in volumes) != len(stories) or (
+                            sum(len(v["sha256"]) for v in volumes) != len(proof)):
+                        raise RuntimeError("daily_volume_incomplete_originals_hold")
+                    return deliver_numbered_daily_volumes(
+                        volumes, ledger=ledger, master_key=rollup_key,
+                        sender=sender, recipient=recipient, password=password,
+                        title=title, send_one_word=send_one_word)
                 try:
                     if os.environ.get("RASD_DAILY_SENT_ARCHIVE_ENABLED") == "true":
                         # Production daily report is ONE consolidated copy
