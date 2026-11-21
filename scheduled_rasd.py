@@ -746,7 +746,8 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
                                window: str, start: datetime, now: datetime,
                                output: Path, held_articles: int = 0,
                                waiting_articles: int = 0,
-                               held_items: list[dict] | None = None) -> dict:
+                               held_items: list[dict] | None = None,
+                               hourly: bool = False) -> dict:
     """One Word status per eligible empty 30m slot, not a fabricated news report.
 
     Distinct FROM the 22:00 news rollup: no 'interval_item' kind is written
@@ -769,7 +770,10 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             [row.get("feed_id") for row in health] != expected_ids or
             any(row.get("status") not in ("ok", "failed") for row in health)):
         raise RuntimeError("source_health_metadata_missing_or_untrusted")
-    cutoff = start + timedelta(minutes=30)
+    if hourly and (hourly_slot_key(window) != hourly_slot_key(
+            hourly_period(now)[2]) or start != hourly_period(now)[0]):
+        raise RuntimeError("hourly_status_window_identity_hold")
+    cutoff = start + timedelta(hours=1) if hourly else start + timedelta(minutes=30)
     for entry in state["entries"].values():
         if not isinstance(entry, dict) or entry.get("kind") != "interval_item":
             continue
@@ -795,12 +799,13 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             "verified_links": count if row["status"] == "ok" else 0,
             "error_type": None if row["status"] == "ok" else "original_feed_unavailable",
         })
-    title = ("رصد | تقرير حالة المتابعة النصف ساعية | "
+    title = (("رصد | تقرير حالة المتابعة الساعية | " if hourly
+              else "رصد | تقرير حالة المتابعة النصف ساعية | ")
              + cairo_display_time(start))
     pending = held_articles + waiting_articles
     report = {
         "title": title, "display_window_start": cairo_display_time(start),
-        "display_window_end": cairo_display_time(now),
+        "display_window_end": cairo_display_time(cutoff if hourly else now),
         "coverage": ("ORIGINAL_IMAGE_HOLD_NO_VERIFIED_DELIVERY" if pending
                      else "SOURCE_LIMITED_NO_VERIFIED_NEW_DELIVERY" if degraded
                      else "NO_VERIFIED_NEW_DELIVERY"),
@@ -808,9 +813,12 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
         "articles": [], "sources": source_rows,
         "held_candidates": held_items or [],
         "scope_note": (
-            f"{len(config['feeds'])} مصدرًا من قنوات RSS المفعّلة"
-            " ضمن سجل بحث يضم 100 مصدرًا؛ والبقية قيد التأهيل وليست"
-            " مرصودة تلقائيًا. عدد الروابط لا يعني شمول السوق."
+            f"{len(config['feeds'])} مصدرًا من قنوات RSS المهيأة"
+            + (f" و{len(collection_origins(config))-len(config['feeds'])}"
+               " من مصادر صفحات الناشرين الأصلية" if
+               len(collection_origins(config)) > len(config['feeds']) else "")
+            + "؛ المصادر المرشحة الأخرى ليست مرصودة تلقائيًا."
+            " عدد الروابط لا يعني شمول السوق."
         ),
         "limitations": (
             ("هذا تقرير حالة تشغيل لا يحمل أخبارًا أو صورًا غير موثقة؛ "
@@ -827,7 +835,8 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
                " شهادة خلو المصادر من الأخبار." if degraded else "")
         ),
     }
-    doc = output / "RASD-Half-Hour-No-New-Verified-News-Status.docx"
+    doc = output / ("RASD-Hourly-No-New-Verified-News-Status.docx" if hourly
+                    else "RASD-Half-Hour-No-New-Verified-News-Status.docx")
     render_docx(report, doc)
     from docx import Document
     if (not doc.is_file() or
@@ -835,7 +844,9 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             Document(doc).inline_shapes):
         doc.unlink(missing_ok=True)
         raise RuntimeError("interval_status_word_integrity_hold")
-    key = digest_key("interval-status:" + window)
+    # The zero-news hour uses the SAME CAS slot as any hourly news
+    # dispatch; no dual status+news delivery by redundant schedulers.
+    key = hourly_slot_key(window) if hourly else digest_key("interval-status:" + window)
     if key in state["entries"]:
         return {"status": "interval_status_already_reserved_or_sent",
                 "smtp_accepted": False}
@@ -846,7 +857,8 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
     receipt = send_one_word(
         doc, sender=sender, recipient=recipient, password=password,
         subject=title, key=key,
-        body_text=("نشرة الحالة النصف ساعية مرفقة في Word."
+        body_text=(("نشرة حالة الساعة المكتملة مرفقة في Word." if hourly
+                    else "نشرة الحالة النصف ساعية مرفقة في Word.")
                    + (" بعض المواد المطابقة معلّقة لعدم توافر صور ناشرين أصلية؛"
                       " لا تُعد أخبارًا مُسلّمة." if pending else
                       " لا توجد أخبار جديدة موثقة مُسلّمة في هذه الدورة.")
@@ -965,13 +977,15 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                           flush=True)
                 if mode == "interval_owner_once":
                     return {"status": "no_new_verified_news", "smtp_accepted": False}
-                if os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true":
+                if (not hourly_enabled and
+                        os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true"):
                     return smart_interval_no_mail(
                         config=config, health=health, window=window)
                 return send_empty_interval_status(
                     ledger=ledger, recipient=recipient, sender=sender,
                     password=password, state=state, config=config, health=health,
-                    window=window, start=start, now=now, output=output)
+                    window=window, start=start, now=now, output=output,
+                    hourly=hourly_enabled)
             # Do not fail all delivery when an irregular GitHub cron lets
             # more than one Word's worth of newly published stories accumulate.
             # Oldest accepted publication goes first so backlog cannot age out
@@ -1024,7 +1038,8 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         "smtp_accepted": False,
                         "coverage_status": "SOURCE_ACCESS_HOLD_NO_DELIVERY",
                     }
-                if os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true":
+                if (not hourly_enabled and
+                        os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true"):
                     return smart_interval_no_mail(
                         config=config, health=health, window=window,
                         held_articles=len(stories), waiting_articles=waiting)
@@ -1033,7 +1048,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     password=password, state=state, config=config, health=health,
                     window=window, start=start, now=now, output=output,
                     held_articles=len(stories), waiting_articles=waiting,
-                    held_items=held_items)
+                    held_items=held_items, hourly=hourly_enabled)
             # Only successfully captured/embedded originals enter private CAS.
             # A volume target is diagnostic only: never insert invented extras.
             hourly_in_period = sum(
