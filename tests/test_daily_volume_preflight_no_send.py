@@ -131,6 +131,8 @@ class BoundedLosslessDailyVolumesNoSend(unittest.TestCase):
             articles,proof=self.make_archive(root,240,noisy=False)
             volumes=self.package(articles,proof,root/"parts")
             self.assertEqual(sum(v["count"] for v in volumes),240)
+            self.assertTrue(all(v["count"]<=180 for v in volumes))
+            self.assertGreaterEqual(len(volumes),2)
             self.assertEqual([i for v in volumes for i in v["article_ids"]],
                              [row["id"] for row in articles])
             self.assertEqual(len(set(i for v in volumes for i in v["article_ids"])),240)
