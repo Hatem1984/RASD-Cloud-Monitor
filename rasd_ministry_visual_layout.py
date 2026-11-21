@@ -375,6 +375,74 @@ def _card(cell, item: dict, index: int, *, wide: bool = False) -> None:
 
 
 
+def render_ministry_hourly_status_word(report: dict, destination: Path) -> None:
+    """Same RASD navy/gold Word cover when 0 publisher JPEGs pass hourly QA.
+
+    RSS "links scanned" are NOT accepted/photographed news. A source/image
+    refusal cannot be presented as evidence of zero published articles.
+    """
+    accepted={
+        "ORIGINAL_IMAGE_HOLD_NO_VERIFIED_DELIVERY",
+        "SOURCE_LIMITED_NO_VERIFIED_NEW_DELIVERY",
+        "NO_VERIFIED_NEW_DELIVERY",
+    }
+    if (report.get("ministry_media_grid") is not True or
+            report.get("report_period")!="interval" or
+            report.get("report_kind")!="hourly" or
+            report.get("coverage") not in accepted or
+            report.get("articles")!=[] or
+            type(report.get("verified_links")) is not int or
+            report["verified_links"]<0 or
+            not isinstance(report.get("sources"),list)):
+        raise ValueError("rasd_hourly_status_visual_identity_hold")
+
+    doc=Document()
+    section=doc.sections[0]
+    section.page_height=Cm(29.7)
+    section.page_width=Cm(21)
+    section.top_margin=Cm(1.35)
+    section.bottom_margin=Cm(1.35)
+    section.left_margin=Cm(1.4)
+    section.right_margin=Cm(1.4)
+    section.header_distance=Cm(0.65)
+    section.footer_distance=Cm(0.7)
+    section.different_first_page_header_footer=True
+    _section_header(section)
+    doc.styles["Normal"].font.name="DejaVu Sans"
+    doc.styles["Normal"].font.size=Pt(10)
+    start=report["display_window_start"]
+    end=report["display_window_end"]
+    _cover(doc,date_label=end,period_label=start+" إلى "+end,
+           stories=0,sites=0,report_period="interval",report_kind="hourly")
+
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,"رصد | تقرير حالة الساعة المكتملة",size=18,bold=True)
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,report["title"],size=11,bold=True)
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,"الصور الأصلية المقبولة والمرفقة: 0. "
+         "لا يعني ذلك عدم نشر أخبار لدى جميع الناشرين.",size=11)
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,"حالة المصادر",size=14,bold=True)
+    failed=sum(x.get("status")!="ok" for x in report["sources"])
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,f"المصادر المتاحة: {len(report['sources'])-failed} "
+         f"من {len(report['sources'])}. المتعذرة: {failed}.",size=11)
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,f"عناصر RSS التي أُتيح فحصها: {report['verified_links']}."
+         " هذه العناصر ليست أخبارًا مصوّرة مستوفية للتسليم.",size=10)
+    for value in ("scope_note","limitations"):
+        note=report.get(value)
+        if isinstance(note,str) and note:
+            p=doc.add_paragraph();_rtl(p)
+            _run(p,("نطاق التغطية: " if value=="scope_note"
+                    else "سبب عدم اكتمال النشرة: ")+note,size=10)
+    doc.core_properties.title=report["title"]
+    doc.core_properties.author="RASD"
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    doc.save(destination)
+
+
 def render_ministry_no_accepted_word(report: dict, destination: Path) -> None:
     """Use the ministry-style cover for a daily operational ZERO-delivery notice.
 
