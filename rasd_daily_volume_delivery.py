@@ -47,7 +47,7 @@ def verify_volume_manifest(volumes: list[dict]) -> list[dict]:
                 or type(v.get("count")) is not int
                 or v["count"]!=len(v["article_ids"])
                 or v["count"]!=len(v["sha256"])
-                or not 1<=v["count"]<=180):
+                or not 1<=v["count"]<=360):
             raise RuntimeError("daily_volume_manifest_invalid")
         ids=v["article_ids"]
         shas=v["sha256"]
@@ -72,8 +72,8 @@ def verify_volume_manifest(volumes: list[dict]) -> list[dict]:
             "article_ids":ids[:],"sha256":shas[:],
             "word_sha256":hashlib.sha256(path.read_bytes()).hexdigest(),
         })
-    if len(seen)>180:
-        raise RuntimeError("daily_volume_total_exceeds_180_hold")
+    if len(seen)>360:
+        raise RuntimeError("daily_volume_total_exceeds_360_hold")
     return result
 
 
