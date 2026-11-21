@@ -96,6 +96,42 @@ class HourlyEmptyStatusNoSend(unittest.TestCase):
         self.assertIn("معلّقة",text)
         self.assertNotIn("لم يُعثر على أخبار جديدة مطابقة",text)
 
+    def test_one_in_hour_is_truthful_shortfall_word_not_fake_zero_news(self):
+        start,end,slot=hourly_period(self.now)
+        with patch.object(worker,"send_one_word",
+                          return_value="<strict-ten@example.com>") as send:
+            result=worker.send_empty_interval_status(
+                ledger=self.ledger,sender="source@gmail.com",
+                recipient="testonly@example.com",password="offline",
+                state={"entries":{}},config=self.news,health=self.health,
+                window=slot,start=start,now=self.now,
+                output=Path(self.tmp.name),hourly=True,fresh_candidates=1)
+        self.assertEqual(result["hourly_target_minimum"],10)
+        self.assertEqual(result["hourly_actual_verified"],1)
+        self.assertEqual(result["hourly_target_shortfall"],9)
+        self.assertEqual(result["items"],0)
+        self.assertIn("لم يكتمل شرط 10 أخبار",send.call_args.kwargs["subject"])
+        self.assertIn("العدد المقبول 1 فقط",send.call_args.kwargs["body_text"])
+        document=Document(send.call_args.args[0])
+        self.assertEqual(len(document.inline_shapes),0)
+        body="\n".join(p.text for p in document.paragraphs)
+        self.assertIn("تحقق 1 فقط من أصل عشرة",body)
+        self.assertNotIn("لم توجد أخبار جديدة مستوفية",body)
+
+    def test_exact_ten_cannot_be_relabeled_a_shortfall_status(self):
+        start,end,slot=hourly_period(self.now)
+        with patch.object(worker,"send_one_word") as sender:
+            with self.assertRaisesRegex(
+                    RuntimeError,"hourly_10_source_status_invalid_count"):
+                worker.send_empty_interval_status(
+                    ledger=self.ledger,sender="source@gmail.com",
+                    recipient="testonly@example.com",password="offline",
+                    state={"entries":{}},config=self.news,health=self.health,
+                    window=slot,start=start,now=self.now,
+                    output=Path(self.tmp.name),hourly=True,fresh_candidates=10)
+        sender.assert_not_called()
+        self.ledger.reserve.assert_not_called()
+
     def test_wrong_hour_start_fails_before_reserving_email(self):
         _,_,slot=hourly_period(self.now)
         with patch.object(worker,"send_one_word") as send:
