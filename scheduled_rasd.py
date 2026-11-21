@@ -1000,10 +1000,26 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             if repeated_events:
                 print("RASD_SAME_EVENT_HELD_COUNT=" + str(len(repeated_events)),
                       flush=True)
+            # The owner requires 10 genuinely NEW different stories from
+            # 10 independent approved publishers, published strictly inside
+            # the last COMPLETED hour. RSS inventory may look back 72 hours
+            # for diagnosis, but old articles can NEVER enter this dispatch.
+            strict_hourly_audit = None
+            if hourly_enabled:
+                strict_hourly_audit = audit_fresh_distinct_sources(
+                    stories, collection_origins(config), now)
+                print("RASD_STRICT_HOURLY_CANDIDATES=" +
+                      str(strict_hourly_audit["fresh_distinct_candidates"]) +
+                      " TARGET=10 DIFFERENT_PUBLISHERS=10", flush=True)
+                if strict_hourly_audit["status"] != "CANDIDATES_NEED_ORIGINAL_IMAGES":
+                    return send_empty_interval_status(
+                        ledger=ledger, recipient=recipient, sender=sender,
+                        password=password, state=state, config=config, health=health,
+                        window=window, start=start, now=now, output=output,
+                        hourly=True, fresh_candidates=
+                        strict_hourly_audit["fresh_distinct_candidates"])
+                stories = strict_hourly_audit["selected"]
             if not stories:
-                if hourly_enabled:
-                    print("RASD_HOURLY_VERIFIED_NEWS=0 TARGET_MIN=6 TARGET_STRETCH=7",
-                          flush=True)
                 if mode == "interval_owner_once":
                     return {"status": "no_new_verified_news", "smtp_accepted": False}
                 if (not hourly_enabled and
@@ -1077,16 +1093,32 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     password=password, state=state, config=config, health=health,
                     window=window, start=start, now=now, output=output,
                     held_articles=len(stories), waiting_articles=waiting,
-                    held_items=held_items, hourly=hourly_enabled)
+                    held_items=held_items, hourly=hourly_enabled,
+                    **({"fresh_candidates": 0} if hourly_enabled else {}))
             # Only successfully captured/embedded originals enter private CAS.
-            # A volume target is diagnostic only: never insert invented extras.
+            # An RSS candidate is NOT enough: the actual original publisher
+            # photo + Word digest gate has already run. If some photos failed,
+            # issue a truthful SHORTFALL status, never a 1-9 news bulletin.
+            if hourly_enabled and not originals_report_ready(
+                    strict_hourly_audit, delivered):
+                verified_count = len(delivered)
+                print("RASD_STRICT_HOURLY_IMAGE_VERIFIED=" +
+                      str(verified_count) + " TARGET=10 HOLD=1", flush=True)
+                return send_empty_interval_status(
+                    ledger=ledger, recipient=recipient, sender=sender,
+                    password=password, state=state, config=config, health=health,
+                    window=window, start=start, now=now, output=output,
+                    hourly=True, fresh_candidates=verified_count,
+                    held_articles=held_count, held_items=held_items,
+                    waiting_articles=waiting)
+            # The owner forbids recovering old news to meet the hourly quota.
             hourly_in_period = sum(
                 row.get("hourly_publication_bucket") == "within_previous_hour"
                 for row in delivered) if hourly_enabled else 0
             hourly_recovered = len(delivered) - hourly_in_period if hourly_enabled else 0
             if hourly_enabled:
                 print(f"RASD_HOURLY_VERIFIED_NEWS={hourly_in_period} RECOVERED_OLDER={hourly_recovered} "
-                      "TARGET_MIN=6 TARGET_STRETCH=7", flush=True)
+                      "TARGET_MIN=10 REQUIRED_PUBLISHERS=10", flush=True)
             # Blocked items remain unsent, so later scheduled scans can retry.
             if hourly_enabled:
                 message_key = reserve_hourly_originals(ledger, delivered, day, window)
@@ -1105,10 +1137,11 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 ledger.mark_smtp_accepted(message_key, receipt)
             return {"status": "smtp_accepted_unconfirmed_inbox",
                     "items": len(delivered),
-                    **({"hourly_target_minimum": 6,
+                    **({"hourly_target_minimum": 10,
+                        "hourly_required_publishers": 10,
                         "hourly_new_within_period": hourly_in_period,
                         "hourly_recovered_older": hourly_recovered,
-                        "hourly_target_shortfall": max(0, 6 - hourly_in_period)}
+                        "hourly_target_shortfall": max(0, 10 - hourly_in_period)}
                        if hourly_enabled else {}),
                     "source_limited": bool(limited or waiting),
                     "original_screenshots_held": held_count,
