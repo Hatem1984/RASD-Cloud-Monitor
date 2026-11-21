@@ -119,5 +119,37 @@ class BoundedLosslessDailyVolumesNoSend(unittest.TestCase):
                              [x["sha256"] for x in proof])
 
 
+    def test_240_distinct_original_images_from_10_per_hour_fit_numbered_word(self):
+        # The business minimum is 10/hour x24 =240 distinct news items.
+        # Synthetic JPEGs are never substituted for live publisher captures.
+        from rasd_daily_volume_preflight_no_send import MAX_STORIES
+        from scheduled_rasd import MAX_ROLLUP
+        self.assertGreaterEqual(MAX_ROLLUP, 240)
+        self.assertGreaterEqual(MAX_STORIES, 240)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            articles,proof=self.make_archive(root,240,noisy=False)
+            volumes=self.package(articles,proof,root/"parts")
+            self.assertEqual(sum(v["count"] for v in volumes),240)
+            self.assertEqual([i for v in volumes for i in v["article_ids"]],
+                             [row["id"] for row in articles])
+            self.assertEqual(len(set(i for v in volumes for i in v["article_ids"])),240)
+            self.assertTrue(all(v["bytes"]<=4_000_000 for v in volumes))
+            for v in volumes:
+                self.assertTrue(word_images_match_capture_digests(
+                    v["path"], [{"status":"verified","sha256":sha}
+                                for sha in v["sha256"]]))
+
+    def test_absolute_360_stories_max_is_explicit_not_silent_truncation(self):
+        from rasd_daily_volume_preflight_no_send import MAX_STORIES
+        self.assertEqual(MAX_STORIES,360)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            rows,proof=self.make_archive(root,1,noisy=False)
+            with self.assertRaises(ValueError):
+                self.package(rows*361,proof*361,root/"oversize")
+            self.assertFalse((root/"oversize").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
