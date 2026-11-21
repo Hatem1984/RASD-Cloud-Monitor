@@ -1,0 +1,37 @@
+name: RASD — 16-origin two real HTML publishers to hourly Word — NO SEND
+
+on:
+  push:
+    branches:
+      - 'gate-rasd-source-hourly*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-sixteen-original-no-send-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-publisher-to-hourly-word:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_ALMAL_ORIGINAL_HTML_ENABLED: 'true'
+      RASD_YOUM7_ORIGINAL_HTML_ENABLED: 'true'
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+      RASD_GATE11_SEND_APPROVED: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install first-party original screenshot/Word QA tools
+        run: |
+          python -m pip install -r requirements-test.txt 'playwright>=1.50,<2'
+          python -m playwright install --only-shell chromium
+      - name: Run the real 16-origin monitoring parser with 2 HTML source photo Word QA (no mail)
+        run: python rasd_two_html_originals_actual_hourly_no_send.py

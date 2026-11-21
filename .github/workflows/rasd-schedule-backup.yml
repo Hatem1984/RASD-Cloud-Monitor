@@ -29,6 +29,10 @@ jobs:
       RASD_AUTOMATION_ENABLED: 'true'
       RASD_SMART_NO_EMPTY_INTERVAL_EMAIL: 'true' # owner-requested: no empty or image-HOLD 30m mail; daily unchanged
       RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: ${{ vars.RASD_DAILY_VOLUME_DELIVERY_ENABLED || 'false' }}
+      RASD_CONTEXT_SCOPE_ENABLED: ${{ vars.RASD_CONTEXT_SCOPE_ENABLED || 'false' }}
+      RASD_ALMAL_ORIGINAL_HTML_ENABLED: ${{ vars.RASD_ALMAL_ORIGINAL_HTML_ENABLED || 'false' }}
+      RASD_YOUM7_ORIGINAL_HTML_ENABLED: ${{ vars.RASD_YOUM7_ORIGINAL_HTML_ENABLED || 'false' }}
       RASD_JOB_CRON: ${{ github.event.schedule }}
       RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
       RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
@@ -48,6 +52,8 @@ jobs:
         run: python -m unittest discover -s tests -p test_scheduled_rasd.py -q
       - name: Recover original-publisher Word interval and daily rollup safely
         shell: bash
+        env:
+          RASD_HOURLY_REPORTS_ENABLED: ${{ vars.RASD_HOURLY_REPORTS_ENABLED || 'false' }} # owner-controlled production release; default no change
         run: |
           set -euo pipefail
           # An article refused by a publisher never enters the ledger.

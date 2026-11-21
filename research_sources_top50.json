@@ -275,8 +275,8 @@
       "publisher_host": "alnaharegypt.com",
       "category": "general_press",
       "editorial_group": "alnahar",
-      "research_status": "candidate_not_scheduled",
-      "rss_status": "unapproved_or_unverified",
+      "research_status": "active_native_rss",
+      "rss_status": "approved_in_sources_newsroom_active.json",
       "similarweb_egypt_news_rank_aug_2026": null
     },
     {

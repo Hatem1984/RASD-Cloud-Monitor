@@ -36,6 +36,10 @@ jobs:
       RASD_AUTOMATION_ENABLED: 'true'
       RASD_SMART_NO_EMPTY_INTERVAL_EMAIL: 'true' # owner-requested: no empty or image-HOLD 30m mail; daily unchanged
       RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: ${{ vars.RASD_DAILY_VOLUME_DELIVERY_ENABLED || 'false' }}
+      RASD_CONTEXT_SCOPE_ENABLED: ${{ vars.RASD_CONTEXT_SCOPE_ENABLED || 'false' }}
+      RASD_ALMAL_ORIGINAL_HTML_ENABLED: ${{ vars.RASD_ALMAL_ORIGINAL_HTML_ENABLED || 'false' }}
+      RASD_YOUM7_ORIGINAL_HTML_ENABLED: ${{ vars.RASD_YOUM7_ORIGINAL_HTML_ENABLED || 'false' }}
       RASD_JOB_CRON: '7,37 * * * *'
       RASD_CLOUDFLARE_ORIGIN: ${{ inputs.origin }}
       RASD_CLOUDFLARE_SLOT: ${{ inputs.slot }}
@@ -55,6 +59,8 @@ jobs:
           python -m playwright install --only-shell chromium
       - name: Run protected original-publisher newsroom interval
         shell: bash
+        env:
+          RASD_HOURLY_REPORTS_ENABLED: ${{ vars.RASD_HOURLY_REPORTS_ENABLED || 'false' }} # owner-controlled production release; default no change
         run: |
           set -euo pipefail
           interval_exit=0
@@ -82,6 +88,10 @@ jobs:
       RASD_AUTOMATION_ENABLED: 'true'
       RASD_SMART_NO_EMPTY_INTERVAL_EMAIL: 'true' # owner-requested: no empty or image-HOLD 30m mail; daily unchanged
       RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: ${{ vars.RASD_DAILY_VOLUME_DELIVERY_ENABLED || 'false' }}
+      RASD_CONTEXT_SCOPE_ENABLED: ${{ vars.RASD_CONTEXT_SCOPE_ENABLED || 'false' }}
+      RASD_ALMAL_ORIGINAL_HTML_ENABLED: ${{ vars.RASD_ALMAL_ORIGINAL_HTML_ENABLED || 'false' }}
+      RASD_YOUM7_ORIGINAL_HTML_ENABLED: ${{ vars.RASD_YOUM7_ORIGINAL_HTML_ENABLED || 'false' }}
       RASD_JOB_CRON: '0 19,20 * * *'
       RASD_CLOUDFLARE_ORIGIN: ${{ inputs.origin }}
       RASD_CLOUDFLARE_SLOT: ${{ inputs.slot }}

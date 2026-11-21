@@ -37,6 +37,7 @@ class OriginalPublisherExpansionTests(unittest.TestCase):
     def test_fourteen_reviewed_native_feed_endpoints(self):
         self.assertEqual(set(APPROVED_FEED_URLS), {
             "https://hapijournal.com/feed/",
+            "https://www.alnaharegypt.com/feed/",
             "https://almessa.gomhuriaonline.com/feed/",
             "https://www.elbalad.news/rss.aspx",
             "https://www.vetogate.com/rss.aspx",

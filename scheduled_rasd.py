@@ -25,6 +25,12 @@ from daily_report import CAIRO, cairo_display_time, render_docx
 from delivery_bridge import PrivateGitHubLedger, now_iso, reserve_entry
 from monitor import SOURCE_FAILURE_CODES, article_id, inspect
 from gate11_runner import candidate_from_feed
+from rasd_original_html_source_gate import (
+    all_newsroom_origins, collection_origins, html_collection_enabled,
+    youm7_collection_enabled,
+)
+from rasd_hourly_delivery import (hourly_period, hourly_slot_key,
+                                  hourly_delivery_eligible, reserve_hourly_originals)
 
 EXPECTED_WORKFLOW = (
     "Hatem1984/RASD-Cloud-Monitor/.github/workflows/"
@@ -44,7 +50,7 @@ CLOUDFLARE_WORKFLOW = (
 DAILY_CRON = "0 19,20 * * *"
 MAX_WORD_BYTES = 8_000_000
 MAX_BATCH = 15  # Existing production limit, unchanged.
-MAX_ROLLUP = 60
+MAX_ROLLUP = 180  # Up to 7 original coverages/hour over a 24h Cairo day.
 
 
 def cairo_window(now: datetime) -> tuple[str, str, datetime]:
@@ -218,17 +224,55 @@ def protected_credentials() -> tuple[str, str, str, PrivateGitHubLedger]:
 def validate_story(item: dict, config: dict) -> None:
     if item.get("id") != article_id(item.get("url", "")):
         raise ValueError("untrusted_story_identifier")
-    matches = [f for f in config["feeds"] if f["name"] == item.get("source")]
+    matches = [f for f in all_newsroom_origins(config)
+               if f["name"] == item.get("source")]
     if len(matches) != 1 or urlsplit(item["url"]).hostname not in matches[0]["allowed_article_hosts"]:
         raise ValueError("unapproved_news_publisher")
     if not item.get("headline") or not item.get("published_at_cairo"):
         raise ValueError("incomplete_story")
 
 
+def _merge_first_party_html_items(
+    html_result: dict, config: dict, checked: datetime,
+    age_hours: int, published_before: datetime | None,
+    newest: dict,
+) -> None:
+    """Preserve exact publisher/original dates and one story ID per URL.
+
+    The caller only catches source fetch failures; an identity spoofing,
+    conflicting date or non-approved host is a hard stop.
+    """
+    for original in html_result["stories"]:
+        stamp=parsedate_to_datetime(original["published"])
+        if stamp.tzinfo is None or stamp.utcoffset() is None:
+            raise RuntimeError("publisher_date_unverifiable")
+        stamp=stamp.astimezone(timezone.utc)
+        if published_before is not None and stamp >= published_before.astimezone(timezone.utc):
+            continue
+        if not checked - timedelta(hours=age_hours) <= stamp <= checked:
+            continue
+        row={
+            "id":original["id"], "headline":original["headline"],
+            "publisher_excerpt":original.get("publisher_excerpt",""),
+            "source":original["source"], "url":original["url"],
+            "published_at_cairo":stamp.astimezone(CAIRO).strftime(
+                "%Y-%m-%d %H:%M %Z"),
+            "published_display_cairo":cairo_display_time(stamp),
+        }
+        validate_story(row,config)
+        if published_before is not None:
+            row["hourly_publication_bucket"]=(
+                "within_previous_hour" if stamp >=
+                published_before.astimezone(timezone.utc)-timedelta(hours=1)
+                else "recovered_older")
+        newest.setdefault(row["id"],(stamp,row))
+
+
 def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                            allow_degraded: bool = False,
                            source_records: list[dict] | None = None,
-                           age_hours: int = 72) -> list[dict]:
+                           age_hours: int = 72,
+                           published_before: datetime | None = None) -> list[dict]:
     """Read ALL current saved-keyword matches before deciding the per-email cap.
 
     A bounded 72-hour recovery window catches publishable items after missed
@@ -243,6 +287,10 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
     if type(age_hours) is not int or age_hours not in (24, 48, 72):
         raise ValueError("unapproved_newsroom_lookback")
     checked = now.astimezone(timezone.utc)
+    if published_before is not None and (published_before.tzinfo is None or
+            published_before.utcoffset() is None or
+            published_before.astimezone(timezone.utc) > checked):
+        raise ValueError("hourly_publication_cutoff_invalid")
     observed = inspector(config, now=checked, article_limit=200,
                          require_complete_items=True)
     if observed.get("matched_article_pool_truncated") or len(observed["matched_public_articles"]) > 200:
@@ -266,6 +314,8 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
         if stamp.tzinfo is None or stamp.utcoffset() is None:
             raise RuntimeError("publisher_date_unverifiable")
         stamp = stamp.astimezone(timezone.utc)
+        if published_before is not None and stamp >= published_before.astimezone(timezone.utc):
+            continue
         if not checked - timedelta(hours=age_hours) <= stamp <= checked:
             continue
         row = {"id": candidate["id"], "headline": candidate["headline"],
@@ -273,7 +323,58 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                "source": candidate["source"], "url": candidate["url"],
                "published_at_cairo": stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
                "published_display_cairo": cairo_display_time(stamp)}
+        if published_before is not None:
+            row["hourly_publication_bucket"] = (
+                "within_previous_hour" if stamp >= published_before.astimezone(timezone.utc)
+                - timedelta(hours=1) else "recovered_older")
         newest.setdefault(row["id"], (stamp, row))
+    if html_collection_enabled(config):
+        # Separate original publisher HTML endpoint, not an arbitrary feed
+        # or generic news search. Screenshot validation still runs later;
+        # parsed HTML alone never qualifies a headline for SMTP.
+        from rasd_almal_original_html_research import research
+        status = {"feed_id": "almal_html", "status": "ok",
+                  "verified_links": 0}
+        try:
+            html_result = research(now=checked)
+        except (OSError, TimeoutError, ValueError, RuntimeError):
+            if not allow_degraded:
+                raise RuntimeError("original_html_publisher_unavailable") from None
+            status.update(status="failed", failure_code="other")
+            html_result = {"original_page_verified": 0,
+                           "original_page_hold": 0, "stories": []}
+        status["verified_links"] = html_result["original_page_verified"]
+        if html_result["original_page_hold"]:
+            status.update(status="failed", failure_code="other")
+        # Security failures in returned items are hard HOLD, never
+        # suppressed as routine publisher network trouble.
+        _merge_first_party_html_items(
+            html_result,config,checked,age_hours,published_before,newest)
+        if source_records is not None:
+            source_records.append(status)
+        if not allow_degraded and status["status"] != "ok":
+            raise RuntimeError("original_html_publisher_partial_hold")
+    if youm7_collection_enabled(config):
+        # Publisher-specific Ministry tag; source page and date are verified
+        # independently, not inferred from a tag or third-party RSS.
+        from rasd_youm7_tag_original_research import research as youm7_research
+        record={"feed_id":"youm7_html","status":"ok","verified_links":0}
+        try:
+            result=youm7_research(now=checked)
+        except (OSError,TimeoutError,ValueError,RuntimeError):
+            if not allow_degraded:
+                raise RuntimeError("youm7_original_publisher_unavailable") from None
+            record.update(status="failed",failure_code="other")
+            result={"original_pages_dated":0,"original_page_hold":0,"stories":[]}
+        record["verified_links"]=result["original_pages_dated"]
+        if result["original_page_hold"]:
+            record.update(status="failed",failure_code="other")
+        _merge_first_party_html_items(
+            result,config,checked,age_hours,published_before,newest)
+        if source_records is not None:
+            source_records.append(record)
+        if not allow_degraded and record["status"]!="ok":
+            raise RuntimeError("youm7_original_publisher_partial_hold")
     return [x[1] for x in sorted(newest.values(), key=lambda x: x[0], reverse=True)]
 
 
@@ -291,7 +392,7 @@ def prepare_word(items: list[dict], config: dict, output: Path,
     for index, item in enumerate(items):
         validate_story(item, config)
         screenshot = output / f"publisher-{index+1:03d}.jpg"
-        result = capture(item, config["feeds"], screenshot)
+        result = capture(item, all_newsroom_origins(config), screenshot)
         if result.get("status") != "verified":
             raise RuntimeError("publisher_screenshot_hold")
         copy = dict(item)
@@ -328,6 +429,7 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
                                         source_records: list[dict],
                                         pending_approved_news: int = 0,
                                         held_items: list[dict] | None = None,
+                                        report_kind: str = "half_hourly",
                                         capture=proof_capture
                                         ) -> tuple[Path, list[dict], int, bool]:
     """Real original screenshots ONLY; blocked articles remain eligible for retry.
@@ -336,11 +438,17 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
     publisher page fails. This deliberately does not pretend complete coverage.
     Any integrity/identity exception stops the entire delivery before reserve.
     """
+    if report_kind not in {"hourly", "half_hourly"}:
+        raise ValueError("source_limited_report_kind_invalid")
+    if report_kind == "hourly" and any(
+            item.get("hourly_publication_bucket") not in
+            {"within_previous_hour", "recovered_older"} for item in items):
+        raise ValueError("hourly_publication_bucket_missing")
     if not items or len(items) > MAX_BATCH:
         raise ValueError("invalid_source_limited_batch")
     if len({a.get("id") for a in items}) != len(items):
         raise ValueError("duplicate_source_limited_article")
-    expected_ids = [f["id"] for f in config["feeds"]]
+    expected_ids = [f["id"] for f in collection_origins(config)]
     if (len(source_records) != len(expected_ids) or
             [s.get("feed_id") for s in source_records] != expected_ids or
             any(s.get("status") not in {"ok", "failed"} for s in source_records)):
@@ -353,7 +461,7 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
     rejected = 0
     for index, item in enumerate(items, 1):
         screenshot = output / f"publisher-{index:03d}.jpg"
-        proof = capture(item, config["feeds"], screenshot)
+        proof = capture(item, all_newsroom_origins(config), screenshot)
         if proof.get("status") != "verified":
             # A known original-page refusal remains a traceable HOLD, not a
             # fabricated picture or an accepted ledger entry.
@@ -418,6 +526,15 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
     report = {
         "title": title + (" — نطاق جزئي" if degraded else ""),
         "display_window_start": start, "display_window_end": end,
+        "ministry_media_grid": True,
+        "report_period": "interval",
+        "report_kind": report_kind,
+        **({"hourly_in_period": sum(
+               item["hourly_publication_bucket"] == "within_previous_hour"
+               for item in selected),
+            "hourly_recovered": sum(
+               item["hourly_publication_bucket"] == "recovered_older"
+               for item in selected)} if report_kind == "hourly" else {}),
         "coverage": "SOURCE_LIMITED" if degraded else "HEALTHY",
         "verified_links": sum(x["verified_links"] for x in source_rows),
         "articles": selected,
@@ -561,7 +678,7 @@ def news_for_rollup(state: dict, day: str, config: dict) -> list[dict]:
         validate_story(item, config)
         news.append(item)
     if len(news) > MAX_ROLLUP:
-        raise RuntimeError("rollup_exceeds_60_verified_items_manual_review")
+        raise RuntimeError("rollup_exceeds_180_verified_items_manual_review")
     # All original items from each SENT Word must remain intact for Gmail
     # archive attachment verification. Fresh future intervals are filtered
     # for cross-publisher duplicates BEFORE sending and private reservation.
@@ -579,7 +696,7 @@ def smart_interval_no_mail(*, config: dict, health: list[dict],
     if (type(held_articles) is not int or type(waiting_articles) is not int or
             not 0 <= held_articles <= 200 or not 0 <= waiting_articles <= 200):
         raise RuntimeError("interval_status_invalid_hold_count")
-    expected = [item["id"] for item in config["feeds"]]
+    expected = [item["id"] for item in collection_origins(config)]
     if (len(expected) != len(health) or
             [item.get("feed_id") for item in health] != expected or
             any(item.get("status") not in ("ok", "failed") for item in health)):
@@ -629,7 +746,8 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
                                window: str, start: datetime, now: datetime,
                                output: Path, held_articles: int = 0,
                                waiting_articles: int = 0,
-                               held_items: list[dict] | None = None) -> dict:
+                               held_items: list[dict] | None = None,
+                               hourly: bool = False) -> dict:
     """One Word status per eligible empty 30m slot, not a fabricated news report.
 
     Distinct FROM the 22:00 news rollup: no 'interval_item' kind is written
@@ -647,12 +765,15 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             raise RuntimeError("invalid_held_item_reason")
     if len(held_items or []) > held_articles:
         raise RuntimeError("held_items_outnumber_hold_count")
-    expected_ids = [feed["id"] for feed in config["feeds"]]
+    expected_ids = [feed["id"] for feed in collection_origins(config)]
     if (len(health) != len(expected_ids) or
             [row.get("feed_id") for row in health] != expected_ids or
             any(row.get("status") not in ("ok", "failed") for row in health)):
         raise RuntimeError("source_health_metadata_missing_or_untrusted")
-    cutoff = start + timedelta(minutes=30)
+    if hourly and (hourly_slot_key(window) != hourly_slot_key(
+            hourly_period(now)[2]) or start != hourly_period(now)[0]):
+        raise RuntimeError("hourly_status_window_identity_hold")
+    cutoff = start + timedelta(hours=1) if hourly else start + timedelta(minutes=30)
     for entry in state["entries"].values():
         if not isinstance(entry, dict) or entry.get("kind") != "interval_item":
             continue
@@ -678,12 +799,13 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             "verified_links": count if row["status"] == "ok" else 0,
             "error_type": None if row["status"] == "ok" else "original_feed_unavailable",
         })
-    title = ("رصد | تقرير حالة المتابعة النصف ساعية | "
+    title = (("رصد | تقرير حالة المتابعة الساعية | " if hourly
+              else "رصد | تقرير حالة المتابعة النصف ساعية | ")
              + cairo_display_time(start))
     pending = held_articles + waiting_articles
     report = {
         "title": title, "display_window_start": cairo_display_time(start),
-        "display_window_end": cairo_display_time(now),
+        "display_window_end": cairo_display_time(cutoff if hourly else now),
         "coverage": ("ORIGINAL_IMAGE_HOLD_NO_VERIFIED_DELIVERY" if pending
                      else "SOURCE_LIMITED_NO_VERIFIED_NEW_DELIVERY" if degraded
                      else "NO_VERIFIED_NEW_DELIVERY"),
@@ -691,9 +813,12 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
         "articles": [], "sources": source_rows,
         "held_candidates": held_items or [],
         "scope_note": (
-            f"{len(config['feeds'])} مصدرًا من قنوات RSS المفعّلة"
-            " ضمن سجل بحث يضم 100 مصدرًا؛ والبقية قيد التأهيل وليست"
-            " مرصودة تلقائيًا. عدد الروابط لا يعني شمول السوق."
+            f"{len(config['feeds'])} مصدرًا من قنوات RSS المهيأة"
+            + (f" و{len(collection_origins(config))-len(config['feeds'])}"
+               " من مصادر صفحات الناشرين الأصلية" if
+               len(collection_origins(config)) > len(config['feeds']) else "")
+            + "؛ المصادر المرشحة الأخرى ليست مرصودة تلقائيًا."
+            " عدد الروابط لا يعني شمول السوق."
         ),
         "limitations": (
             ("هذا تقرير حالة تشغيل لا يحمل أخبارًا أو صورًا غير موثقة؛ "
@@ -710,7 +835,8 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
                " شهادة خلو المصادر من الأخبار." if degraded else "")
         ),
     }
-    doc = output / "RASD-Half-Hour-No-New-Verified-News-Status.docx"
+    doc = output / ("RASD-Hourly-No-New-Verified-News-Status.docx" if hourly
+                    else "RASD-Half-Hour-No-New-Verified-News-Status.docx")
     render_docx(report, doc)
     from docx import Document
     if (not doc.is_file() or
@@ -718,7 +844,9 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
             Document(doc).inline_shapes):
         doc.unlink(missing_ok=True)
         raise RuntimeError("interval_status_word_integrity_hold")
-    key = digest_key("interval-status:" + window)
+    # The zero-news hour uses the SAME CAS slot as any hourly news
+    # dispatch; no dual status+news delivery by redundant schedulers.
+    key = hourly_slot_key(window) if hourly else digest_key("interval-status:" + window)
     if key in state["entries"]:
         return {"status": "interval_status_already_reserved_or_sent",
                 "smtp_accepted": False}
@@ -729,7 +857,8 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
     receipt = send_one_word(
         doc, sender=sender, recipient=recipient, password=password,
         subject=title, key=key,
-        body_text=("نشرة الحالة النصف ساعية مرفقة في Word."
+        body_text=(("نشرة حالة الساعة المكتملة مرفقة في Word." if hourly
+                    else "نشرة الحالة النصف ساعية مرفقة في Word.")
                    + (" بعض المواد المطابقة معلّقة لعدم توافر صور ناشرين أصلية؛"
                       " لا تُعد أخبارًا مُسلّمة." if pending else
                       " لا توجد أخبار جديدة موثقة مُسلّمة في هذه الدورة.")
@@ -789,6 +918,11 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     recovery = mode == "rollup_recovery"
     if recovery and schedule_kind not in (HALF_HOUR_CRON, BACKUP_HALF_HOUR_CRON, CLOUDFLARE_CRON):
         raise RuntimeError("daily_recovery_not_half_hour_schedule")
+    hourly_enabled = (os.environ.get("RASD_HOURLY_REPORTS_ENABLED") == "true"
+                      and mode == "interval")
+    if (hourly_enabled and phase == "interval" and
+            not hourly_delivery_eligible(now, CAIRO)):
+        phase = "skip"
     if phase == "skip" and not recovery:
         return {"status": "skip_non_target_cairo_slot", "smtp_accepted": False}
     # 22:07 and 22:18 Cairo are backup opportunities for the 22:00
@@ -802,6 +936,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     sender, recipient, password, ledger = protected_credentials()
     config = json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
     window, day, start = cairo_window(now)
+    if hourly_enabled:
+        hour_start, hour_end, window = hourly_period(now)
+        start = hour_start
     if recovery:
         local = now.astimezone(CAIRO)
         target_date = (local.date() if local.hour >= 22
@@ -811,10 +948,14 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     with tempfile.TemporaryDirectory(prefix="rasd-scheduled-") as folder:
         output = Path(folder)
         if mode in ("interval", "interval_owner_once"):
+            if hourly_enabled and hourly_slot_key(window) in state["entries"]:
+                return {"status": "hourly_slot_already_reserved_or_sent",
+                        "smtp_accepted": False, "inbox_delivery_verified": False}
             health = []
             available = discover_interval_news(
                 config, now, allow_degraded=True, source_records=health,
-                **({"age_hours":48} if mode == "interval_owner_once" else {}))
+                **({"age_hours":48} if mode == "interval_owner_once" else {}),
+                **({"published_before":hour_end} if hourly_enabled else {}))
             if mode == "interval_owner_once":
                 # Retrospective only: strictly Oct23 publisher timestamps.
                 available = [a for a in available
@@ -831,21 +972,30 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 print("RASD_SAME_EVENT_HELD_COUNT=" + str(len(repeated_events)),
                       flush=True)
             if not stories:
+                if hourly_enabled:
+                    print("RASD_HOURLY_VERIFIED_NEWS=0 TARGET_MIN=6 TARGET_STRETCH=7",
+                          flush=True)
                 if mode == "interval_owner_once":
                     return {"status": "no_new_verified_news", "smtp_accepted": False}
-                if os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true":
+                if (not hourly_enabled and
+                        os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true"):
                     return smart_interval_no_mail(
                         config=config, health=health, window=window)
                 return send_empty_interval_status(
                     ledger=ledger, recipient=recipient, sender=sender,
                     password=password, state=state, config=config, health=health,
-                    window=window, start=start, now=now, output=output)
+                    window=window, start=start, now=now, output=output,
+                    hourly=hourly_enabled)
             # Do not fail all delivery when an irregular GitHub cron lets
             # more than one Word's worth of newly published stories accumulate.
             # Oldest accepted publication goes first so backlog cannot age out
             # solely because newer feed items repeatedly take priority.
             stories = sorted(stories,
                              key=lambda a: (a["published_at_cairo"], a["id"]))
+            if hourly_enabled and any(
+                    row.get("hourly_publication_bucket") not in
+                    {"within_previous_hour", "recovered_older"} for row in stories):
+                raise RuntimeError("hourly_publication_classification_missing")
             waiting = max(0, len(stories) - MAX_BATCH)
             if waiting:
                 print("::warning::RASD_VERIFIED_STORIES_BACKLOG_PENDING="
@@ -853,14 +1003,17 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 stories = stories[:MAX_BATCH]
             title = ("رصد | استدراك أخبار 23 أكتوبر بصور ناشريها الأصلية"
                      if mode == "interval_owner_once" else
+                     "رصد | تقرير المتابعة الساعية | " + cairo_display_time(hour_end)
+                     if hourly_enabled else
                      "رصد | أخبار جديدة من الفحص الدوري | " + cairo_display_time(start))
             held_items = []
             try:
                 doc, delivered, held_count, limited = prepare_source_limited_verified_word(
                     stories, config, output, title=title,
                     start=cairo_display_time(start),
-                    end=cairo_display_time(now), source_records=health,
-                    held_items=held_items,
+                    end=cairo_display_time(hour_end if hourly_enabled else now),
+                    source_records=health, held_items=held_items,
+                    **({"report_kind": "hourly"} if hourly_enabled else {}),
                     **({"pending_approved_news":waiting} if waiting else {}))
             except RuntimeError as exc:
                 # Every discovered, approved article was attempted, but NONE
@@ -872,6 +1025,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 # remains a hard failure and must not be hidden.
                 if str(exc) != "no_original_publisher_page_verified":
                     raise
+                if hourly_enabled:
+                    print("RASD_HOURLY_VERIFIED_NEWS=0 TARGET_MIN=6 TARGET_STRETCH=7 IMAGE_HOLD=1",
+                          flush=True)
                 if mode == "interval_owner_once":
                     return {
                         "status": "hold_all_original_publisher_captures_unavailable",
@@ -882,7 +1038,8 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         "smtp_accepted": False,
                         "coverage_status": "SOURCE_ACCESS_HOLD_NO_DELIVERY",
                     }
-                if os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true":
+                if (not hourly_enabled and
+                        os.environ.get("RASD_SMART_NO_EMPTY_INTERVAL_EMAIL") == "true"):
                     return smart_interval_no_mail(
                         config=config, health=health, window=window,
                         held_articles=len(stories), waiting_articles=waiting)
@@ -891,11 +1048,22 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     password=password, state=state, config=config, health=health,
                     window=window, start=start, now=now, output=output,
                     held_articles=len(stories), waiting_articles=waiting,
-                    held_items=held_items)
+                    held_items=held_items, hourly=hourly_enabled)
             # Only successfully captured/embedded originals enter private CAS.
+            # A volume target is diagnostic only: never insert invented extras.
+            hourly_in_period = sum(
+                row.get("hourly_publication_bucket") == "within_previous_hour"
+                for row in delivered) if hourly_enabled else 0
+            hourly_recovered = len(delivered) - hourly_in_period if hourly_enabled else 0
+            if hourly_enabled:
+                print(f"RASD_HOURLY_VERIFIED_NEWS={hourly_in_period} RECOVERED_OLDER={hourly_recovered} "
+                      "TARGET_MIN=6 TARGET_STRETCH=7", flush=True)
             # Blocked items remain unsent, so later scheduled scans can retry.
-            reserve_stories(ledger, delivered, day)
-            message_key = digest_key("interval:" + window + ":" + ",".join(x["id"] for x in delivered))
+            if hourly_enabled:
+                message_key = reserve_hourly_originals(ledger, delivered, day, window)
+            else:
+                reserve_stories(ledger, delivered, day)
+                message_key = digest_key("interval:" + window + ":" + ",".join(x["id"] for x in delivered))
             subject = title + (" [تغطية جزئية/متأخرة]" if limited or waiting else "")
             receipt = send_one_word(doc, sender=sender, recipient=recipient,
                                     password=password, subject=subject, key=message_key)
@@ -904,8 +1072,16 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             # N separate writes that can leave a half-accepted daily rollup.
             ledger.mark_smtp_accepted_many(
                 [article["id"] for article in delivered], receipt)
+            if hourly_enabled:
+                ledger.mark_smtp_accepted(message_key, receipt)
             return {"status": "smtp_accepted_unconfirmed_inbox",
-                    "items": len(delivered), "source_limited": bool(limited or waiting),
+                    "items": len(delivered),
+                    **({"hourly_target_minimum": 6,
+                        "hourly_new_within_period": hourly_in_period,
+                        "hourly_recovered_older": hourly_recovered,
+                        "hourly_target_shortfall": max(0, 6 - hourly_in_period)}
+                       if hourly_enabled else {}),
+                    "source_limited": bool(limited or waiting),
                     "original_screenshots_held": held_count,
                     "waiting_approved_news": waiting}
         if mode in ("rollup", "rollup_recovery", "rollup_owner_once"):
@@ -977,6 +1153,30 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 no_news = True
             else:
                 title = "رصد | التقرير المجمع للأخبار المرسلة | " + day_label
+                if os.environ.get("RASD_DAILY_VOLUME_DELIVERY_ENABLED") == "true":
+                    # Owner approved numbered parts, but this release
+                    # remains disabled unless an explicit variable is set.
+                    # Never claim unverified replacement pictures or
+                    # restart SMTP automatically after uncertain receipt.
+                    if os.environ.get("RASD_DAILY_SENT_ARCHIVE_ENABLED") != "true":
+                        raise RuntimeError("daily_volume_requires_original_sent_archive")
+                    from daily_sent_consolidator import consolidate_sent_words
+                    from rasd_daily_volume_delivery import deliver_numbered_daily_volumes
+                    volumes, proof = consolidate_sent_words(
+                        stories, state, output, sender=sender,
+                        recipient=recipient, app_password=password,
+                        approved_copy=approved_report_copy(sender, recipient),
+                        title=title,
+                        start="الساعة 22:00 من اليوم السابق بتوقيت القاهرة",
+                        end=end_label, config=config,
+                        volume_preflight_only=True)
+                    if sum(v["count"] for v in volumes) != len(stories) or (
+                            sum(len(v["sha256"]) for v in volumes) != len(proof)):
+                        raise RuntimeError("daily_volume_incomplete_originals_hold")
+                    return deliver_numbered_daily_volumes(
+                        volumes, ledger=ledger, master_key=rollup_key,
+                        sender=sender, recipient=recipient, password=password,
+                        title=title, send_one_word=send_one_word)
                 try:
                     if os.environ.get("RASD_DAILY_SENT_ARCHIVE_ENABLED") == "true":
                         # Production daily report is ONE consolidated copy
@@ -1085,7 +1285,7 @@ PUBLIC_SCHEDULED_HOLD_CODES = frozenset({
     "gmail_attachment_size_hold",
     "source_not_healthy",
     "news_inventory_silent_truncation_hold",
-    "rollup_exceeds_60_verified_items_manual_review",
+    "rollup_exceeds_180_verified_items_manual_review",
     "daily_status_word_integrity_hold",
     "interval_status_word_integrity_hold",
     "original_capture_digest_mismatch",

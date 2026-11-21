@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "note": "Fixed public publisher-origin links for research original screenshot QA; no prod approvals or sends",
+  "cases": [
+    {
+      "id": "alnaharegypt",
+      "base": "alnaharegypt.com",
+      "hosts": [
+        "www.alnaharegypt.com"
+      ],
+      "url": "https://www.alnaharegypt.com/1205331",
+      "published_day": "2026-11-20"
+    },
+    {
+      "id": "youm7",
+      "base": "youm7.com",
+      "hosts": [
+        "www.youm7.com"
+      ],
+      "url": "https://www.youm7.com/story/2026/11/20/%D9%88%D8%B2%D9%8A%D8%B1-%D8%A7%D9%84%D8%AA%D8%AE%D8%B7%D9%8A%D8%B7-%D9%86%D8%AC%D8%A7%D8%AD-%D8%A7%D9%84%D8%AF%D9%88%D8%B1%D8%A9-%D8%A7%D9%84%D8%B1%D8%A7%D8%A8%D8%B9%D8%A9-%D9%8A%D8%B9%D9%83%D8%B3-%D8%AA%D8%B7%D9%88%D8%B1-%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%AF%D8%B1%D8%A9-%D9%88%D9%82%D8%AF%D8%B1%D8%AA%D9%87%D8%A7-%D8%B9%D9%84%D9%89/7625874",
+      "published_day": "2026-11-20"
+    },
+    {
+      "id": "ahram_gate",
+      "base": "ahram.org.eg",
+      "hosts": [
+        "gate.ahram.org.eg"
+      ],
+      "url": "https://gate.ahram.org.eg/News/5988339.aspx",
+      "published_day": "2026-11-20"
+    },
+    {
+      "id": "almal",
+      "base": "almalnews.com",
+      "hosts": [
+        "almalnews.com"
+      ],
+      "url": "https://almalnews.com/2148532/%D8%AA%D8%AD%D9%88%D9%8A%D9%84%D9%87%D8%A7-%D8%A5%D9%84%D9%89-%D9%85%D8%AF%D9%8A%D9%86%D8%A9-%D9%85%D8%B3%D8%AA%D8%AF%D8%A7%D9%85%D8%A9-%D9%88%D8%B2%D9%8A%D8%B1-%D8%A7%D9%84%D8%AA%D8%AE%D8%B7%D9%8A%D8%B7-%D8%A8%D9%88%D8%B1%D8%B3%D8%B9%D9%8A%D8%AF/",
+      "published_day": "2026-11-20"
+    },
+    {
+      "id": "almasdar",
+      "base": "almasdar.com",
+      "hosts": [
+        "www.almasdar.com"
+      ],
+      "url": "https://www.almasdar.com/176237",
+      "published_day": "2026-11-21"
+    }
+  ]
+}

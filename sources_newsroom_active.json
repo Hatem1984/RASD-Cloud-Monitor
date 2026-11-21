@@ -141,8 +141,39 @@
       "allowed_article_hosts": [
         "inp.edu.eg"
       ]
+    },
+    {
+      "id": "alnaharegypt",
+      "name": "Al Nahar Egypt native news RSS",
+      "url": "https://www.alnaharegypt.com/feed/",
+      "allowed_article_hosts": [
+        "www.alnaharegypt.com",
+        "alnaharegypt.com"
+      ]
     }
   ],
   "max_feed_bytes": 1500000,
-  "recent_hours": 72
+  "recent_hours": 72,
+  "original_html_sources": [
+    {
+      "id": "almal_html",
+      "name": "Al Mal native publisher HTML",
+      "homepage_url": "https://almalnews.com/",
+      "allowed_article_hosts": [
+        "almalnews.com",
+        "www.almalnews.com"
+      ],
+      "type": "original_publisher_html"
+    },
+    {
+      "id": "youm7_html",
+      "name": "Youm7 first-party Ministry tag HTML",
+      "homepage_url": "https://www.youm7.com/Tags/Index?id=33679&tag=%D9%88%D8%B2%D8%A7%D8%B1%D8%A9-%D8%A7%D9%84%D8%AA%D8%AE%D8%B7%D9%8A%D8%B7",
+      "allowed_article_hosts": [
+        "www.youm7.com"
+      ],
+      "type": "original_publisher_tag_html"
+    }
+  ],
+  "context_scope": "egypt_development_v1"
 }

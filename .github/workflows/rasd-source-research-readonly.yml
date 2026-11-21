@@ -1,0 +1,70 @@
+name: RASD source research qualification — READ ONLY
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Research origins to inspect (not approve or activate)"
+        required: true
+        default: "100"
+        type: choice
+        options: ["25", "50", "100"]
+  push:
+    branches:
+      - 'gate-rasd-source-hourly*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-research-readonly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-candidates-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      RASD_AUTOMATION_ENABLED: "false"
+      RASD_GATE11_SEND_APPROVED: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Research catalog, local schema and safety checks only
+        run: |
+          python -m unittest discover -s tests -p 'test_source_candidate_preflight.py' -v
+          python rasd_source_candidate_preflight.py --limit 100 > "$RUNNER_TEMP/rasd-research-offline.json"
+      - name: Inspect native first-party RSS origins, no photos/mail/private storage
+        shell: bash
+        env:
+          REQUESTED_LIMIT: ${{ inputs.limit || '100' }}
+        run: |
+          set -euo pipefail
+          case "$REQUESTED_LIMIT" in 25|50|100) ;; *) exit 4 ;; esac
+          python rasd_source_candidate_preflight.py --live --limit "$REQUESTED_LIMIT" --workers 5 > "$RUNNER_TEMP/rasd-research-live.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          summary = json.loads((Path(os.environ["RUNNER_TEMP"]) / "rasd-research-live.json").read_text())
+          assert summary["scope"] == "RESEARCH_ONLY_NEVER_AUTOMATIC_SOURCE_APPROVAL"
+          assert summary["approved_production_inventory_unchanged"] == 14
+          assert summary["screenshot_verified_by_this_audit"] == 0
+          assert summary["production_mail_sent"] is False
+          assert summary["schedule_changed"] is False
+          # Never publish unverified original URLs or article text.
+          print("RASD_RESEARCH_CHECKED=" + str(summary["sources_checked_or_listed"]))
+          print("RASD_RESEARCH_CATEGORIES=" + json.dumps(summary["status_counts"], sort_keys=True))
+          print("RASD_RESEARCH_HOLD_CAUSES=" + json.dumps(summary["hold_reason_counts"], sort_keys=True))
+          print("RASD_PREVIOUS_COMPLETE_HOUR_NATIVE_RSS_MATCHES_UNVERIFIED=" + str(summary["previous_complete_hour_rss_matches_not_approved_news"]))
+          for candidate in summary["sources"]:
+              if candidate["id"] == "alnaharegypt" and candidate["stage"] != "HOLD":
+                  print("RASD_ALNAHAR_SHADOW_NATIVE_FEED=" + candidate["qualified_feed_url"])
+          for row in summary["sources"]:
+              print("SOURCE_ID=" + row["id"] + " STAGE=" + row["stage"] +
+                    (" HOLD_REASON=" + row["hold_reason"]
+                     if row["stage"] == "HOLD" else ""))
+          print("RASD_PRODUCTION_SOURCES_BRANCH_ONLY=14; 100 SUCCESSFUL SOURCES NOT PROVEN")
+          PY

@@ -1,0 +1,30 @@
+name: RASD — Al Mal publisher native feed research — no send
+
+on:
+  push:
+    branches:
+      - 'gate-rasd-source-hourly*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-almal-native-rss-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-almal-rss:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Strict first-party feed parser no-send
+        run: python rasd_almal_native_rss_no_send.py

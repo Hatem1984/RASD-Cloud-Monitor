@@ -11,7 +11,7 @@ class AlborsaDirectFeed(unittest.TestCase):
     def test_direct_publisher_exact_url_and_same_original_article_host_scope(self):
         config = json.loads(Path("sources_newsroom_active.json").read_text(
             encoding="utf-8"))
-        self.assertEqual(len(config["feeds"]), 13)
+        self.assertEqual(len(config["feeds"]), 14)
         feed = next(f for f in config["feeds"] if f["id"] == "alborsa")
         expected = ("https://alborsaanews.com/category/"
                     "%D8%A7%D9%84%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-"
