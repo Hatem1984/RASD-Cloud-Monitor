@@ -328,6 +328,7 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
                                         source_records: list[dict],
                                         pending_approved_news: int = 0,
                                         held_items: list[dict] | None = None,
+                                        report_kind: str = "half_hourly",
                                         capture=proof_capture
                                         ) -> tuple[Path, list[dict], int, bool]:
     """Real original screenshots ONLY; blocked articles remain eligible for retry.
@@ -336,6 +337,12 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
     publisher page fails. This deliberately does not pretend complete coverage.
     Any integrity/identity exception stops the entire delivery before reserve.
     """
+    if report_kind not in {"half_hourly", "hourly"}:
+        raise ValueError("source_limited_report_kind_invalid")
+    if report_kind == "hourly" and any(
+            item.get("hourly_publication_bucket") not in
+            {"within_previous_hour", "recovered_older"} for item in items):
+        raise ValueError("hourly_publication_bucket_missing")
     if not items or len(items) > MAX_BATCH:
         raise ValueError("invalid_source_limited_batch")
     if len({a.get("id") for a in items}) != len(items):
@@ -418,6 +425,15 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
     report = {
         "title": title + (" — نطاق جزئي" if degraded else ""),
         "display_window_start": start, "display_window_end": end,
+        "ministry_media_grid": True,
+        "report_period": "interval",
+        "report_kind": report_kind,
+        **({"hourly_in_period": sum(
+               item["hourly_publication_bucket"] == "within_previous_hour"
+               for item in selected),
+            "hourly_recovered": sum(
+               item["hourly_publication_bucket"] == "recovered_older"
+               for item in selected)} if report_kind == "hourly" else {}),
         "coverage": "SOURCE_LIMITED" if degraded else "HEALTHY",
         "verified_links": sum(x["verified_links"] for x in source_rows),
         "articles": selected,
