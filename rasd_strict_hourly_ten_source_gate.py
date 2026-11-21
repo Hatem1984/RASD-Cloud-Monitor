@@ -14,6 +14,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo
+
+CAIRO = ZoneInfo("Africa/Cairo")
 
 from event_identity import same_event
 from monitor import article_id
@@ -141,6 +144,14 @@ def audit_fresh_distinct_sources(
             rejected["not_in_last_completed_hour"] += 1
             decide("not_in_last_completed_hour")
             continue
+        cairo_clock=stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M")
+        original_cairo=item.get("published_at_cairo")
+        if (original_cairo is not None and
+                (not isinstance(original_cairo,str)
+                 or original_cairo[:16]!=cairo_clock)):
+            rejected["wrong_original_date"] += 1
+            decide("published_cairo_utc_conflict")
+            continue
         prepared.append((stamp, source, item))
     # Use NEWEST first and one publisher only. Without this, five stories
     # from one website could masquerade as five independent news sources.
@@ -156,6 +167,8 @@ def audit_fresh_distinct_sources(
         # UTC timestamp is ONLY for exact clock boundaries; never relabel UTC
         # wall time as Cairo on an accepted item.
         normalized=dict(original)
+        normalized.setdefault("published_at_cairo",
+                              stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M"))
         if any(same_event(normalized, prev) for prev in accepted):
             rejected["repeated_event"] += 1
             decisions.append({"id":original["id"],"outcome":"repeated_event"})
