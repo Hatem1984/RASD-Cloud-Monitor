@@ -1,7 +1,7 @@
 """Pre-release capacity audit for multiple real publisher coverages. NO SEND.
 
 As total authenticated clippings rise, never silently drop older items or
-pretend that a >60 daily report was sent; respect existing protected caps.
+pretend that an over-capacity daily report was sent; respect 360 verified-news cap.
 """
 import os
 import unittest
@@ -73,19 +73,35 @@ class DeliveryCoverageStressNoSend(unittest.TestCase):
         accepted=rasd.news_for_rollup({"entries":entries},"2026-11-17",config)
         self.assertEqual(len(accepted),60)
 
-    def test_nightly_61st_not_silently_discarded_or_sent(self):
+    def test_nightly_360_verified_stories_are_not_silently_truncated(self):
         name="Verified Publisher"
         config={"feeds":[{"name":name,
                            "allowed_article_hosts":["news.example"]}]}
         entries={}
-        for i in range(61):
+        for i in range(360):
+            story_item=story(i,name,"news.example")
+            entries[story_item["id"]]={
+                "kind":"interval_item","status":"smtp_accepted",
+                "accepted_at":"2026-11-17T15:00:00+02:00",
+                "news":story_item,
+            }
+        accepted=rasd.news_for_rollup({"entries":entries},"2026-11-17",config)
+        self.assertEqual(len(accepted),360)
+        self.assertEqual(len({item["id"] for item in accepted}),360)
+
+    def test_nightly_361st_is_explicit_hold_not_silent_drop_or_email(self):
+        name="Verified Publisher"
+        config={"feeds":[{"name":name,
+                           "allowed_article_hosts":["news.example"]}]}
+        entries={}
+        for i in range(361):
             s=story(i,name,"news.example")
             entries[s["id"]]={
                 "kind":"interval_item","status":"smtp_accepted",
                 "accepted_at":"2026-11-17T15:00:00+02:00","news":s
             }
         with self.assertRaisesRegex(RuntimeError,
-                                    "rollup_exceeds_60_verified_items_manual_review"):
+                                    "rollup_exceeds_360_verified_items_manual_review"):
             rasd.news_for_rollup({"entries":entries},"2026-11-17",config)
 
 
