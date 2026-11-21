@@ -321,9 +321,10 @@ def capture_verified_original_frame(page, publisher: str, destination: Path,
     with TemporaryDirectory(prefix=".rasd-capture-",dir=destination.parent) as temp:
         staged=Path(temp)/"candidate.jpg"
         for attempt in range(2):
-            if (page.url != requested_url or
-                    not headline_visible_in_viewport(
-                        headline.bounding_box(),page.viewport_size)):
+            if page.url != requested_url:
+                return {"ok": False, "reason": "redirect_outside_publisher"}
+            if not headline_visible_in_viewport(
+                    headline.bounding_box(),page.viewport_size):
                 return {"ok": False, "reason": "original_headline_out_of_frame"}
             page.screenshot(path=str(staged),type="jpeg",
                             quality=85,full_page=False,timeout=15000)
