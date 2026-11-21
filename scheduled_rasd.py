@@ -54,7 +54,7 @@ CLOUDFLARE_WORKFLOW = (
 DAILY_CRON = "0 19,20 * * *"
 MAX_WORD_BYTES = 8_000_000
 MAX_BATCH = 15  # Existing production limit, unchanged.
-MAX_ROLLUP = 180  # Up to 7 original coverages/hour over a 24h Cairo day.
+MAX_ROLLUP = 360  # Up to 15 genuine new coverages/hour over a 24h Cairo day; split delivery by Word size.
 
 
 def cairo_window(now: datetime) -> tuple[str, str, datetime]:
@@ -712,7 +712,7 @@ def news_for_rollup(state: dict, day: str, config: dict) -> list[dict]:
         validate_story(item, config)
         news.append(item)
     if len(news) > MAX_ROLLUP:
-        raise RuntimeError("rollup_exceeds_180_verified_items_manual_review")
+        raise RuntimeError("rollup_exceeds_360_verified_items_manual_review")
     # All original items from each SENT Word must remain intact for Gmail
     # archive attachment verification. Fresh future intervals are filtered
     # for cross-publisher duplicates BEFORE sending and private reservation.
