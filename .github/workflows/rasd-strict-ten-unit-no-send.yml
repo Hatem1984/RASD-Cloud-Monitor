@@ -1,0 +1,27 @@
+name: RASD — strict 10 original current-hour sources unit QA — NO SEND
+
+on:
+  push:
+    branches: ['qa-rasd-ten-fresh-ten-publishers-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  strict-time-source-no-send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Strict 10 current-hour independent publisher gate offline
+        run: python -m unittest discover -s tests -p 'test_strict_ten_fresh_ten_publishers_no_send.py' -v
+      - name: No regressions in complete offline suite
+        run: python -m unittest discover -s tests -p 'test_*.py' -q
