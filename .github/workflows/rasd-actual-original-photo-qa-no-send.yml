@@ -33,3 +33,5 @@ jobs:
           python -m playwright install --only-shell chromium
       - name: Recheck real local news screenshots and original date metadata, no mail
         run: python rasd_live_new_source_photo_no_send.py
+      - name: Research only non-approved Al Masdar genuine original-page photo (no activation)
+        run: python rasd_almasdar_original_screenshot_research_no_send.py
