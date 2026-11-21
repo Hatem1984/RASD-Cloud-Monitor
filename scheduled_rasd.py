@@ -863,6 +863,9 @@ def send_empty_interval_status(*, ledger: PrivateGitHubLedger,
                      else "NO_VERIFIED_NEW_DELIVERY"),
         "verified_links": sum(row["verified_links"] for row in source_rows),
         "articles": [], "sources": source_rows,
+        **({"ministry_media_grid":True,
+            "report_period":"interval",
+            "report_kind":"hourly"} if hourly else {}),
         "held_candidates": held_items or [],
         "scope_note": (
             f"{len(config['feeds'])} مصدرًا من قنوات RSS المهيأة"
