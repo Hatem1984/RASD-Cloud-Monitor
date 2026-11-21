@@ -22,6 +22,14 @@ class HourlyReleaseInterlock(unittest.TestCase):
                 self.assertIn(
                     "vars.RASD_HOURLY_REPORTS_ENABLED || 'false'", text)
                 self.assertNotIn("RASD_HOURLY_REPORTS_ENABLED: 'true'",text)
+                for gate in (
+                    "RASD_DAILY_VOLUME_DELIVERY_ENABLED",
+                    "RASD_CONTEXT_SCOPE_ENABLED",
+                    "RASD_ALMAL_ORIGINAL_HTML_ENABLED",
+                    "RASD_YOUM7_ORIGINAL_HTML_ENABLED",
+                ):
+                    self.assertIn("vars." + gate + " || 'false'", text)
+                    self.assertNotIn(gate + ": 'true'", text)
                 self.assertNotIn("RASD_YOUM7_ORIGINAL_HTML_ENABLED: 'true'",text)
                 self.assertNotIn("RASD_ALMAL_ORIGINAL_HTML_ENABLED: 'true'",text)
 
