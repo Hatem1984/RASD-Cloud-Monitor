@@ -24,6 +24,7 @@ from daily_report import render_docx
 MAX_STORIES = 360
 DEFAULT_MAX_WORD_BYTES = 7_500_000
 MAX_DAILY_VOLUMES = 32
+MAX_IMAGES_PER_DOCUMENT = 180  # Renderer guarantees <=180 original screenshot cards in a Word file
 DOCUMENT_OVERHEAD_RESERVE = 750_000
 
 
@@ -86,7 +87,8 @@ def create_verified_daily_volumes(
         predicted = item[2] + 12_000
         if predicted > budget:
             raise RuntimeError("daily_volume_single_original_too_large_hold")
-        if current and size + predicted > budget:
+        if current and (size + predicted > budget or
+                        len(current) >= MAX_IMAGES_PER_DOCUMENT):
             groups.append(current)
             current = []
             size = 0
