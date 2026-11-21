@@ -234,7 +234,8 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
     p=doc.add_paragraph(); _rtl(p); _run(p, display_title, size=10, color="777777")
     p=doc.add_paragraph(); _rtl(p); _run(p, "تحليل الرصد", size=20, bold=True)
     p=doc.add_paragraph(); _rtl(p)
-    basis = ("أخبار الساعة السابقة واستدراكات من ساعات أقدم، مع تاريخ النشر الحقيقي لكل مادة."
+    basis = ("أخبار منشورة داخل الساعة المكتملة السابقة فقط، "
+             "ولا تدخل المواد المستدركة في هذا العدد."
              if period == "interval" and report.get("report_kind") == "hourly"
              else "من روابط الناشرين الأصلية المستوفية خلال فترة المتابعة."
              if period == "interval" else "وفق سجل التسليم فقط.")
@@ -367,6 +368,9 @@ def _card(cell, item: dict, index: int, *, wide: bool = False) -> None:
     p.add_run().add_picture(str(image_path),width=Cm(fitted_w),height=Cm(fitted_h))
     p=cell.add_paragraph();_rtl(p)
     _run(p,"النشر: "+(item.get("published_display_cairo") or item.get("published_at_cairo", "غير محدد")),size=8)
+    if item.get("discovered_display_cairo"):
+        p=cell.add_paragraph();_rtl(p)
+        _run(p,"وقت اكتشاف الرصد: "+item["discovered_display_cairo"],size=7)
     p=cell.add_paragraph();_rtl(p);_link(p,item["url"])
 
 
