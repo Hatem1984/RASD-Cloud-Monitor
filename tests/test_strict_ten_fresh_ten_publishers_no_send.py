@@ -42,6 +42,28 @@ class TenFreshDifferentNewsrooms(unittest.TestCase):
         self.assertFalse(result["original_images_verified"])
         self.assertFalse(result["smtp_sent"])
 
+    def test_every_candidate_exceeding_capacity_has_an_explicit_decision(self):
+        # Regression: a prior early break counted the overflow but silently
+        # omitted its individual decisions. Every submitted candidate must
+        # be traceable to exactly one acceptance or exclusion reason.
+        feeds, items = fixture(15)
+        audit = audit_fresh_distinct_sources(
+            items, feeds, NOW, required=10, max_items=10)
+        decisions = audit["candidate_decisions"]
+        self.assertEqual(len(audit["selected"]), 10)
+        self.assertEqual(audit["rejection_counts"]["not_selected_capacity"], 5)
+        self.assertEqual(len(decisions), len(items))
+        self.assertEqual(
+            {entry["id"] for entry in decisions},
+            {entry["id"] for entry in items})
+        self.assertEqual(
+            sum(row["outcome"] == "not_selected_capacity" for row in decisions),
+            5)
+        self.assertEqual(
+            sum(row["outcome"] == "accepted_candidate" for row in decisions),
+            10)
+        self.assertFalse(audit["smtp_sent"])
+
     def test_only_nine_real_publishers_are_retained_for_honest_partial_word(self):
         feeds,items=fixture(9)
         result=audit_fresh_distinct_sources(items,feeds,NOW)
