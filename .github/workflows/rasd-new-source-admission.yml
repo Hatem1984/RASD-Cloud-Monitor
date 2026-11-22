@@ -1,0 +1,30 @@
+name: RASD — NEW publisher native RSS admission QA (NO SEND)
+on:
+  push:
+    branches:
+      - 'gate-rasd-new-source-admission-*'
+permissions:
+  contents: read
+jobs:
+  first-party-candidate-rss:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline source and safety tests
+        run: python -m unittest discover -s tests -p test_new_sources_qa.py -v
+      - name: Read five proposed ORIGINAL publisher RSS URLs (NO SEND)
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_GMAIL_APP_PASSWORD: ''
+          RASD_REPORT_TO: ''
+          RASD_REPORT_CC: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: python rasd_new_sources_qa.py
+      - name: Inspect only strict www-apex first-party redirect targets (NO SEND)
+        run: python rasd_candidate_redirect_qa.py
+      - name: Confirm all sites remain candidate-only
+        run: echo "No new sources activated, no Word/email/private state, no added cron."
