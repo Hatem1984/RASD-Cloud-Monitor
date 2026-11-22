@@ -85,6 +85,17 @@ class DurableReceiptReconciliation(unittest.TestCase):
             safe_scheduled_hold_reason(RuntimeError(
                 "smtp_receipt_persistence_uncertain_manual_reconcile")),
             "smtp_receipt_persistence_uncertain_manual_reconcile")
+        # The release raises 360, NOT the obsolete interim 180 ceiling.
+        # Show the fixed safe code to diagnose a true oversized rollup,
+        # while unrelated/untrusted exception text remains suppressed.
+        self.assertEqual(
+            safe_scheduled_hold_reason(RuntimeError(
+                "rollup_exceeds_360_verified_items_manual_review")),
+            "rollup_exceeds_360_verified_items_manual_review")
+        self.assertEqual(
+            safe_scheduled_hold_reason(RuntimeError(
+                "rollup_exceeds_180_verified_items_manual_review")),
+            "other_held_failure")
 
 
 if __name__ == "__main__":
