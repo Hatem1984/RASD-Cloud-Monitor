@@ -184,17 +184,18 @@ def audit_fresh_distinct_sources(
             rejected["repeated_event"] += 1
             decisions.append({"id":original["id"],"outcome":"repeated_event"})
             continue
+        # The audit trail must account for EVERY original candidate, even
+        # after the report has reached its bounded publisher capacity.
+        # A bulk total plus an early break hides which later article was
+        # excluded and makes the owner's acceptance decisions unauditable.
+        if len(accepted) >= max_items:
+            rejected["not_selected_capacity"] += 1
+            decisions.append({"id":original["id"],
+                              "outcome":"not_selected_capacity"})
+            continue
         accepted.append(normalized)
         publisher_set.add(source)
         decisions.append({"id":original["id"],"outcome":"accepted_candidate"})
-        if len(accepted)==max_items:
-            rejected["not_selected_capacity"] = max(
-                0, len(prepared) - sum(
-                    1 for row in decisions
-                    if row["outcome"] in (
-                        "accepted_candidate","same_publisher",
-                        "repeated_event","previously_delivered_event")))
-            break
     ready=len(accepted)>=required and len(publisher_set)>=required
     return {
         "status":"CANDIDATES_NEED_ORIGINAL_IMAGES" if ready else
