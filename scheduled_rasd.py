@@ -1418,7 +1418,7 @@ PUBLIC_SCHEDULED_HOLD_CODES = frozenset({
     "gmail_attachment_size_hold",
     "source_not_healthy",
     "news_inventory_silent_truncation_hold",
-    "rollup_exceeds_180_verified_items_manual_review",
+    "rollup_exceeds_360_verified_items_manual_review",
     "daily_status_word_integrity_hold",
     "interval_status_word_integrity_hold",
     "original_capture_digest_mismatch",
