@@ -385,9 +385,13 @@ class Store:
         # Atomic idempotence even under concurrent double-click/retries.
         with self.connect() as con:
             con.execute("BEGIN IMMEDIATE")
-            existing = con.execute("SELECT id FROM scans WHERE tenant_id=? AND status='running'",(tid,)).fetchone()
-            if existing:
-                return existing["id"],False
+            existing = con.execute(
+                "SELECT id,started_at,status FROM scans WHERE tenant_id=? ORDER BY started_at DESC LIMIT 1",
+                (tid,)).fetchone()
+            if existing and (existing["status"] == "running" or
+                    (datetime.now(UTC) - datetime.fromisoformat(
+                        existing["started_at"])).total_seconds() < 8):
+                return existing["id"], False
             sid = new_id()
             con.execute("INSERT INTO scans(id,tenant_id,status,started_at) VALUES(?,?,?,?)",
                         (sid,tid,"running",utcnow()))
