@@ -582,6 +582,8 @@ class Store:
         dest=self.files / tid / "reports"
         dest.mkdir(parents=True,exist_ok=True)
         doc=Document()
+        doc.styles["Normal"].font.name="Arial"
+        doc.styles["Normal"].font.size=Pt(10)
         sec=doc.sections[0];sec.top_margin=Inches(.7);sec.bottom_margin=Inches(.7)
         if tenant.get("logo_path"):
             try:
@@ -595,6 +597,13 @@ class Store:
         doc.add_paragraph("الفترة: "+start+" — "+end)
         doc.add_paragraph("التغطيات: "+str(len(rows))+" | الناشرون: "+str(len(set(a["publisher"] for a in rows))))
         doc.add_paragraph("صور ناشر أصلية موثقة: "+str(sum(a["image_state"]=="verified_original" for a in rows)))
+        scans=self.list_scans(tid,1)
+        if scans:
+            last=json.loads(scans[0].get("summary") or "{}")
+            failed=int(last.get("sources_unavailable") or 0)
+            if failed:
+                doc.add_paragraph("حدود التغطية: تعذر فحص "+str(failed)+
+                                  " مصدر/مصادر خلال آخر فحص؛ النتائج جزئية ولا تثبت عدم نشر مواد أخرى.")
         if len(rows)<tenant["target"]:
             doc.add_paragraph("عجز عن الهدف: "+str(tenant["target"]-len(rows))+
                               " — مواد أقل من الهدف أو سياسة منع تكرار الحدث؛ لا تعني عدم نشر أخبار أخرى.")
@@ -623,6 +632,16 @@ class Store:
                 doc.add_paragraph("SHA-256: "+art["image_sha"])
             else:
                 doc.add_paragraph("لا توجد صورة ناشر موثقة لهذا الخبر.")
+        # Preserve Arabic right-to-left glyph ordering, and avoid separating
+        # each article identity from its accompanying publisher image.
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        for paragraph in doc.paragraphs:
+            paragraph.alignment=WD_ALIGN_PARAGRAPH.RIGHT
+            props=paragraph._p.get_or_add_pPr()
+            bidi=OxmlElement("w:bidi")
+            bidi.set(qn("w:val"),"1")
+            props.append(bidi)
         path=dest/(rid+".docx")
         doc.save(path)
         sha=hashlib.sha256(path.read_bytes()).hexdigest()
