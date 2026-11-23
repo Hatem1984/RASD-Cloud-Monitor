@@ -65,7 +65,7 @@ def review_all(page,expected):
         button.click()
         page.locator("#review-form").wait_for()
         page.locator('#review-form button[value="approved"]').click()
-        page.locator("#dialog.hidden").wait_for(timeout=10000)
+        page.locator("#dialog").wait_for(state="hidden", timeout=10000)
     page.locator("#filter-state").select_option("pending")
     page.locator('button[data-action="filter-articles"]').click()
     page.get_by_text("لا توجد أخبار بهذه الفلاتر").wait_for(timeout=10000)
