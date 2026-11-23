@@ -618,19 +618,53 @@ class Store:
         doc=Document()
         doc.styles["Normal"].font.name="Arial"
         doc.styles["Normal"].font.size=Pt(10)
-        sec=doc.sections[0];sec.top_margin=Inches(.7);sec.bottom_margin=Inches(.7)
+        sec=doc.sections[0]
+        sec.top_margin=Inches(.7)
+        sec.bottom_margin=Inches(.7)
+
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        from docx.opc.constants import RELATIONSHIP_TYPE as RT
+
+        def local_date(value: str) -> str:
+            # ISO timestamps in a bidi Arabic paragraph can render in the
+            # wrong order. Use a native Arabic date with scoped tenant TZ.
+            months=("يناير","فبراير","مارس","أبريل","مايو","يونيو",
+                    "يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر")
+            moment=datetime.fromisoformat(value.replace("Z","+00:00")).astimezone(
+                ZoneInfo(tenant["timezone"]))
+            display=(f"{moment.day} {months[moment.month-1]} {moment.year}"
+                     f"، الساعة {moment.hour:02}:{moment.minute:02}")
+            return display.translate(str.maketrans("0123456789","٠١٢٣٤٥٦٧٨٩"))
+
+        def article_hyperlink(paragraph, exact_url: str):
+            rel_id=paragraph.part.relate_to(exact_url,RT.HYPERLINK,is_external=True)
+            link=OxmlElement("w:hyperlink")
+            link.set(qn("r:id"),rel_id)
+            run=OxmlElement("w:r")
+            textnode=OxmlElement("w:t")
+            textnode.text=exact_url
+            run.append(textnode)
+            link.append(run)
+            paragraph._p.append(link)
+
         if tenant.get("logo_path"):
             try:
                 logo=self.secure_file(tid,tenant["logo_path"])
                 doc.add_picture(str(logo),width=Inches(1))
             except (PermissionError,OSError):
                 raise RuntimeError("report_logo_integrity_hold") from None
-        title=doc.add_heading("رصد | "+tenant["name"],0)
-        title.alignment=WD_ALIGN_PARAGRAPH.RIGHT
-        doc.add_paragraph("تقرير متابعة إعلامية — "+("عرض تجريبي غير حقيقي" if any(a["demo"] for a in rows) else "مسودة مراجعة"))
-        doc.add_paragraph("الفترة: "+start+" — "+end)
-        doc.add_paragraph("التغطيات: "+str(len(rows))+" | الناشرون: "+str(len(set(a["publisher"] for a in rows))))
-        doc.add_paragraph("صور ناشر أصلية موثقة: "+str(sum(a["image_state"]=="verified_original" for a in rows)))
+
+        doc.add_heading("رصد | "+tenant["name"],0)
+        doc.add_paragraph("تقرير متابعة إعلامية — "+
+                          ("عرض تجريبي غير حقيقي" if any(a["demo"] for a in rows)
+                           else "مسودة مراجعة"))
+        doc.add_paragraph("الفترة: من "+local_date(start)+" إلى "+
+                          local_date(end)+"، بالتوقيت المحلي للجهة.")
+        doc.add_paragraph("التغطيات: "+str(len(rows))+
+                          " | الناشرون: "+str(len({a["publisher"] for a in rows})))
+        doc.add_paragraph("صور ناشر أصلية موثقة: "+
+                          str(sum(a["image_state"]=="verified_original" for a in rows)))
         scans=self.list_scans(tid,1)
         if scans:
             last=json.loads(scans[0].get("summary") or "{}")
@@ -641,41 +675,61 @@ class Store:
         if len(rows)<tenant["target"]:
             doc.add_paragraph("عجز عن الهدف: "+str(tenant["target"]-len(rows))+
                               " — مواد أقل من الهدف أو سياسة منع تكرار الحدث؛ لا تعني عدم نشر أخبار أخرى.")
+
         for idx,art in enumerate(rows,1):
-            p=doc.add_paragraph()
-            p.paragraph_format.keep_with_next=True
-            r=p.add_run(str(idx)+" | "+art["title"]);r.bold=True;r.font.size=Pt(13)
-            doc.add_paragraph(art["publisher"]+" | نشر "+art["published_at"]+
-                              " | اكتشاف "+art["discovered_at"])
-            para=doc.add_paragraph("الرابط الأصلي: ")
-            from docx.oxml import OxmlElement
-            from docx.opc.constants import RELATIONSHIP_TYPE as RT
-            from docx.oxml.ns import qn
-            link_rid=para.part.relate_to(art["url"],RT.HYPERLINK,is_external=True)
-            link=OxmlElement("w:hyperlink")
-            link.set(qn("r:id"),link_rid)
-            run=OxmlElement("w:r")
-            node=OxmlElement("w:t")
-            node.text=art["url"]
-            run.append(node)
-            link.append(run)
-            para._p.append(link)
+            # One single Word row per report card. w:cantSplit keeps the
+            # title, publisher, hyperlink, genuine/DEMO image and SHA
+            # together even at a page boundary and for longer titles.
+            table=doc.add_table(rows=1,cols=1)
+            table.autofit=False
+            row=table.rows[0]
+            props=row._tr.get_or_add_trPr()
+            nosplit=OxmlElement("w:cantSplit")
+            props.append(nosplit)
+            cell=row.cells[0]
+            heading=cell.paragraphs[0]
+            heading.paragraph_format.keep_with_next=True
+            title_run=heading.add_run(str(idx)+" | "+art["title"])
+            title_run.bold=True
+            title_run.font.size=Pt(13)
+            meta=cell.add_paragraph(art["publisher"]+" — نُشر "+
+                                    local_date(art["published_at"]))
+            meta.paragraph_format.keep_with_next=True
+            cell.add_paragraph("اكتُشف "+local_date(art["discovered_at"])).paragraph_format.keep_with_next=True
+            linkpara=cell.add_paragraph("رابط الناشر: ")
+            linkpara.paragraph_format.keep_with_next=True
+            article_hyperlink(linkpara,art["url"])
             if art["image_path"]:
-                doc.add_paragraph("الصورة: "+("DEMO — ليست صورة ناشر أصلية" if art["demo"] else art["image_state"]))
-                doc.add_picture(str(self.secure_file(tid,art["image_path"])),width=Inches(5.45))
-                doc.add_paragraph("SHA-256: "+art["image_sha"])
+                photo=cell.add_paragraph("الصورة: "+
+                    ("DEMO — صورة توضيحية وليست صورة الناشر" if art["demo"]
+                     else "صورة الناشر: "+art["image_state"]))
+                photo.paragraph_format.keep_with_next=True
+                picture=cell.add_paragraph()
+                picture.paragraph_format.keep_with_next=True
+                picture.add_run().add_picture(
+                    str(self.secure_file(tid,art["image_path"])),width=Inches(4.7))
+                cell.add_paragraph("بصمة JPEG — SHA-256: "+art["image_sha"])
             else:
-                doc.add_paragraph("لا توجد صورة ناشر موثقة لهذا الخبر.")
-        # Preserve Arabic right-to-left glyph ordering, and avoid separating
-        # each article identity from its accompanying publisher image.
-        from docx.oxml import OxmlElement
-        from docx.oxml.ns import qn
-        for paragraph in doc.paragraphs:
+                cell.add_paragraph("لا توجد صورة ناشر موثقة لهذا الخبر.")
+            doc.add_paragraph("").paragraph_format.space_after=Pt(3)
+
+        # Explicit Arabic run direction and alignment for every paragraph,
+        # including ones inside table cells (not just document.paragraphs).
+        paragraphs=list(doc.paragraphs)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    paragraphs.extend(cell.paragraphs)
+        for paragraph in paragraphs:
             paragraph.alignment=WD_ALIGN_PARAGRAPH.RIGHT
-            props=paragraph._p.get_or_add_pPr()
             bidi=OxmlElement("w:bidi")
             bidi.set(qn("w:val"),"1")
-            props.append(bidi)
+            paragraph._p.get_or_add_pPr().append(bidi)
+        footer=sec.footer.paragraphs[0]
+        footer.text="رصد | "+tenant["name"]+" — محفوظ في أرشيف الجهة"
+        footer.alignment=WD_ALIGN_PARAGRAPH.RIGHT
+        for run in footer.runs:
+            run.font.size=Pt(8)
         path=dest/(rid+".docx")
         doc.save(path)
         sha=hashlib.sha256(path.read_bytes()).hexdigest()
