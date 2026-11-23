@@ -8,6 +8,7 @@ from datetime import datetime,timedelta,timezone
 from http.server import ThreadingHTTPServer
 from http.cookiejar import CookieJar
 from pathlib import Path
+from docx import Document
 from urllib.error import HTTPError
 from urllib.request import Request,build_opener,HTTPCookieProcessor
 from unittest.mock import patch
@@ -44,6 +45,9 @@ class RoleHTTPAcceptance(unittest.TestCase):
         start=(datetime.now(timezone.utc)-timedelta(days=1)).isoformat()
         end=datetime.now(timezone.utc).isoformat()
         self.report=st.create_report(self.a,[self.art["id"]],start,end)
+        text=" ".join(p.text for p in Document(self.report["file_path"]).paragraphs)
+        assert "مقارنة بالهدف: اختار المحلل" in text
+        assert "نافذة آخر فحص RSS للجهة" in text
         self.server=ThreadingHTTPServer(("127.0.0.1",0),self.app.handler())
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True)
         self.thread.start()

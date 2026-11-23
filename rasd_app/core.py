@@ -675,11 +675,11 @@ class Store:
         if scans:
             last=json.loads(scans[0].get("summary") or "{}")
             if last.get("window_start") and last.get("window_end"):
-                doc.add_paragraph("نافذة فحص RSS الفعلية: من "+
+                doc.add_paragraph("نافذة آخر فحص RSS للجهة: من "+
                     local_date(last["window_start"])+" إلى "+
                     local_date(last["window_end"])+
                     "؛ لا تعني أن جميع مصادر الإنترنت غُطّيت.")
-                doc.add_paragraph("المصادر التي نجحت: "+str(last.get("sources_ok",0))+
+                doc.add_paragraph("آخر فحص — مصادر نجحت: "+str(last.get("sources_ok",0))+
                     " | المصادر المتعذرة: "+str(last.get("sources_unavailable",0))+
                     " | المواد المقروءة: "+str(last.get("items_inspected",0))+
                     " | المواد خارج الفترة: "+str(last.get("outside_window",0)))
@@ -688,8 +688,10 @@ class Store:
                 doc.add_paragraph("حدود التغطية: تعذر فحص "+str(failed)+
                                   " مصدر/مصادر خلال آخر فحص؛ النتائج جزئية ولا تثبت عدم نشر مواد أخرى.")
         if len(rows)<tenant["target"]:
-            doc.add_paragraph("عجز عن الهدف: "+str(tenant["target"]-len(rows))+
-                              " — مواد أقل من الهدف أو سياسة منع تكرار الحدث؛ لا تعني عدم نشر أخبار أخرى.")
+            doc.add_paragraph("مقارنة بالهدف: اختار المحلل "+
+                str(len(rows))+" خبرًا لهذا الملف من هدف "+str(tenant["target"])+
+                " أخبار للجهة. هذا الفرق لا يثبت نقص تغطية المصادر؛ "+
+                "راجع نطاق الناشرين ونتيجة الفحص والمواد المعلقة للمراجعة.")
 
         for idx,art in enumerate(rows,1):
             # One single Word row per report card. w:cantSplit keeps the
