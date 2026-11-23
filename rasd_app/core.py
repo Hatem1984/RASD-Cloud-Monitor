@@ -574,6 +574,12 @@ class Store:
         dest.mkdir(parents=True,exist_ok=True)
         doc=Document()
         sec=doc.sections[0];sec.top_margin=Inches(.7);sec.bottom_margin=Inches(.7)
+        if tenant.get("logo_path"):
+            try:
+                logo=self.secure_file(tid,tenant["logo_path"])
+                doc.add_picture(str(logo),width=Inches(1))
+            except (PermissionError,OSError):
+                raise RuntimeError("report_logo_integrity_hold") from None
         title=doc.add_heading("رصد | "+tenant["name"],0)
         title.alignment=WD_ALIGN_PARAGRAPH.RIGHT
         doc.add_paragraph("تقرير متابعة إعلامية — "+("عرض تجريبي غير حقيقي" if any(a["demo"] for a in rows) else "مسودة مراجعة"))
