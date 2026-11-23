@@ -36,6 +36,10 @@ jobs:
       RASD_AUTOMATION_ENABLED: 'true'
       RASD_SMART_NO_EMPTY_INTERVAL_EMAIL: 'true' # owner-requested: no empty or image-HOLD 30m mail; daily unchanged
       RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
+      RASD_HOURLY_REPORTS_ENABLED: 'false' # needs separately approved live delivery switch
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: 'false' # unchanged 22 Cairo until ready
+      RASD_ALMAL_ORIGINAL_HTML_ENABLED: 'false'
+      RASD_YOUM7_ORIGINAL_HTML_ENABLED: 'false'
       RASD_JOB_CRON: '7,37 * * * *'
       RASD_CLOUDFLARE_ORIGIN: ${{ inputs.origin }}
       RASD_CLOUDFLARE_SLOT: ${{ inputs.slot }}
@@ -61,6 +65,8 @@ jobs:
           python scheduled_rasd.py --mode interval || interval_exit=$?
           rollup_exit=0
           python scheduled_rasd.py --mode rollup_recovery || rollup_exit=$?
+          echo "RASD_INTERVAL_EXIT_CODE=$interval_exit"
+          echo "RASD_DAILY_RECOVERY_EXIT_CODE=$rollup_exit"
           if [ "$interval_exit" -ne 0 ] || [ "$rollup_exit" -ne 0 ]; then
             echo 'RASD_CLOUDFLARE_INTERVAL_OR_ROLLUP_HOLD'
             exit 1
@@ -82,6 +88,10 @@ jobs:
       RASD_AUTOMATION_ENABLED: 'true'
       RASD_SMART_NO_EMPTY_INTERVAL_EMAIL: 'true' # owner-requested: no empty or image-HOLD 30m mail; daily unchanged
       RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
+      RASD_HOURLY_REPORTS_ENABLED: 'false' # needs separately approved live delivery switch
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: 'false' # unchanged 22 Cairo until ready
+      RASD_ALMAL_ORIGINAL_HTML_ENABLED: 'false'
+      RASD_YOUM7_ORIGINAL_HTML_ENABLED: 'false'
       RASD_JOB_CRON: '0 19,20 * * *'
       RASD_CLOUDFLARE_ORIGIN: ${{ inputs.origin }}
       RASD_CLOUDFLARE_SLOT: ${{ inputs.slot }}

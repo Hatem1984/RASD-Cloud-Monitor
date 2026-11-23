@@ -1,0 +1,37 @@
+name: RASD — real original publisher image to Word QA — NO SEND
+
+on:
+  push:
+    branches: ['release-rasd-hourly-contract-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-live-publisher-word-no-send-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-source-to-word:
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_HOURLY_REPORTS_ENABLED: 'false'
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: 'false'
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install genuine original capture + Arabic Word validation tools
+        run: |
+          python -m pip install -r requirements-test.txt 'playwright>=1.50,<2'
+          python -m playwright install --only-shell chromium
+      - name: Probe 14 original RSS sources and up to 3 publisher screenshots into Word
+        run: python rasd_release_original_source_to_word_qa_no_send.py
+      - name: Measure the exact last completed Cairo hour separately from 72h photo QA
+        run: python rasd_hourly_real_window_probe_no_send.py

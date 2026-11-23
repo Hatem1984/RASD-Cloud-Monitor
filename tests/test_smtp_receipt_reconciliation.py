@@ -70,6 +70,31 @@ class DurableReceiptReconciliation(unittest.TestCase):
                                         "smtp_receipt_persistence_uncertain_manual_reconcile"):
                 self.ledger.mark_smtp_accepted_many([KEY], RECEIPT)
 
+    def test_new_grid_card_verification_failure_codes_are_publicly_safe(self):
+        # The Word parser's fixed, pre-reviewed codes are safe to expose,
+        # never publisher URL, screenshot content, private mail or MIME.
+        fixed_codes = (
+            "daily_sent_grid_cover_identity_hold",
+            "daily_sent_grid_image_count_hold",
+            "daily_sent_grid_card_identity_hold",
+            "daily_sent_grid_card_order_hold",
+            "daily_sent_grid_article_identity_hold",
+            "daily_sent_grid_publication_date_hold",
+            "daily_sent_grid_original_url_hold",
+            "daily_sent_grid_image_relationship_hold",
+            "daily_sent_grid_original_jpeg_hold",
+            "daily_sent_grid_original_visual_hold",
+            "daily_sent_grid_missing_originals_hold",
+        )
+        for code in fixed_codes:
+            with self.subTest(code=code):
+                self.assertEqual(
+                    safe_scheduled_hold_reason(RuntimeError(code)), code)
+        self.assertEqual(
+            safe_scheduled_hold_reason(RuntimeError(
+                "daily_sent_grid_original_url_hold:https://private.invalid")),
+            "other_held_failure")
+
     def test_sanitized_public_failure_code_never_reflects_sensitive_exceptions(self):
         self.assertEqual(
             safe_scheduled_hold_reason(RuntimeError("private_ledger_commit_not_visible")),
@@ -85,6 +110,17 @@ class DurableReceiptReconciliation(unittest.TestCase):
             safe_scheduled_hold_reason(RuntimeError(
                 "smtp_receipt_persistence_uncertain_manual_reconcile")),
             "smtp_receipt_persistence_uncertain_manual_reconcile")
+        # The release raises 360, NOT the obsolete interim 180 ceiling.
+        # Show the fixed safe code to diagnose a true oversized rollup,
+        # while unrelated/untrusted exception text remains suppressed.
+        self.assertEqual(
+            safe_scheduled_hold_reason(RuntimeError(
+                "rollup_exceeds_360_verified_items_manual_review")),
+            "rollup_exceeds_360_verified_items_manual_review")
+        self.assertEqual(
+            safe_scheduled_hold_reason(RuntimeError(
+                "rollup_exceeds_180_verified_items_manual_review")),
+            "other_held_failure")
 
 
 if __name__ == "__main__":

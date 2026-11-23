@@ -252,8 +252,13 @@ def render_docx(report: dict, destination: Path) -> None:
     # their existing evidence layout and delivery constraints.
     if report.get("ministry_media_grid") is True:
         from rasd_ministry_visual_layout import (
-            render_ministry_visual_word, render_ministry_no_accepted_word)
-        if report.get("coverage") == "NO_ACCEPTED_VERIFIED_NEWS":
+            render_ministry_visual_word, render_ministry_no_accepted_word,
+            render_ministry_hourly_status_word)
+        if (report.get("report_period")=="interval" and
+                report.get("report_kind")=="hourly" and
+                report.get("articles")==[]):
+            render_ministry_hourly_status_word(report, destination)
+        elif report.get("coverage") == "NO_ACCEPTED_VERIFIED_NEWS":
             render_ministry_no_accepted_word(report, destination)
         else:
             render_ministry_visual_word(report, destination)

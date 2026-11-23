@@ -104,7 +104,11 @@ jobs:
     env:
       RASD_AUTOMATION_ENABLED: 'true' # Owner-authorized production activation in signed main release
       RASD_SMART_NO_EMPTY_INTERVAL_EMAIL: 'true' # owner-requested: no empty or image-HOLD 30m mail; daily unchanged
-      RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true' # PROVEN Gmail Sent IMAP read-only, run 40093969919
+      RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
+      RASD_HOURLY_REPORTS_ENABLED: 'false' # needs separately approved live delivery switch
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: 'false' # unchanged 22 Cairo until ready
+      RASD_ALMAL_ORIGINAL_HTML_ENABLED: 'false'
+      RASD_YOUM7_ORIGINAL_HTML_ENABLED: 'false' # PROVEN Gmail Sent IMAP read-only, run 40093969919
       RASD_JOB_CRON: ${{ github.event.schedule }}
       RASD_OWNER_PUSH_CONFIRM: ${{ github.event.head_commit.message }}
       RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
@@ -150,6 +154,8 @@ jobs:
             python scheduled_rasd.py --mode interval || interval_exit=$?
             recovery_exit=0
             python scheduled_rasd.py --mode rollup_recovery || recovery_exit=$?
+            echo "RASD_INTERVAL_EXIT_CODE=$interval_exit"
+            echo "RASD_DAILY_RECOVERY_EXIT_CODE=$recovery_exit"
             if [ "$interval_exit" -ne 0 ] || [ "$recovery_exit" -ne 0 ]; then
               echo 'RASD_SCHEDULED_INTERVAL_OR_DAILY_RECOVERY_HOLD'
               exit 1

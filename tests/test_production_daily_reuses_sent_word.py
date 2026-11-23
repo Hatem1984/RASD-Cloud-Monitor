@@ -1,6 +1,9 @@
 """Production 22:00 bulletin reuses ORIGINAL SENT Word, never publisher recapture."""
 from datetime import datetime, timezone
 import os
+import io
+import contextlib
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -67,6 +70,58 @@ class ProductionNightlyOneWord(unittest.TestCase):
         smtp.assert_called_once()
         ledger.reserve.assert_called_once()
         ledger.mark_smtp_accepted.assert_called_once()
+
+    def test_nov21_nov22_real_count_shaped_archive_hold_is_explicit_and_never_reserved(self):
+        # The private read-only ledger had 8 and 2 accepted article records
+        # for these cutoff dates; ONLY synthetic story payloads are used here.
+        # No production credentials, private CAS data or actual e-mail IDs.
+        for iso_day, n in [("2026-11-21", 8), ("2026-11-22", 2)]:
+            with self.subTest(day=iso_day):
+                ledger = MagicMock()
+                ledger.read.return_value = ({"entries": {}}, "sha")
+                synthetic = [
+                    {**self.mock_accepted_news()[0],
+                     "id": f"{i+1:024x}",
+                     "url": f"https://www.alborsaanews.com/example-{i+1}",
+                     "headline": f"خبر صناعي مؤهل رقم {i+1}"}
+                    for i in range(n)
+                ]
+                output = io.StringIO()
+                with (
+                    patch.object(worker, "require_github_scheduler"),
+                    patch.object(worker, "protected_credentials",
+                        return_value=("sender@gmail.com","approved@example.com",
+                                      "not-a-real-password",ledger)),
+                    patch.object(worker, "news_for_rollup", return_value=synthetic),
+                    patch.object(archive, "consolidate_sent_words",
+                        side_effect=RuntimeError("daily_sent_message_not_found")),
+                    patch.object(worker, "send_one_word") as send,
+                    contextlib.redirect_stdout(output),
+                ):
+                    with self.assertRaisesRegex(
+                            RuntimeError, "daily_sent_message_not_found"):
+                        worker.run_scheduled(
+                            "rollup", datetime.fromisoformat(
+                                iso_day + "T20:00:15+00:00"))
+                diagnostic = [
+                    json.loads(s.partition("=")[2])
+                    for s in output.getvalue().splitlines()
+                    if s.startswith("RASD_DAILY_STAGE=")
+                ]
+                self.assertTrue(diagnostic)
+                self.assertIn("reading_original_sent_word",
+                              [z["stage"] for z in diagnostic])
+                self.assertNotIn("word_ready_cas_next",
+                                 [z["stage"] for z in diagnostic])
+                self.assertTrue(all(z["cairo_day"] == iso_day for z in diagnostic))
+                self.assertTrue(all(len(z["delivery_hint"]) == 8
+                                    for z in diagnostic))
+                ledger.reserve.assert_not_called()
+                ledger.mark_smtp_accepted.assert_not_called()
+                send.assert_not_called()
+                self.assertEqual(worker.safe_scheduled_hold_reason(
+                    RuntimeError("daily_sent_message_not_found")),
+                    "daily_sent_message_not_found")
 
     def test_if_original_sent_mail_archive_unavailable_no_daily_email(self):
         ledger=MagicMock()
