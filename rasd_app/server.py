@@ -270,6 +270,10 @@ class App:
                         if new:
                             app.store.run_scan_background(tid,sid)
                         return self.j(202,{"scan_id":sid,"new_scan":new,"duplicate_click":not new})
+                    if action=="articles" and len(parts)==6 and parts[5]=="capture":
+                        self.guard(tid,"analyst",True)
+                        result=app.store.capture_original(tid,parts[4])
+                        return self.j(200 if result["ok"] else 409,result)
                     if action=="articles" and len(parts)==6 and parts[5]=="review":
                         self.guard(tid,"analyst",True)
                         app.store.review(tid,parts[4],user["email"],data.get("state",""),
@@ -301,7 +305,8 @@ class App:
                             con.execute("UPDATE tenants SET logo_path=? WHERE id=?",(str(out),tid))
                         return self.j(200,{"saved":True})
                     return self.j(404,{"error":"not_found"})
-                except (PermissionError,ValueError,LookupError,RuntimeError,KeyError,json.JSONDecodeError,base64.binascii.Error) as exc:
+                except (PermissionError,ValueError,LookupError,RuntimeError,KeyError,
+                        OSError,json.JSONDecodeError,base64.binascii.Error) as exc:
                     self.fail(exc)
 
             def fail(self,exc):
