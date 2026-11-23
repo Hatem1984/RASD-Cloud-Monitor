@@ -34,6 +34,8 @@ class DailyGridAndLegacySentWord(unittest.TestCase):
             "report_period": "interval",
             "coverage": "HEALTHY",
             "ministry_media_grid": True,
+            "sources": [{"feed_id": "offline-test", "status": "ok",
+                         "verified_links": count}],
         })
         original_word = root / "RASD-News-With-Original-Screenshots.docx"
         render_docx(report, original_word)
