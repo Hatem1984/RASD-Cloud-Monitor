@@ -602,10 +602,14 @@ class Store:
                 if hashlib.sha256(file.read_bytes()).hexdigest()!=sha:
                     raise RuntimeError("report_image_integrity_hold")
             file_hashes.append(sha)
-        # An exact duplicate request must re-use the immutable existing Word,
-        # even after a rapid second button press.
+        # Tenant logo is an input to the immutable report, not merely a
+        # pathname. A later logo replacement must produce a NEW snapshot
+        # while leaving every older report file unchanged.
+        logo_sha=(hashlib.sha256(self.secure_file(tid,tenant["logo_path"]).read_bytes()).hexdigest()
+                  if tenant.get("logo_path") else None)
+        # Identical double-clicks re-use the same archived Word.
         request_obj={"ids":selected,"window":[start,end],"settings":tenant,
-                     "images":file_hashes}
+                     "logo_sha256":logo_sha,"images":file_hashes}
         key=hashlib.sha256(json.dumps(request_obj,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
         with self.connect() as con:
             existing=con.execute("SELECT * FROM reports WHERE tenant_id=? AND request_key=?",
@@ -738,7 +742,7 @@ class Store:
                    "discovered_at":r["discovered_at"],"image_sha":r["image_sha"],
                    "image_state":r["image_state"],"event_key":r["event_key"]} for r in rows]
         meta=json.dumps(manifest,ensure_ascii=False)
-        settings=json.dumps(tenant,ensure_ascii=False)
+        settings=json.dumps({**tenant,"logo_sha256":logo_sha},ensure_ascii=False)
         with self.connect() as con:
             try:
                 con.execute("""INSERT INTO reports VALUES(?,?,?,?,?,?,?,?,?,?)""",
