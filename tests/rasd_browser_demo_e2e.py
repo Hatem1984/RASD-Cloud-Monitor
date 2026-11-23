@@ -55,20 +55,20 @@ def wait_scan(page):
 def review_all(page,expected):
     page.locator('button[data-tab="articles"]').click()
     page.locator('tr [data-action="article-detail"]').first.wait_for(timeout=7000)
-    rows=page.locator('tr [data-action="article-detail"]')
-    assert rows.count()==expected,rows.count()
-    for _ in range(expected):
-        page.locator('tr [data-action="article-detail"]').first.click()
+    cards=page.locator('tr [data-action="article-detail"]')
+    ids=cards.evaluate_all("(nodes) => nodes.map(n => n.dataset.id)")
+    assert len(ids)==expected,(expected,ids)
+    for aid in ids:
+        # Select BY STABLE ARTICLE ID, not the first row after async render.
+        button=page.locator('tr [data-action="article-detail"][data-id="'+aid+'"]')
+        button.wait_for()
+        button.click()
         page.locator("#review-form").wait_for()
         page.locator('#review-form button[value="approved"]').click()
-        page.locator('tr [data-action="article-detail"]').first.wait_for()
-        # Next loop uses the next pending item; approved items are still visible
-        # until filter below, so explicitly choose a pending row by state label.
-        page.locator("#filter-state").select_option("pending")
-        page.locator('button[data-action="filter-articles"]').click()
-        if _ < expected-1:
-            page.locator('tr [data-action="article-detail"]').first.wait_for()
-    assert page.locator('tr [data-action="article-detail"]').count()==0
+        page.locator("#dialog.hidden").wait_for(timeout=10000)
+    page.locator("#filter-state").select_option("pending")
+    page.locator('button[data-action="filter-articles"]').click()
+    page.get_by_text("لا توجد أخبار بهذه الفلاتر").wait_for(timeout=10000)
 
 
 def report_from_browser(page,out:Path,prefix):
