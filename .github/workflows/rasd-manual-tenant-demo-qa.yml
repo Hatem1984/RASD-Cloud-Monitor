@@ -1,0 +1,48 @@
+name: RASD manual multi-tenant demonstration — NO SEND
+on:
+  push:
+    branches:
+      - 'feature/rasd-manual-*'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-app-and-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_HOURLY_REPORTS_ENABLED: 'false'
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: 'false'
+      RASD_GMAIL_SENDER: ''
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+      RASD_REPORT_TO: ''
+      RASD_REPORT_CC: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline-only Word and screenshot dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Syntax check front end
+        run: node --check rasd_app/static/app.js
+      - name: Run local API and tenant isolation
+        run: python -m unittest discover -s tests -p test_rasd_manual_app.py -v
+      - name: Preserve PR193 original and legacy Word template regression
+        run: python -m unittest discover -s tests -p test_daily_grid_after_navy_gold_fix_no_send.py -q
+      - name: Complete repo offline regression suite
+        run: python -m unittest discover -s tests -q
+      - name: Verify app excludes scheduler, SMTP and private ledger
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          app = Path('rasd_app/server.py').read_text()
+          core = Path('rasd_app/core.py').read_text()
+          assert 'import scheduled_rasd' not in app + core
+          assert 'import delivery_bridge' not in app + core
+          assert 'smtplib' not in app + core
+          assert 'RASD_GMAIL_APP_PASSWORD' not in app + core
+          print('RASD_MANUAL_APP_NO_MAIL_NO_LEDGER_NO_SCHEDULER=1')
+          PY
