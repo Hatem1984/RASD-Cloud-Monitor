@@ -13,6 +13,14 @@ echo Demo password: RasdLocalDemo!2026
 echo PUBLIC demo-only credentials on localhost.
 echo NEVER use these credentials on a real server.
 echo.
+rem Reuse an existing localhost demo: second click must not start another
+rem process or waste time installing dependencies again.
+powershell -NoProfile -Command "try { $h=Invoke-RestMethod -Uri 'http://127.0.0.1:8765/api/health' -TimeoutSec 2; if($h.service -eq 'RASD Manual') { exit 0 } else { exit 1 } } catch { exit 1 }"
+if not errorlevel 1 (
+  echo Existing RASD local demo detected. Opening browser.
+  start "" "http://127.0.0.1:8765"
+  exit /b 0
+)
 where py >nul 2>&1
 if errorlevel 1 (
   echo Python 3 required. Install from https://www.python.org/downloads/
