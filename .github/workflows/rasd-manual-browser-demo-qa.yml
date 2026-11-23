@@ -1,0 +1,42 @@
+name: RASD manual app — real Chromium demo and two Words — NO SEND
+on:
+  push:
+    branches:
+      - 'feature/rasd-manual-*'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-owner-and-tenant-demo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_HOURLY_REPORTS_ENABLED: 'false'
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: 'false'
+      RASD_GMAIL_SENDER: ''
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+      RASD_REPORT_TO: ''
+      RASD_REPORT_CC: ''
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install isolated browser, Word and fixture dependencies
+        run: |
+          python -m pip install -r requirements-test.txt playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Export two synthetic tenant Word samples with URL/JPEG digest acceptance
+        run: python -m rasd_app.export_demo demo-output
+      - name: Open local app in real Chromium and complete both clients' journeys
+        run: python tests/rasd_browser_demo_e2e.py demo-output
+      - name: Make Word and screenshot demo evidence downloadable
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RASD-Manual-Client-Demo-Synthetic-NO-SEND
+          path: demo-output/
+          retention-days: 7
