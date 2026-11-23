@@ -90,3 +90,15 @@
 **Root-cause evidence boundary:** The two requested daily cutoffs have no confirmed daily SMTP acceptance in the authorized evidence reviewed. Public `other_held_failure` hides the inner exception; until a *protected, authorized, read-only* original Sent check reports an error code, the first internal failure is unknown. An accepted original periodic mail cannot be treated as acceptance of its unsent daily aggregate. No blind re-send.
 
 **Only activation decision once gates pass:** Select exact reviewed SHA of PR #192; explicitly approve `RASD_HOURLY_REPORTS_ENABLED='true'` and `RASD_DAILY_VOLUME_DELIVERY_ENABLED='true'` after verifying the approved sender, To, CC/BCC, SMTP/IMAP quota, private CAS, original Word SHA, and personal-owner single-message test. Keep the Cairo daily deadline at 22:00 and preserve immutable private ledger. Rollback by reviewed flag change to both `false`; never delete reservations, Force Push, or automatically replay an unknown SMTP receipt.
+
+
+## إثبات عدم توافق القالب المستلم مع قارئ الإنتاج — 23 نوفمبر
+
+**تم فحص أصلين حقيقيين في Inbox الشخصي المصرح به، دون نقل أي عنوان أو صورة أو MIME إلى GitHub العام:** تقرير دوري مستلم 21 نوفمبر 19:07 بالقاهرة، وتقرير دوري مستلم 22 نوفمبر 18:07 بالقاهرة. كل مرفق DOCX عُرض بصريًا في 3 صفحات: غلاف، تحليل/جدول، بطاقة ناشر وصورة. لا صفحات بيضاء، وصورة واحدة على بطاقة خبر أصلية في كل مرفق.
+
+**سبب برمجي مثبت (وبذلك سبب كافٍ لرفض هذه المرفقات عند وصول التنفيذ إلى مرحلة استخراج Word):** `main/daily_sent_consolidator.py` يبحث عن الفقرة العليا `الأخبار المطابقة`، ويبحث عن `a:blip` داخل `document.paragraphs` فقط. كلا المرفقين الأصليين يحتوي **صفرًا** من هذه العناوين والصور في الفقرات العليا، لكن يحتوي **صورة واحدة داخل بطاقة جدول ذات عنوان مرقم، ووقت نشر، ورابط واحد**. بالتالي مسار `main.extract_sent_originals` سيرفضهما بـ `daily_sent_original_headlines_hold`؛ وسبب الفرق اعتماد قالب جدول الوزارة في PR #190 دون نشر قارئ الجدول في `main`. This is verified structural incompatibility, **not a claim that dedicated sender IMAP successfully fetched each message in the live failed run**.
+
+**الإصلاح موجود في الفرع المنعزل:** `daily_sent_consolidator.py` في PR #192 يستخدم `is_interval_ministry_grid` ثم `extract_sent_grid_originals` من `rasd_daily_grid_extractor.py`، ويتحقق من صاحب الخبر والتاريخ والرابط وصورة JPEG والهوية والبصمة. أُضيف الاختبار الصناعي `test_new_real_style_breaks_old_paragraph_extractor_but_grid_recovers`، ليؤكد أن القالب الجديد لا يحتوي العنوان/الصورة في موضع القارئ القديم بينما القارئ الجديد يستخرج الصورة والهوية الصحيحة. **لا بيانات بريد خاصة في المستودع أو الاختبارات.**
+
+**مطلوب لإغلاق السبب الجذري لكل رسالة فعليًا:** نتيجة قراءة Sent لدى حساب المرسل المخوّل فقط، والتحقق من أول `Message-ID` يتعذر أو ينجح استخراج ملفه؛ إذا تعطل IMAP قبل تنزيل المستند، فهناك عائق إضافي غير محسوم. لا توجد حجوزات يومية ليومي 21 أو 22؛ لذلك لا تعاود الإرسال دون تفويض إنتاجي منفصل.
+
