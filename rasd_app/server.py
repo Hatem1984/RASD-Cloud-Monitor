@@ -259,6 +259,10 @@ class App:
                         self.guard(tid,"tenant_admin",True)
                         app.store.add_source(tid,data.get("name",""),data.get("feed_url",""))
                         return self.j(201,{"created":True})
+                    if action=="sources" and len(parts)==6 and parts[5]=="toggle":
+                        self.guard(tid,"tenant_admin",True)
+                        app.store.toggle_source(tid,parts[4],data.get("enabled"))
+                        return self.j(200,{"saved":True,"effective_from":"next_manual_scan"})
                     if action=="members" and len(parts)==4:
                         self.guard(tid,"tenant_admin",True)
                         uid=app.store.add_member(tid,data.get("email",""),data.get("password",""),
