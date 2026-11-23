@@ -227,7 +227,8 @@ class App:
                         token,csrf=app.store.login(data.get("email",""),data.get("password",""))
                         secure="; Secure" if self.headers.get("X-Forwarded-Proto")=="https" else ""
                         return self.j(200,{"csrf":csrf},
-                           {"Set-Cookie":"rasd_sid="+token+"; Path=/; HttpOnly; SameSite=Strict"+secure})
+                           {"Set-Cookie":"rasd_sid="+token+"; Path=/; HttpOnly; SameSite=Strict"+secure,
+                            "X-RASD-CSRF-Token":csrf})
                     user=self.user(mutate=True)
                     if parts==["api","logout"]:
                         app.store.logout(self.cookie_token())
