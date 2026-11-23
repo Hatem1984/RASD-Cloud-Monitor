@@ -660,18 +660,29 @@ class Store:
                 raise RuntimeError("report_logo_integrity_hold") from None
 
         doc.add_heading("رصد | "+tenant["name"],0)
-        doc.add_paragraph("تقرير متابعة إعلامية — "+
-                          ("عرض تجريبي غير حقيقي" if any(a["demo"] for a in rows)
-                           else "مسودة مراجعة"))
-        doc.add_paragraph("الفترة: من "+local_date(start)+" إلى "+
+        is_demo=any(a["demo"] for a in rows) or tenant.get("mode")=="demo"
+        doc.add_paragraph("وضع التقرير: "+
+            ("عرض تجريبي — بيانات وأخبار وصور غير حقيقية" if is_demo
+             else "رصد حي — روابط ناشرين أصليين (التوثيق بحسب حالة كل صورة)"))
+        doc.add_paragraph("نافذة التقرير المنشورة: من "+local_date(start)+" إلى "+
                           local_date(end)+"، بالتوقيت المحلي للجهة.")
         doc.add_paragraph("التغطيات: "+str(len(rows))+
+                          " | الأحداث المستقلة: "+str(len({a["event_key"] for a in rows}))+
                           " | الناشرون: "+str(len({a["publisher"] for a in rows})))
         doc.add_paragraph("صور ناشر أصلية موثقة: "+
                           str(sum(a["image_state"]=="verified_original" for a in rows)))
         scans=self.list_scans(tid,1)
         if scans:
             last=json.loads(scans[0].get("summary") or "{}")
+            if last.get("window_start") and last.get("window_end"):
+                doc.add_paragraph("نافذة فحص RSS الفعلية: من "+
+                    local_date(last["window_start"])+" إلى "+
+                    local_date(last["window_end"])+
+                    "؛ لا تعني أن جميع مصادر الإنترنت غُطّيت.")
+                doc.add_paragraph("المصادر التي نجحت: "+str(last.get("sources_ok",0))+
+                    " | المصادر المتعذرة: "+str(last.get("sources_unavailable",0))+
+                    " | المواد المقروءة: "+str(last.get("items_inspected",0))+
+                    " | المواد خارج الفترة: "+str(last.get("outside_window",0)))
             failed=int(last.get("sources_unavailable") or 0)
             if failed:
                 doc.add_paragraph("حدود التغطية: تعذر فحص "+str(failed)+

@@ -1,0 +1,68 @@
+name: RASD enterprise manual live trial - isolated NO SEND
+on:
+  push:
+    branches:
+      - 'feature/rasd-enterprise-live-*'
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  RASD_AUTOMATION_ENABLED: 'false'
+  RASD_HOURLY_REPORTS_ENABLED: 'false'
+  RASD_DAILY_VOLUME_DELIVERY_ENABLED: 'false'
+  RASD_GMAIL_SENDER: ''
+  RASD_GMAIL_APP_PASSWORD: ''
+  RASD_PRIVATE_LEDGER_TOKEN: ''
+  RASD_REPORT_TO: ''
+  RASD_REPORT_CC: ''
+  PYTHONPATH: .
+jobs:
+  offline-full-suite:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Check JavaScript syntax
+        run: node --check rasd_app/static/app.js
+      - name: Private live windows, no-DEMO and conservative events
+        run: python -m unittest discover -s tests -p test_rasd_enterprise_live.py -v
+      - name: Isolated backup/restore and SHA of original archived Word
+        run: python -m unittest discover -s tests -p test_rasd_private_backup.py -v
+      - name: Full legacy and enterprise regression, NO SMTP
+        run: python -m unittest discover -s tests -q
+      - name: Guard production services
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for p in ('rasd_app/core.py','rasd_app/enterprise.py','rasd_app/backup.py','rasd_app/server.py'):
+              s=Path(p).read_text(encoding='utf-8')
+              for forbidden in ('import scheduled_rasd','import delivery_bridge','import smtplib','RASD_GMAIL_APP_PASSWORD'):
+                  assert forbidden not in s,(p,forbidden)
+          print('RASD_ENTERPRISE_MANUAL_NO_PROD_SEND=PASS')
+          PY
+  chromium-two-tenants:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install packages and browser
+        run: |
+          python -m pip install -r requirements-enterprise.txt
+          python -m playwright install --with-deps chromium
+      - name: Test real UI with SYNTHETIC sources only
+        run: python tests/rasd_browser_demo_e2e.py demo-output
+      - name: Upload only synthetic demo QA, NEVER real client data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RASD-Enterprise-Demo-SYNTHETIC-ONLY
+          path: demo-output/
+          retention-days: 7

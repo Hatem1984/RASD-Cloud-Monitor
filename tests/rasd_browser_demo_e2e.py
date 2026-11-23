@@ -75,6 +75,13 @@ def report_from_browser(page,out:Path,prefix):
     page.locator('button[data-tab="reports"]').click()
     page.locator('[data-action="create-report"]').click()
     page.locator("#report-form").wait_for()
+    if prefix=="RASD_DEMO_UNIVERSITY":
+        order=page.locator("#report-form .report-row input[name='items']")
+        before=order.evaluate_all("(nodes)=>nodes.map(x=>x.value)")
+        assert len(before)==4
+        page.locator("#report-form .report-row [data-move='up']").nth(1).click()
+        after=order.evaluate_all("(nodes)=>nodes.map(x=>x.value)")
+        assert after[0]==before[1] and after[1]==before[0]
     page.locator("#report-form button.primary").click()
     page.locator("#dialog-body a.primary").wait_for(timeout=12000)
     with page.expect_download(timeout=12000) as download:
@@ -116,6 +123,17 @@ def main():
                 result=wait_scan(page)
                 assert "مصدر متعذر" in result and "4" in result
                 page.screenshot(path=str(output/"01-university-dashboard.png"),full_page=True)
+                # A dashboard EVENT means a group, not a publisher URL.
+                # Prove 3 independent publisher links behind a single event.
+                page.locator('[data-action="event-groups"]').click()
+                page.get_by_text("الأحداث والتغطيات").wait_for()
+                assert "3 روابط تغطية" in page.locator("#dialog-body").inner_text()
+                page.locator('[data-action="event-filter"]').first.click()
+                page.locator('tr [data-action="article-detail"]').first.wait_for()
+                assert page.locator('tr [data-action="article-detail"]').count()==3
+                page.locator('[data-action="clear-articles"]').first.click()
+                page.locator('tr [data-action="article-detail"]').first.wait_for()
+                assert page.locator('tr [data-action="article-detail"]').count()==4
                 review_all(page,4)
                 page.screenshot(path=str(output/"02-university-news.png"),full_page=True)
                 uni_doc=report_from_browser(page,output,"RASD_DEMO_UNIVERSITY")
@@ -129,7 +147,7 @@ def main():
                 page.locator("#tenant-switch").select_option(food)
                 page.locator('[data-action="start-scan"]').first.click()
                 result=wait_scan(page)
-                assert "3" in result and "مصادر متاحة" in result
+                assert "3" in result and "مصادر نجحت" in result
                 review_all(page,3)
                 food_doc=report_from_browser(page,output,"RASD_DEMO_FOOD")
                 page.screenshot(path=str(output/"04-food-report.png"),full_page=True)
