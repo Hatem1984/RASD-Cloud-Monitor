@@ -133,7 +133,20 @@ modal('<div class="detail"><h2>'+htmlEscape(a.title)+'</h2><p>'+badge(niceState(
 (!a.demo&&canReview()?'<button class="outline" data-action="capture-original" data-id="'+a.id+'">التقاط صورة أصلية من موقع الناشر</button>':"")+
 (canReview()?'<form id="review-form"><label>معرّف الحدث — يمكن توحيده عبر عدة ناشرين<input name="event_key" value="'+htmlEscape(a.event_key)+'"></label><label>سبب القرار أو ملاحظات التوثيق<textarea name="reason" placeholder="أسباب الاعتماد أو الاستبعاد">'+htmlEscape(a.review_reason||"")+'</textarea></label><div class="actions" style="margin-top:13px"><button class="primary" name="state" value="approved">اعتماد الخبر</button><button class="outline" name="state" value="rejected">استبعاد مع السبب</button><button class="outline" name="state" value="pending">إعادته للمراجعة</button></div></form>':"")+'</div>');
 if(canReview())$("review-form").addEventListener("submit",async ev=>{ev.preventDefault();const b=ev.submitter;try{await api(rootPath("/articles/"+a.id+"/review"),{state:b.value,event_key:ev.target.elements.event_key.value,reason:ev.target.elements.reason.value});toast("حُفظ القرار والسبب في سجل هذه المادة");closeModal();render();}catch(e){toast(errorLabel(e.message),true);}});}
-async function showReport(id){const x=await api(rootPath("/reports/"+id));const manifest=JSON.parse(x.manifest||"[]");modal('<h2>معاينة التقرير المؤرشف</h2><p class="muted">أُنشئ '+fmt(x.created_at)+' · الفترة '+fmt(x.window_start)+' إلى '+fmt(x.window_end)+'</p><p class="notice-box">SHA-256 ملف Word: '+htmlEscape(x.file_sha)+'</p><h3>المواد داخل الملف بالترتيب</h3>'+(manifest.length?manifest.map((a,i)=>'<div class="rowline"><strong>'+(i+1)+'. '+htmlEscape(a.title)+'</strong><br><small>'+htmlEscape(a.publisher)+' · '+htmlEscape(a.url)+'<br>صورة: '+htmlEscape(a.image_state)+' · SHA '+htmlEscape(a.image_sha||"لا يوجد")+'</small></div>').join(""):'<p>تقرير صفر مواد. لا يعني ذلك عدم نشر أخبار خارج المصادر المختارة.</p>')+'<a href="'+rootPath("/reports/"+id+"/download")+'" class="primary" style="display:inline-block;margin-top:16px">تنزيل Word</a>');}
+async function showReport(id){
+const x=await api(rootPath("/reports/"+id)),manifest=JSON.parse(x.manifest||"[]");
+const rows=manifest.map((a,i)=>{
+const sh=a.image_sha||"";
+return '<div class="rowline"><strong>'+(i+1)+'. '+htmlEscape(a.title)+'</strong>'+
+'<p><small>الناشر: '+htmlEscape(a.publisher)+'</small> · <a class="text-btn" href="'+htmlEscape(a.url)+'" target="_blank" rel="noopener noreferrer">فتح رابط الناشر الأصلي ↗</a></p>'+
+'<small>الصورة: '+htmlEscape(a.image_state||"missing")+' · بصمة SHA-256: <code title="'+htmlEscape(sh)+'">'+htmlEscape(sh?sh.slice(0,18)+"…":"لا توجد")+'</code></small></div>';
+}).join("");
+modal('<h2>معاينة التقرير المؤرشف</h2><p class="muted">أُنشئ '+fmt(x.created_at)+' · الفترة '+fmt(x.window_start)+' إلى '+fmt(x.window_end)+'</p>'+
+'<p class="notice-box">بصمة ملف Word الكاملة SHA-256: <code style="overflow-wrap:anywhere">'+htmlEscape(x.file_sha)+'</code></p>'+
+'<h3>المواد داخل الملف بالترتيب</h3>'+
+(rows||'<p class="muted">تقرير صفر مواد. لا يعني عدم نشر أخبار خارج مصادر الرصد ونطاقه.</p>')+
+'<a href="'+rootPath("/reports/"+id+"/download")+'" class="primary" style="display:inline-block;margin-top:16px">تنزيل Word</a>');
+}
 async function createReport(){
 const [res,tenant]=await Promise.all([api(rootPath("/articles?state=approved")),api(rootPath())]);
 const articles=res.articles,stamps=articles.map(a=>new Date(a.published_at).getTime()).filter(Number.isFinite);

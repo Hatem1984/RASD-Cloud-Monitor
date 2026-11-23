@@ -84,6 +84,7 @@ def report_from_browser(page,out:Path,prefix):
         assert after[0]==before[1] and after[1]==before[0]
     page.locator("#report-form button.primary").click()
     page.locator("#dialog-body a.primary").wait_for(timeout=12000)
+    assert "فتح رابط الناشر الأصلي" in page.locator("#dialog-body").inner_text()
     with page.expect_download(timeout=12000) as download:
         page.locator("#dialog-body a.primary").click()
     target=out/(prefix+".docx")
