@@ -11,6 +11,7 @@ from urllib.request import Request, build_opener, HTTPCookieProcessor
 from http.cookiejar import CookieJar
 
 from docx import Document
+from PIL import Image
 
 from rasd_app.core import Store, DEMO_FEEDS
 from rasd_app.server import App
@@ -129,6 +130,30 @@ class DemoJourney(unittest.TestCase):
         self.assertNotEqual(one["id"],two["id"])
         self.assertEqual(before,Path(one["file_path"]).read_bytes())
         self.assertIn("مصنع الغذاء",json.loads(one["settings"])["name"])
+
+    def test_logo_replacement_creates_new_immutable_branded_word(self):
+        self.run_scan(self.food)
+        ids=self.approved(self.food)
+        logo=self.store.files/self.food/"logo.png"
+        logo.parent.mkdir(parents=True,exist_ok=True)
+        Image.new("RGB",(250,110),"navy").save(logo,"PNG")
+        with self.store.connect() as con:
+            con.execute("UPDATE tenants SET logo_path=? WHERE id=?",(str(logo),self.food))
+        one=self.store.create_report(self.food,ids,
+                         "2000-01-01T00:00:00+00:00","2100-01-01T00:00:00+00:00")
+        old_bytes=Path(one["file_path"]).read_bytes()
+        first_logo_sha=json.loads(one["settings"])["logo_sha256"]
+        self.assertEqual(len(Document(one["file_path"]).inline_shapes),len(ids)+1)
+        self.assertEqual(len(Document(one["file_path"]).tables),len(ids))
+        for table in Document(one["file_path"]).tables:
+            self.assertEqual(len(table.rows[0]._tr.xpath(".//w:cantSplit")),1)
+        Image.new("RGB",(250,110),"maroon").save(logo,"PNG")
+        two=self.store.create_report(self.food,ids,
+                         "2000-01-01T00:00:00+00:00","2100-01-01T00:00:00+00:00")
+        self.assertNotEqual(one["id"],two["id"])
+        self.assertNotEqual(first_logo_sha,json.loads(two["settings"])["logo_sha256"])
+        self.assertEqual(old_bytes,Path(one["file_path"]).read_bytes())
+        self.assertEqual(len(self.store.list_reports(self.food)),2)
 
     def test_tampered_image_fails_closed_without_report(self):
         self.run_scan(self.food)
