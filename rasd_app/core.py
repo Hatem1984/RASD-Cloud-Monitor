@@ -442,6 +442,30 @@ class Store:
                           WHERE tenant_id=? AND id=?""",
                         (state,ev,json.dumps(history,ensure_ascii=False),tid,aid))
 
+    def capture_original(self, tid: str, aid: str) -> dict:
+        """Optional user-clicked capture; never label a generated image original."""
+        article=self.article(tid,aid)
+        if article["demo"]:
+            return {"ok":False,"reason":"demo_illustration_not_a_publisher_frame"}
+        dest=self.files/tid/"images"/(aid+".jpg")
+        dest.parent.mkdir(parents=True,exist_ok=True)
+        try:
+            from .capture import capture_manual_article
+            result=capture_manual_article(article,dest)
+        except Exception as exc:
+            result={"ok":False,"reason":type(exc).__name__}
+        if not result.get("ok"):
+            return result
+        digest=hashlib.sha256(dest.read_bytes()).hexdigest()
+        if result.get("sha256")!=digest:
+            dest.unlink(missing_ok=True)
+            return {"ok":False,"reason":"publisher_frame_digest_mismatch"}
+        with self.connect() as con:
+            con.execute("""UPDATE articles SET image_path=?,image_sha=?,
+                image_state='verified_original' WHERE tenant_id=? AND id=?""",
+                (str(dest),digest,tid,aid))
+        return {"ok":True,"sha256":digest,"image_state":"verified_original"}
+
     def _eligible(self, tid, item, feed_name, scan_id, now, demo):
         config=self.tenant(tid)
         text=item["title"].casefold()
