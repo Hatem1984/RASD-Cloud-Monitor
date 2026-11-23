@@ -1,0 +1,1 @@
+"""RASD isolated manual multi-tenant app, without email or scheduling."""
