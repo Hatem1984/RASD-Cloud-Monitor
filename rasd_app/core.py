@@ -479,8 +479,9 @@ class Store:
         config=self.tenant(tid)
         text=item["title"].casefold()
         excluded=[x for x in config["excludes"] if x.casefold() in text]
-        matched=[x for x in config["includes"] if x.casefold() in text]
-        if excluded or (config["includes"] and not matched):
+        terms=config["includes"] or config["topics"]
+        matched=[x for x in terms if x.casefold() in text]
+        if excluded or (terms and not matched):
             return False
         link=item["url"]
         aid=hashlib.sha256((tid+":"+link).encode()).hexdigest()[:24]
