@@ -531,12 +531,18 @@ class Store:
         tenant=self.tenant(tid)
         if not isinstance(selected,list) or len(selected)>360 or len(set(selected))!=len(selected):
             raise ValueError("invalid_report_selection")
-        if not start or not end or start > end:
-            raise ValueError("invalid_report_window")
+        try:
+            window_start=datetime.fromisoformat(start.replace("Z","+00:00"))
+            window_end=datetime.fromisoformat(end.replace("Z","+00:00"))
+            if window_start.tzinfo is None or window_end.tzinfo is None or window_start > window_end:
+                raise ValueError("invalid_window")
+        except (ValueError,TypeError,AttributeError):
+            raise ValueError("invalid_report_window") from None
         rows=[self.article(tid,a) for a in selected]
         if any(x["state"]!="approved" for x in rows):
             raise ValueError("report_requires_approved_items")
-        if any(not (start<=x["published_at"]<=end) for x in rows):
+        if any(not (window_start <= datetime.fromisoformat(x["published_at"])
+                    <= window_end) for x in rows):
             raise ValueError("article_outside_report_window")
         if tenant["duplicate_policy"]=="events":
             known=set();filtered=[]
