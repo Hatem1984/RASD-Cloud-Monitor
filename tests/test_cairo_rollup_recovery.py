@@ -47,16 +47,30 @@ class DailyCatchUp(unittest.TestCase):
         ledger.mark_smtp_accepted.assert_called_once()
         return result
 
-    def test_missed_yesterday_at_late_afternoon_cairo(self):
-        self.check_recovery(datetime(2026, 10, 23, 13, 30,
-                                     tzinfo=timezone.utc), "2026-10-22")
+    def test_missed_yesterday_at_late_afternoon_cairo_needs_manual_review(self):
+        # More than four hours after due: release must not silently email
+        # yesterday's missed report or even read private CAS.
+        clock = datetime(2026, 10, 23, 13, 30, tzinfo=timezone.utc)
+        with (
+            patch.dict(os.environ, {"RASD_JOB_CRON": worker.HALF_HOUR_CRON}),
+            patch.object(worker, "require_github_scheduler"),
+            patch.object(worker, "protected_credentials") as credentials,
+            patch.object(worker, "send_one_word") as send,
+        ):
+            result = worker.run_scheduled("rollup_recovery", clock)
+        self.assertEqual(result["status"],
+                         "expired_daily_recovery_requires_owner_review")
+        credentials.assert_not_called()
+        send.assert_not_called()
 
     def test_current_day_after_cairo_22_30(self):
         self.check_recovery(datetime(2026, 10, 23, 19, 30,
                                      tzinfo=timezone.utc), "2026-10-23")
 
     def test_winter_offset_uses_actual_cairo_date(self):
-        self.check_recovery(datetime(2026, 11, 3, 19, 0,
+        # Winter: Nov 2 at 22:00 Cairo is 20:00 UTC; four hours later
+        # remains a valid last-chance recovery in the 02:00 Cairo slot.
+        self.check_recovery(datetime(2026, 11, 3, 0, 0,
                                      tzinfo=timezone.utc), "2026-11-02")
 
     def test_pre_existing_daily_reservation_skips_before_smtp(self):
@@ -73,7 +87,7 @@ class DailyCatchUp(unittest.TestCase):
         ):
             result=worker.run_scheduled(
                 "rollup_recovery",
-                datetime(2026,10,23,13,30,tzinfo=timezone.utc))
+                datetime(2026,10,22,21,30,tzinfo=timezone.utc))
         self.assertEqual(result["status"],"rollup_reserved_pending_manual_reconciliation")
         send.assert_not_called()
         ledger.reserve.assert_not_called()
