@@ -151,8 +151,9 @@ def main():
                 page.locator('[data-action="new-tenant"]').first.click()
                 page.locator('#new-tenant-form input[name="name"]').fill("مركز الأبحاث — جديد")
                 page.locator("#new-tenant-form button.primary").click()
-                page.locator("h1").first.wait_for()
-                page.locator("#current-name").get_by_text("مركز الأبحاث — جديد").wait_for()
+                # The login panel also owns a hidden h1. Wait for the
+                # actual new tenant identity instead of the first h1 in DOM.
+                page.locator("#current-name").get_by_text("مركز الأبحاث — جديد").wait_for(timeout=12000)
                 page.screenshot(path=str(output/"06-new-tenant-settings.png"),full_page=True)
                 new_tenant=next(x["id"] for x in app.store.memberships(
                     app.store.session_user(next(iter([]),""))) if x["name"]=="never") if False else None
