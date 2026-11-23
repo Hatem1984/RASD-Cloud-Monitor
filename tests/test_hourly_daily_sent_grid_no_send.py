@@ -66,6 +66,35 @@ class NewHourlySentGridDailyCompatibility(unittest.TestCase):
         self.assertTrue(word_images_match_capture_digests(doc, digests))
         return doc.read_bytes(), ledger_rows, digests
 
+    def test_new_real_style_breaks_old_paragraph_extractor_but_grid_recovers(self):
+        # The 21/22 Nov received periodic Word uses a Ministry cover and
+        # numbered table cards, not top-level "الأخبار المطابقة" paragraphs.
+        # Reproduce that *shape* synthetically, without private mail or JPEG.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw, sources, proof = self.build_hourly(root, count=1)
+            original = Document(root / "RASD-News-With-Original-Screenshots.docx")
+            self.assertEqual(len(original.tables), 3)
+            self.assertEqual(
+                sum(p.text.strip() == "الأخبار المطابقة"
+                    for p in original.paragraphs), 0)
+            self.assertEqual(
+                sum(len(p._p.xpath(".//a:blip"))
+                    for p in original.paragraphs), 0)
+            self.assertEqual(
+                sum(len(c._tc.xpath(".//a:blip"))
+                    for table in original.tables[2:]
+                    for row in table.rows for c in row.cells), 1)
+            # The legacy reader on main immediately returns
+            # daily_sent_original_headlines_hold for this layout.
+            # PR #192 must use table-based exact card verification instead.
+            result_dir = root / "extract"
+            result_dir.mkdir()
+            extracted = extract_sent_originals(raw, sources, result_dir)
+            self.assertEqual(len(extracted), 1)
+            self.assertEqual(extracted[0][0]["id"], sources[0]["id"])
+            self.assertEqual(extracted[0][2], proof[0]["sha256"])
+
     def test_seven_hourly_jpegs_are_extracted_inside_correct_publisher_cards(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
