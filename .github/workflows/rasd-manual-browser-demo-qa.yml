@@ -19,6 +19,7 @@ jobs:
       RASD_PRIVATE_LEDGER_TOKEN: ''
       RASD_REPORT_TO: ''
       RASD_REPORT_CC: ''
+      PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
