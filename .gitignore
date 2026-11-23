@@ -28,3 +28,11 @@ proof-output/
 .idea/
 .DS_Store
 Thumbs.db
+
+# RASD demo data: never commit tenant DB, private reports or local secrets
+.rasd-manual/
+rasd_demo_output/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
