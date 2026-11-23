@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   browser-owner-and-tenant-demo:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 24
     env:
       RASD_AUTOMATION_ENABLED: 'false'
