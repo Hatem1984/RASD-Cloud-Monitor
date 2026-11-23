@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from contextlib import contextmanager
 import io
 import json
 import os
@@ -231,12 +232,20 @@ class Store:
         with self.connect() as con:
             con.executescript(SCHEMA)
 
+    @contextmanager
     def connect(self):
         con = sqlite3.connect(self.db, timeout=15)
         con.row_factory = sqlite3.Row
         con.execute("PRAGMA foreign_keys=ON")
         con.execute("PRAGMA busy_timeout=15000")
-        return con
+        try:
+            yield con
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+        finally:
+            con.close()
 
     def create_user(self, email: str, password: str, *, owner=False) -> str:
         email = email.strip().lower()
