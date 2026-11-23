@@ -595,7 +595,19 @@ class Store:
             r=p.add_run(str(idx)+" | "+art["title"]);r.bold=True;r.font.size=Pt(13)
             doc.add_paragraph(art["publisher"]+" | نشر "+art["published_at"]+
                               " | اكتشاف "+art["discovered_at"])
-            doc.add_paragraph("الرابط الأصلي: "+art["url"])
+            para=doc.add_paragraph("الرابط الأصلي: ")
+            from docx.oxml import OxmlElement
+            from docx.opc.constants import RELATIONSHIP_TYPE as RT
+            from docx.oxml.ns import qn
+            rid=para.part.relate_to(art["url"],RT.HYPERLINK,is_external=True)
+            link=OxmlElement("w:hyperlink")
+            link.set(qn("r:id"),rid)
+            run=OxmlElement("w:r")
+            node=OxmlElement("w:t")
+            node.text=art["url"]
+            run.append(node)
+            link.append(run)
+            para._p.append(link)
             if art["image_path"]:
                 doc.add_paragraph("الصورة: "+("DEMO — ليست صورة ناشر أصلية" if art["demo"] else art["image_state"]))
                 doc.add_picture(str(self.secure_file(tid,art["image_path"])),width=Inches(5.45))
