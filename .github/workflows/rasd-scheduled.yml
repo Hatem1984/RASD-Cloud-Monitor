@@ -154,6 +154,8 @@ jobs:
             python scheduled_rasd.py --mode interval || interval_exit=$?
             recovery_exit=0
             python scheduled_rasd.py --mode rollup_recovery || recovery_exit=$?
+            echo "RASD_INTERVAL_EXIT_CODE=$interval_exit"
+            echo "RASD_DAILY_RECOVERY_EXIT_CODE=$recovery_exit"
             if [ "$interval_exit" -ne 0 ] || [ "$recovery_exit" -ne 0 ]; then
               echo 'RASD_SCHEDULED_INTERVAL_OR_DAILY_RECOVERY_HOLD'
               exit 1
