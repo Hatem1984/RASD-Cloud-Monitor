@@ -381,6 +381,15 @@ class Store:
             con.execute("INSERT INTO sources(id,tenant_id,name,feed_url) VALUES(?,?,?,?)",
                         (new_id(), tenant, name,feed))
 
+    def toggle_source(self, tid: str, sid: str, enabled: bool):
+        if type(enabled) is not bool:
+            raise ValueError("invalid_enabled_flag")
+        with self.connect() as con:
+            result=con.execute("UPDATE sources SET enabled=? WHERE tenant_id=? AND id=?",
+                               (int(enabled),tid,sid))
+            if result.rowcount!=1:
+                raise LookupError("source_not_found_for_tenant")
+
     def sources(self, tid: str):
         with self.connect() as con:
             return [dict(r) for r in con.execute("SELECT * FROM sources WHERE tenant_id=? ORDER BY name",(tid,))]
