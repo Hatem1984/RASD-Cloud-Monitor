@@ -45,6 +45,26 @@ DAILY_CRON = "0 19,20 * * *"
 MAX_WORD_BYTES = 8_000_000
 MAX_BATCH = 15  # Existing production limit, unchanged.
 MAX_ROLLUP = 60
+# Prevent automatic mail of a previous day's report after the nightly
+# recovery horizon. Expired day remains unreserved for explicit reconciliation.
+DAILY_RECOVERY_MAX_AGE = timedelta(hours=4)
+
+
+def automatic_daily_recovery_window(now: datetime) -> tuple[str, bool]:
+    """Cairo 22:00 daily key and whether a scheduled catch-up is still timely.
+
+    The normal 22:00 daily action is untouched. This guards ONLY automatic
+    `rollup_recovery`, across all three authenticated interval relays.
+    """
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("timezone_required")
+    local = now.astimezone(CAIRO)
+    target = local.date() if local.hour >= 22 else local.date() - timedelta(days=1)
+    due = datetime.combine(target, time(22, 0), tzinfo=CAIRO)
+    elapsed = now.astimezone(timezone.utc) - due.astimezone(timezone.utc)
+    return target.isoformat(), timedelta(0) <= elapsed <= DAILY_RECOVERY_MAX_AGE
+
+
 
 
 def cairo_window(now: datetime) -> tuple[str, str, datetime]:
@@ -815,14 +835,19 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             return {"status": "skip_non_target_cairo_slot", "smtp_accepted": False}
     if mode != phase and not (recovery and phase in ("interval", "skip")) and not owner_oneoff:
         raise RuntimeError("scheduled_mode_cron_mismatch")
+    # A stale 22:00 report is a manual-reconciliation task, never an
+    # automatic surprise email when an unrelated Word-parser fix ships.
+    # Return BEFORE reading private credentials/CAS; do NOT invent a hold
+    # reservation or overwrite historical SMTP state.
+    if recovery and not automatic_daily_recovery_window(now)[1]:
+        return {"status": "expired_daily_recovery_requires_owner_review",
+                "smtp_accepted": False, "cas_mutated": False,
+                "private_ledger_read": False}
     sender, recipient, password, ledger = protected_credentials()
     config = json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
     window, day, start = cairo_window(now)
     if recovery:
-        local = now.astimezone(CAIRO)
-        target_date = (local.date() if local.hour >= 22
-                       else local.date() - timedelta(days=1))
-        day = target_date.isoformat()
+        day, _within_approved_recovery_age = automatic_daily_recovery_window(now)
     state, _ = ledger.read()
     with tempfile.TemporaryDirectory(prefix="rasd-scheduled-") as folder:
         output = Path(folder)
