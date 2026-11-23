@@ -62,6 +62,7 @@ class DailyGridAndLegacySentWord(unittest.TestCase):
             word, rows, receipts = self.new_2026_grid(root, 2)
             self.assertNotIn("الأخبار المطابقة",
                              [p.text.strip() for p in Document(word).paragraphs])
+            (root / "verified").mkdir()
             collected = extract_sent_originals(
                 word.read_bytes(), rows, root / "verified")
             self.assertEqual(len(collected), 2)
@@ -116,6 +117,7 @@ class DailyGridAndLegacySentWord(unittest.TestCase):
             root = Path(directory)
             word, stories, _ = self.new_2026_grid(root, 1)
             fake_story = {**stories[0], "headline": "عنوان مختلف غير موجود"}
+            (root / "bad").mkdir()
             with self.assertRaisesRegex(
                     RuntimeError, "daily_sent_grid_article_identity_hold"):
                 extract_sent_originals(
