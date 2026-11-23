@@ -1427,7 +1427,7 @@ DAILY_DIAGNOSTIC_STAGES = frozenset({
 
 def emit_daily_stage(day: str, stage: str) -> None:
     if (not isinstance(day, str)
-            or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", day)
+            or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day)
             or stage not in DAILY_DIAGNOSTIC_STAGES):
         raise ValueError("daily_diagnostic_stage_invalid")
     print("RASD_DAILY_STAGE=" + json.dumps({
