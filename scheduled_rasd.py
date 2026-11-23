@@ -1219,6 +1219,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                     "waiting_approved_news": waiting}
         if mode in ("rollup", "rollup_recovery", "rollup_owner_once"):
             rollup_key = digest_key("rollup:" + day)
+            emit_daily_stage(day, "ledger_checked")
             if rollup_key in state["entries"]:
                 # Reserved is NOT SMTP accepted; and SMTP accepted is NOT
                 # evidence of inbox arrival. Preserve exactly-once blocking
@@ -1249,7 +1250,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         "manual_reconciliation_required": True,
                     }
                 raise RuntimeError("daily_rollup_ledger_status_invalid")
+            emit_daily_stage(day, "selecting_smtp_accepted_news")
             stories = news_for_rollup(state, day, config)
+            emit_daily_stage(day, "news_selected")
             day_label, end_label = cairo_rollup_label(day)
             if not stories:
                 # No accepted verified newsroom items is itself a genuine
@@ -1295,6 +1298,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         raise RuntimeError("daily_volume_requires_original_sent_archive")
                     from daily_sent_consolidator import consolidate_sent_words
                     from rasd_daily_volume_delivery import deliver_numbered_daily_volumes
+                    emit_daily_stage(day, "reading_original_sent_word")
                     volumes, proof = consolidate_sent_words(
                         stories, state, output, sender=sender,
                         recipient=recipient, app_password=password,
@@ -1316,6 +1320,7 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         # of already DELIVERED originals, never a new browser
                         # visit that the publisher may now block.
                         from daily_sent_consolidator import consolidate_sent_words
+                        emit_daily_stage(day, "reading_original_sent_word")
                         doc, _ = consolidate_sent_words(
                             stories, state, output, sender=sender,
                             recipient=recipient, app_password=password,
@@ -1366,7 +1371,9 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         raise RuntimeError("daily_image_hold_word_integrity_hold")
                     photo_hold = True
                 no_news = False
+            emit_daily_stage(day, "word_ready_cas_next")
             reservation = ledger.reserve(rollup_key, recipient)
+            emit_daily_stage(day, "cas_result_checked")
             if reservation != "reserved":
                 return {"status": "rollup_not_reserved", "smtp_accepted": False}
             status_notice = no_news or (not no_news and photo_hold)
@@ -1385,8 +1392,11 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             }
             if status_notice:
                 mail_args["body_text"] = description
+            emit_daily_stage(day, "smtp_attempt_next")
             receipt = send_one_word(doc, **mail_args)
+            emit_daily_stage(day, "smtp_accepted_receipt_to_persist")
             ledger.mark_smtp_accepted(rollup_key, receipt)
+            emit_daily_stage(day, "receipt_persisted")
             return {
                 "status": (
                     "daily_no_verified_news_status_smtp_accepted_unconfirmed_inbox"
@@ -1400,6 +1410,31 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
             }
     raise RuntimeError("unsupported_scheduled_mode")
 
+
+
+
+# Fixed public diagnostics expose only the Cairo *day*, stage and a short
+# opaque hint, never a private ledger key, news, IMAP ID, mailbox or URL.
+# These are boundary markers: e.g. "reading_original_sent_word" is written
+# BEFORE opening the archive and does not assert success.
+DAILY_DIAGNOSTIC_STAGES = frozenset({
+    "ledger_checked", "selecting_smtp_accepted_news", "news_selected",
+    "reading_original_sent_word", "word_ready_cas_next", "cas_result_checked",
+    "smtp_attempt_next", "smtp_accepted_receipt_to_persist",
+    "receipt_persisted",
+})
+
+
+def emit_daily_stage(day: str, stage: str) -> None:
+    if (not isinstance(day, str)
+            or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", day)
+            or stage not in DAILY_DIAGNOSTIC_STAGES):
+        raise ValueError("daily_diagnostic_stage_invalid")
+    print("RASD_DAILY_STAGE=" + json.dumps({
+        "cairo_day": day,
+        "stage": stage,
+        "delivery_hint": digest_key("rollup:" + day)[:8],
+    }, ensure_ascii=True, sort_keys=True), flush=True)
 
 
 # Only fixed, reviewed failure codes may leave the public GitHub runner.
@@ -1422,6 +1457,40 @@ PUBLIC_SCHEDULED_HOLD_CODES = frozenset({
     "daily_status_word_integrity_hold",
     "interval_status_word_integrity_hold",
     "original_capture_digest_mismatch",
+    "daily_sent_folder_list_hold",
+    "daily_sent_folder_identity_hold",
+    "daily_sent_folder_select_hold",
+    "daily_sent_message_identity_hold",
+    "daily_sent_message_not_found",
+    "daily_sent_message_ambiguous",
+    "daily_sent_message_fetch_hold",
+    "daily_sent_message_size_hold",
+    "daily_sent_message_headers_hold",
+    "daily_sent_attachment_missing",
+    "daily_sent_attachment_identity_hold",
+    "daily_sent_original_headlines_hold",
+    "daily_sent_original_urls_hold",
+    "daily_sent_image_count_hold",
+    "daily_sent_image_order_hold",
+    "daily_sent_image_relationship_hold",
+    "daily_sent_jpeg_visual_hold",
+    "daily_sent_jpeg_signature_hold",
+    "daily_imap_login_hold",
+    "daily_imap_archive_unavailable_hold",
+    "daily_consolidation_item_count_hold",
+    "daily_consolidation_duplicate_article_hold",
+    "daily_consolidation_ledger_integrity_hold",
+    "daily_consolidation_incomplete_private_ledger",
+    "daily_consolidation_missing_original_images",
+    "daily_consolidated_original_digest_hold",
+    "daily_consolidated_word_size_hold",
+    "private_accepted_timestamp_missing",
+    "private_accepted_timestamp_invalid",
+    "private_accepted_timezone_missing",
+    "private_sent_news_corrupted",
+    "unapproved_news_publisher",
+    "untrusted_story_identifier",
+    "incomplete_story",
 })
 
 
