@@ -23,15 +23,17 @@ from urllib.parse import parse_qs, urlsplit
 
 from PIL import Image
 
-from .core import ROOT, SOURCE_CATALOG, Store, STATES, utcnow
+from .core import ROOT, SOURCE_CATALOG, STATES, utcnow
+from .enterprise import EnterpriseStore
 
 WEB = Path(__file__).resolve().parent / "static"
 MAX_JSON = 220_000
 
 
 class App:
-    def __init__(self, storage: str | Path):
-        self.store = Store(storage)
+    def __init__(self, storage: str | Path, *, live_only=False):
+        self.store = EnterpriseStore(storage,live_only=live_only)
+        self.live_only=bool(live_only)
 
     def handler(self):
         app = self
@@ -117,7 +119,7 @@ class App:
                         return self.j(404,{"error":"not_found"})
                     if parts==["api","health"]:
                         return self.j(200,{"service":"RASD Manual","scheduler":"DISABLED_IN_THIS_APP",
-                                           "email":"NOT_IMPLEMENTED","time":utcnow()})
+                                           "email":"NOT_IMPLEMENTED","private_live":app.live_only,"time":utcnow()})
                     user=self.user()
                     if parts==["api","me"]:
                         return self.j(200,{"email":user["email"],"id":user["id"],
@@ -125,7 +127,7 @@ class App:
                                            "tenants":app.store.memberships(user)})
                     if parts==["api","catalog"]:
                         return self.j(200,{"sources":[{"name":n,"url":u} for n,u in SOURCE_CATALOG],
-                                           "demo":["demo://university","demo://foods","demo://unavailable"]})
+                                           "demo":[] if app.live_only else ["demo://university","demo://foods","demo://unavailable"]})
                     if parts==["api","tenants"]:
                         return self.j(200,{"tenants":app.store.memberships(user)})
                     if len(parts) < 3 or parts[:2]!=["api","tenants"]:
@@ -155,10 +157,15 @@ class App:
                         reports=app.store.list_reports(tid)
                         pub={}
                         daily={}
+                        event_groups={}
                         for article in articles:
                             pub[article["publisher"]]=pub.get(article["publisher"],0)+1
                             date=article["published_at"][:10]
                             daily[date]=daily.get(date,0)+1
+                            key=article["event_key"]
+                            if key not in event_groups:
+                                event_groups[key]={"key":key,"title":article["title"],"count":0}
+                            event_groups[key]["count"]+=1
                         failed=0
                         if scans:
                             for c in app.store.source_checks(tid,scans[0]["id"]):
@@ -169,7 +176,8 @@ class App:
                             "news_approved":sum(a["state"]=="approved" for a in articles),
                             "news_pending":sum(a["state"]=="pending" for a in articles),
                             "coverages":len(articles),
-                            "events":len({a["event_key"] for a in articles}),
+                            "events":len(event_groups),
+                            "event_groups":sorted(event_groups.values(),key=lambda x:-x["count"]),
                             "publishers":pub,"timeline":daily,
                             "scheduler":"متوقفة بقرار المالك — التطبيق يدوي بالكامل"})
                     if action=="articles":
@@ -180,8 +188,9 @@ class App:
                             publisher=params.get("publisher",[None])[0]
                             since=params.get("since",[None])[0]
                             until=params.get("until",[None])[0]
+                            key=params.get("event_key",[None])[0]
                             return self.j(200,{"articles":app.store.articles(
-                                tid,state=state,query=q,publisher=publisher,since=since,until=until)})
+                                tid,state=state,query=q,publisher=publisher,since=since,until=until,event_key=key)})
                         if len(parts) in (5,6):
                             art=app.store.article(tid,parts[4])
                             if len(parts)==5:
@@ -270,7 +279,7 @@ class App:
                         return self.j(201,{"id":uid})
                     if action=="scan" and len(parts)==4:
                         self.guard(tid,"analyst",True)
-                        sid,new=app.store.start_scan(tid)
+                        sid,new=app.store.start_scan(tid,data.get("start"),data.get("end"))
                         if new:
                             app.store.run_scan_background(tid,sid)
                         return self.j(202,{"scan_id":sid,"new_scan":new,"duplicate_click":not new})
@@ -281,7 +290,7 @@ class App:
                     if action=="articles" and len(parts)==6 and parts[5]=="review":
                         self.guard(tid,"analyst",True)
                         app.store.review(tid,parts[4],user["email"],data.get("state",""),
-                                         data.get("event_key"))
+                                         data.get("event_key"),data.get("reason"))
                         return self.j(200,{"saved":True})
                     if action=="reports" and len(parts)==4:
                         self.guard(tid,"analyst",True)
@@ -332,12 +341,35 @@ def main():
     parser.add_argument("--port",type=int,default=8765)
     parser.add_argument("--data",default=str(ROOT/".rasd-manual"))
     parser.add_argument("--seed-demo",action="store_true")
+    parser.add_argument("--private-live",action="store_true",help="No demo feeds in this process")
+    parser.add_argument("--init-owner",action="store_true",help="Generate a private owner on first run")
     parser.add_argument("--owner-email",default="owner@rasd.demo")
     parser.add_argument("--owner-password",default=None)
     args=parser.parse_args()
     if args.host not in ("127.0.0.1","localhost","::1"):
         parser.error("MVP refuses publicly exposed HTTP: use a TLS/authenticated deployment after security review")
-    app=App(args.data)
+    if args.seed_demo and args.private_live:
+        parser.error("cannot_seed_demo_in_private_live")
+    app=App(args.data,live_only=args.private_live)
+    if args.init_owner:
+        with app.store.connect() as db:
+            users=db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        if not users:
+            private_email=(args.owner_email if args.owner_email!="owner@rasd.demo"
+                           else "owner@rasd.private")
+            private_pass=secrets.token_urlsafe(26)
+            app.store.create_user(private_email,private_pass,owner=True)
+            credential_file=Path(args.data)/"OWNER_LOGIN_LOCAL.txt"
+            credential_file.write_text(
+                "RASD private manual owner\\nURL: http://127.0.0.1:"+
+                str(args.port)+"\\nAccount: "+private_email+
+                "\\nPassword: "+private_pass+"\\nNot for public use\\n",
+                encoding="utf-8")
+            try: os.chmod(credential_file,0o600)
+            except OSError: pass
+            print("RASD_OWNER_CREDENTIAL_FILE="+str(credential_file),flush=True)
+        else:
+            print("RASD_PRIVATE_OWNER_EXISTS_NO_RESET",flush=True)
     if args.seed_demo:
         info=app.store.seed_demo(args.owner_email,args.owner_password)
         if info:
