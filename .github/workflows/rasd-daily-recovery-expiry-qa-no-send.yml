@@ -26,4 +26,4 @@ jobs:
       - name: Test actual simulated Nov 23 publication time and full main regressions
         run: python -m unittest discover -s tests -q
       - name: Confirm worker dry run has no SMTP or private CAS
-        run: python scheduled_rasd.py --mode dry_run_no_network
+        run: python scheduled_rasd.py --mode dry_run
