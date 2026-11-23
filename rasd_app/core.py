@@ -608,9 +608,9 @@ class Store:
             from docx.oxml import OxmlElement
             from docx.opc.constants import RELATIONSHIP_TYPE as RT
             from docx.oxml.ns import qn
-            rid=para.part.relate_to(art["url"],RT.HYPERLINK,is_external=True)
+            link_rid=para.part.relate_to(art["url"],RT.HYPERLINK,is_external=True)
             link=OxmlElement("w:hyperlink")
-            link.set(qn("r:id"),rid)
+            link.set(qn("r:id"),link_rid)
             run=OxmlElement("w:r")
             node=OxmlElement("w:t")
             node.text=art["url"]
