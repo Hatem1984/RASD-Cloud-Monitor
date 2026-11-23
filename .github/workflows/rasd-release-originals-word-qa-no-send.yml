@@ -33,3 +33,5 @@ jobs:
           python -m playwright install --only-shell chromium
       - name: Probe 14 original RSS sources and up to 3 publisher screenshots into Word
         run: python rasd_release_original_source_to_word_qa_no_send.py
+      - name: Measure the exact last completed Cairo hour separately from 72h photo QA
+        run: python rasd_hourly_real_window_probe_no_send.py
