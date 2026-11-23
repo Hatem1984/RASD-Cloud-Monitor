@@ -30,12 +30,26 @@ python() {
                               capture_output=True, text=True, env=env,
                               check=False)
 
+    def test_relay_backup_and_main_log_separate_nonsecret_exit_codes(self):
+        for path in (
+                ".github/workflows/rasd-scheduled.yml",
+                ".github/workflows/rasd-schedule-backup.yml",
+                ".github/workflows/rasd-cloudflare-dispatch.yml"):
+            with self.subTest(path=path):
+                text = Path(path).read_text("utf-8")
+                self.assertEqual(text.count("RASD_INTERVAL_EXIT_CODE="), 1)
+                self.assertEqual(text.count("RASD_DAILY_RECOVERY_EXIT_CODE="), 1)
+                self.assertIn("python scheduled_rasd.py --mode interval", text)
+                self.assertIn("python scheduled_rasd.py --mode rollup_recovery", text)
+
     def test_interval_failure_does_not_skip_daily(self):
         output = self.run_case(7, 0)
         self.assertNotEqual(output.returncode, 0)
         self.assertIn("INTERVAL_ATTEMPTED", output.stdout)
         self.assertIn("DAILY_RECOVERY_ATTEMPTED", output.stdout)
         self.assertIn("RASD_SCHEDULED_INTERVAL_OR_DAILY_RECOVERY_HOLD", output.stdout)
+        self.assertIn("RASD_INTERVAL_EXIT_CODE=7", output.stdout)
+        self.assertIn("RASD_DAILY_RECOVERY_EXIT_CODE=0", output.stdout)
 
     def test_daily_failure_keeps_failed_workflow(self):
         output = self.run_case(0, 9)
