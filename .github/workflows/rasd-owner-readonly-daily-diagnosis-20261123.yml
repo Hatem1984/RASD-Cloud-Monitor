@@ -1,0 +1,42 @@
+name: RASD — owner-authorized protected DAILY READ-ONLY triage — NO SEND
+
+on:
+  push:
+    branches:
+      - 'release-rasd-hourly-contract-20261121'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasd-owner-readonly-private-daily-diagnosis-20261123
+  cancel-in-progress: false
+
+jobs:
+  protected-readonly-daily:
+    if: >-
+      github.actor == 'Hatem1984' &&
+      github.ref == 'refs/heads/release-rasd-hourly-contract-20261121' &&
+      github.run_attempt == 1 &&
+      github.event.head_commit.message == 'RASD-OWNER-READONLY-DAILY-DIAG-2026-11-23'
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    environment: rasd-production
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_HOURLY_REPORTS_ENABLED: 'false'
+      RASD_DAILY_VOLUME_DELIVERY_ENABLED: 'false'
+      RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
+      RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
+      RASD_REPORT_CC: ${{ vars.RASD_REPORT_CC }}
+      RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
+      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install private original Word inspector dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: READ ONLY — inspect Nov 21 and 22 already accepted Sent original Word
+        run: python rasd_private_daily_readonly_triage.py
