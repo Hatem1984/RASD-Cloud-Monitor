@@ -120,8 +120,11 @@ def build_official_daily(output: Path, *, target_date: date,
     if cfg.get("keywords") != APPROVED_WORDS:
         raise ValueError("official_keywords_modified")
     output.mkdir(parents=True, exist_ok=True)
-    from playwright.sync_api import sync_playwright
-    factory = browser_factory or sync_playwright
+    if browser_factory is None:
+        from playwright.sync_api import sync_playwright
+        factory = sync_playwright
+    else:
+        factory = browser_factory
     accepted = []
     with factory() as playwright:
         browser = playwright.chromium.launch(
