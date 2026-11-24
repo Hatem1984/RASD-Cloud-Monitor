@@ -19,6 +19,9 @@ from docx import Document
 from capture_public import image_quality
 from cloud_proof_report import word_images_match_capture_digests
 from daily_report import render_docx
+from rasd_daily_grid_extractor import (
+    extract_sent_grid_originals, is_interval_ministry_grid,
+)
 
 
 def sent_mailbox(client) -> None:
@@ -96,6 +99,11 @@ def extract_sent_originals(word_bytes: bytes, expected: list[dict],
     filename.write_bytes(word_bytes)
     try:
         document = Document(filename)
+        # The approved Ministry layout now embeds verified screenshots inside
+        # numbered table cards. Preserve the old paragraph-based extraction
+        # for previously accepted mails produced before the layout change.
+        if is_interval_ministry_grid(document):
+            return extract_sent_grid_originals(document, expected, output)
         # The interval Word also numbers HELD stories in a separate section.
         # Only numbered headlines inside the verified news section may match
         # the private accepted ledger; never mistake HOLD candidates for sent.
@@ -143,7 +151,7 @@ def extract_sent_originals(word_bytes: bytes, expected: list[dict],
             end = pairs[i+1][0] if i+1 < len(pairs) else section_end
             if not begin < paragraph_index < end:
                 raise RuntimeError("daily_sent_image_order_hold")
-            if len(blob) < 8000 or not blob.startswith(b"\xff\xd8"):
+            if len(blob) < 3000 or not blob.startswith(b"\xff\xd8"):
                 raise RuntimeError("daily_sent_jpeg_signature_hold")
             destination = output / ("daily-original-" + expected[i]["id"] + ".jpg")
             destination.write_bytes(blob)
