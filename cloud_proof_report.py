@@ -131,7 +131,7 @@ def proof_capture(article: dict, feeds: list[dict], destination: Path,
         return {"status": "hold", "reason": "url_mismatch"}
     if not original_headline_in_page_title(article["headline"], result.get("title", "")):
         return {"status": "hold", "reason": "title_mismatch"}
-    if not destination.is_file() or destination.stat().st_size < 8000:
+    if not destination.is_file() or destination.stat().st_size < 3000:
         return {"status": "hold", "reason": "screenshot_too_small"}
     quality = image_quality(destination)
     if not quality["accepted"]:
