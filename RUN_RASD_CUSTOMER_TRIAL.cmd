@@ -5,6 +5,8 @@ title RASD - Private Institutional Trial (MANUAL)
 if not defined RASD_PRIVATE_DATA set "RASD_PRIVATE_DATA=%LOCALAPPDATA%\RASD-Customer-Trial"
 if not defined RASD_PRIVATE_PORT set "RASD_PRIVATE_PORT=8774"
 set "RASD_PRIVATE_URL=http://127.0.0.1:%RASD_PRIVATE_PORT%"
+set "PLAYWRIGHT_BROWSERS_PATH=%~dp0.venv-trial\pw-browsers"
+set "PLAYWRIGHT_SKIP_BROWSER_GC=1"
 echo RASD PRIVATE LIVE - MANUAL - NO SMTP / SCHEDULES
 echo Data: %RASD_PRIVATE_DATA%
 powershell -NoProfile -Command "try {$r=Invoke-RestMethod ($env:RASD_PRIVATE_URL+'/api/health') -TimeoutSec 2; if($r.service -eq 'RASD Manual' -and $r.private_live -and $r.scheduler -eq 'DISABLED_IN_THIS_APP' -and $r.email -eq 'NOT_IMPLEMENTED') {exit 0}; exit 2} catch {exit 1}"
