@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Inches, Pt
+from docx.shared import Inches, Pt, RGBColor
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -253,7 +253,7 @@ class Store:
             raise ValueError("invalid_user_or_password")
         uid, salt = new_id(), secrets.token_hex(16)
         with self.connect() as con:
-            con.execute("INSERT INTO users VALUES(?,?,?,?,?)",
+            con.execute("INSERT INTO users(id,email,salt,password_hash,platform_owner) VALUES(?,?,?,?,?)",
                         (uid, email, salt, digest_password(password, salt), int(owner)))
         return uid
 
@@ -369,7 +369,7 @@ class Store:
             existing = con.execute("SELECT id FROM users WHERE email=?", (email.lower().strip(),)).fetchone()
         uid = existing["id"] if existing else self.create_user(email, password)
         with self.connect() as con:
-            con.execute("INSERT INTO memberships VALUES(?,?,?)", (uid,tid,role))
+            con.execute("INSERT INTO memberships(user_id,tenant_id,role) VALUES(?,?,?)", (uid,tid,role))
         return uid
 
     def add_source(self, tenant: str, name: str, feed: str):
@@ -622,6 +622,12 @@ class Store:
         doc=Document()
         doc.styles["Normal"].font.name="Arial"
         doc.styles["Normal"].font.size=Pt(10)
+        for style in ("Title","Heading 1","Heading 2"):
+            doc.styles[style].font.name="Arial"
+            doc.styles[style].font.color.rgb=RGBColor(23,49,78)
+        doc.styles["Title"].font.size=Pt(22 if len(tenant["name"])<48 else 18)
+        doc.styles["Heading 1"].font.size=Pt(15)
+        doc.styles["Heading 2"].font.size=Pt(12)
         sec=doc.sections[0]
         sec.top_margin=Inches(.7)
         sec.bottom_margin=Inches(.7)
@@ -641,13 +647,21 @@ class Store:
                      f"، الساعة {moment.hour:02}:{moment.minute:02}")
             return display.translate(str.maketrans("0123456789","٠١٢٣٤٥٦٧٨٩"))
 
-        def article_hyperlink(paragraph, exact_url: str):
+        def article_hyperlink(paragraph, exact_url: str, label: str):
             rel_id=paragraph.part.relate_to(exact_url,RT.HYPERLINK,is_external=True)
             link=OxmlElement("w:hyperlink")
             link.set(qn("r:id"),rel_id)
             run=OxmlElement("w:r")
             textnode=OxmlElement("w:t")
-            textnode.text=exact_url
+            textnode.text=label
+            props=OxmlElement("w:rPr")
+            color=OxmlElement("w:color")
+            color.set(qn("w:val"),"21617A")
+            props.append(color)
+            under=OxmlElement("w:u")
+            under.set(qn("w:val"),"single")
+            props.append(under)
+            run.insert(0,props)
             run.append(textnode)
             link.append(run)
             paragraph._p.append(link)
@@ -660,6 +674,8 @@ class Store:
                 raise RuntimeError("report_logo_integrity_hold") from None
 
         doc.add_heading("رصد | "+tenant["name"],0)
+        doc.add_paragraph("تقرير إعلامي مخصص للجهة — إصدار محفوظ يمكن الرجوع إليه بعد تغيير الإعدادات.")
+        doc.add_heading("نطاق التقرير",level=2)
         is_demo=any(a["demo"] for a in rows) or tenant.get("mode")=="demo"
         doc.add_paragraph("وضع التقرير: "+
             ("عرض تجريبي — بيانات وأخبار وصور غير حقيقية" if is_demo
@@ -671,6 +687,7 @@ class Store:
                           " | الناشرون: "+str(len({a["publisher"] for a in rows})))
         doc.add_paragraph("صور ناشر أصلية موثقة: "+
                           str(sum(a["image_state"]=="verified_original" for a in rows)))
+        doc.add_heading("أدلة آخر فحص للمصادر",level=2)
         scans=self.list_scans(tid,1)
         if scans:
             last=json.loads(scans[0].get("summary") or "{}")
@@ -687,11 +704,31 @@ class Store:
             if failed:
                 doc.add_paragraph("حدود التغطية: تعذر فحص "+str(failed)+
                                   " مصدر/مصادر خلال آخر فحص؛ النتائج جزئية ولا تثبت عدم نشر مواد أخرى.")
+        # Count the actual stored tenant publications in this report window,
+        # not the target and not the most recent unrelated source attempt.
+        with self.connect() as con:
+            candidates=con.execute("SELECT published_at,state FROM articles WHERE tenant_id=?",(tid,)).fetchall()
+        within=[a for a in candidates if window_start <= datetime.fromisoformat(a["published_at"]) <= window_end]
+        doc.add_paragraph("التغطيات المحفوظة داخل فترة التقرير: "+str(len(within))+
+            " | معتمدة: "+str(sum(a["state"]=="approved" for a in within))+
+            " | معلقة: "+str(sum(a["state"]=="pending" for a in within))+
+            " | مستبعدة: "+str(sum(a["state"]=="rejected" for a in within))+
+            " | دخلت الملف بعد الاختيار وسياسة التكرار والهدف: "+str(len(rows)))
         if len(rows)<tenant["target"]:
             doc.add_paragraph("مقارنة بالهدف: اختار المحلل "+
                 str(len(rows))+" خبرًا لهذا الملف من هدف "+str(tenant["target"])+
                 " أخبار للجهة. هذا الفرق لا يثبت نقص تغطية المصادر؛ "+
                 "راجع نطاق الناشرين ونتيجة الفحص والمواد المعلقة للمراجعة.")
+
+        # Rights are tracked for each individual source, never assumed from
+        # successful publisher access or a cryptographically verified picture.
+        source_rights={x["id"]:x for x in self.sources(tid)}
+        # An intentional, clearly identified cover page. Keep one complete
+        # publisher-evidence card together; never strand its title on cover.
+        if rows:
+            doc.add_paragraph("تنبيه: صور صفحات الناشرين للتوثيق الداخلي؛ إعادة النشر التجاري تحتاج مراجعة حقوق المصدر.")
+            doc.add_page_break()
+            doc.add_heading("الأخبار المُختارة وروابط الناشرين",level=1)
 
         for idx,art in enumerate(rows,1):
             # One single Word row per report card. w:cantSplit keeps the
@@ -713,19 +750,24 @@ class Store:
                                     local_date(art["published_at"]))
             meta.paragraph_format.keep_with_next=True
             cell.add_paragraph("اكتُشف "+local_date(art["discovered_at"])).paragraph_format.keep_with_next=True
-            linkpara=cell.add_paragraph("رابط الناشر: ")
+            linkpara=cell.add_paragraph("المصدر الأصلي: ")
             linkpara.paragraph_format.keep_with_next=True
-            article_hyperlink(linkpara,art["url"])
+            article_hyperlink(linkpara,art["url"],"فتح الخبر على موقع "+art["publisher"])
             if art["image_path"]:
                 photo=cell.add_paragraph("الصورة: "+
                     ("DEMO — صورة توضيحية وليست صورة الناشر" if art["demo"]
-                     else "صورة الناشر: "+art["image_state"]))
+                     else "لقطة صفحة الناشر الأصلية — حالة التحقق: "+art["image_state"]))
                 photo.paragraph_format.keep_with_next=True
                 picture=cell.add_paragraph()
                 picture.paragraph_format.keep_with_next=True
                 picture.add_run().add_picture(
                     str(self.secure_file(tid,art["image_path"])),width=Inches(4.7))
                 cell.add_paragraph("بصمة JPEG — SHA-256: "+art["image_sha"])
+                source=source_rights.get(art["source_id"],{})
+                cell.add_paragraph("حقوق إعادة استخدام صورة الناشر — "+
+                    str(source.get("name",art["publisher"]))+
+                    ": لم يقدم تصريح إعادة نشر تجاري موثق في بيانات رصد؛ "+
+                    "تحقق من موافقة الناشر قبل المشاركة الخارجية.")
             else:
                 cell.add_paragraph("لا توجد صورة ناشر موثقة لهذا الخبر.")
             doc.add_paragraph("").paragraph_format.space_after=Pt(3)

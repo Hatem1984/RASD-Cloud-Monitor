@@ -1,0 +1,15 @@
+# Deployment template ONLY. Do not run or expose externally without owner approval.
+# Replace domain with an authorized private trial hostname; Caddy provisions TLS
+# once DNS and firewall are configured. Backend must remain loopback-only.
+trial.example.invalid {
+    encode gzip
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+    }
+    reverse_proxy 127.0.0.1:8774 {
+        header_up X-Forwarded-Proto https
+    }
+}

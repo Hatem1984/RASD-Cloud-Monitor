@@ -7,6 +7,8 @@ Existing demo databases are migrated additively. No mail or production CAS.
 from __future__ import annotations
 
 import hashlib
+import hmac
+import secrets
 import json
 import re
 import sqlite3
@@ -15,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .core import (Store, DEMO_FEEDS, clean_terms, demo_items, event_key,
+from .core import (Store, DEMO_FEEDS, ROLES, digest_password, clean_terms, demo_items, event_key,
                    make_demo_image, new_id, parse_live_feed, utcnow)
 from monitor import _matchable_arabic, safe_source_failure_code
 
@@ -76,6 +78,9 @@ class EnterpriseStore(Store):
                 ("source_checks","excluded","INTEGER NOT NULL DEFAULT 0"),
                 ("source_checks","outside_window","INTEGER NOT NULL DEFAULT 0"),
                 ("source_checks","already_known","INTEGER NOT NULL DEFAULT 0"),
+                ("sources","reuse_rights","TEXT NOT NULL DEFAULT 'unreviewed'"),
+                ("users","disabled","INTEGER NOT NULL DEFAULT 0"),
+                ("memberships","active","INTEGER NOT NULL DEFAULT 1"),
                 ("articles","image_error","TEXT"),
                 ("articles","image_checked_at","TEXT"),
             ):
@@ -87,6 +92,104 @@ class EnterpriseStore(Store):
             db.execute("""UPDATE scans SET status='failed',ended_at=?,
                 summary='{"error":"interrupted_by_app_restart","source_results_preserved":true}'
                 WHERE status='running'""",(utcnow(),))
+
+    def session_user(self,token,csrf=None):
+        user=super().session_user(token,csrf)
+        if user is not None and user.get("disabled"):
+            return None
+        return user
+
+    def login(self,email,password):
+        token,csrf=super().login(email,password)
+        if not self.session_user(token,csrf):
+            self.logout(token)
+            raise PermissionError("account_disabled")
+        return token,csrf
+
+    def memberships(self,user):
+        if user.get("disabled"):
+            return []
+        if user.get("platform_owner"):
+            return super().memberships(user)
+        with self.connect() as db:
+            rows=db.execute("""SELECT t.*,m.role FROM tenants t
+                JOIN memberships m ON m.tenant_id=t.id
+                WHERE m.user_id=? AND m.active=1 ORDER BY t.name""",
+                (user["id"],)).fetchall()
+        return [dict(row) for row in rows]
+
+    def role(self,user,tenant,required="reader"):
+        if user.get("disabled"):
+            raise PermissionError("account_disabled")
+        if not user.get("platform_owner"):
+            with self.connect() as db:
+                row=db.execute("SELECT active FROM memberships WHERE tenant_id=? AND user_id=?",
+                               (tenant,user["id"])).fetchone()
+            if row is None or not row["active"]:
+                raise PermissionError("tenant_membership_disabled")
+        return super().role(user,tenant,required)
+
+    def add_member(self,tid,email,password,role):
+        if role not in ROLES:
+            raise ValueError("role_invalid")
+        normalized=str(email).strip().lower()
+        with self.connect() as db:
+            row=db.execute("SELECT id FROM users WHERE email=?",(normalized,)).fetchone()
+        uid=row["id"] if row else self.create_user(normalized,password)
+        with self.connect() as db:
+            db.execute("""INSERT INTO memberships(user_id,tenant_id,role,active)
+                VALUES(?,?,?,1)""",(uid,tid,role))
+        return uid
+
+    def tenant_members(self,tid):
+        with self.connect() as db:
+            rows=db.execute("""SELECT u.id,u.email,m.role,m.active
+                FROM memberships m JOIN users u ON u.id=m.user_id
+                WHERE m.tenant_id=? ORDER BY u.email""",(tid,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def toggle_member(self,tid,uid,enabled,actor):
+        if type(enabled) is not bool:
+            raise ValueError("invalid_member_status")
+        if uid==actor["id"]:
+            raise ValueError("cannot_disable_own_membership")
+        with self.connect() as db:
+            u=db.execute("SELECT platform_owner FROM users WHERE id=?",(uid,)).fetchone()
+            if u is None or u["platform_owner"]:
+                raise PermissionError("protected_owner_account")
+            row=db.execute("SELECT role,active FROM memberships WHERE tenant_id=? AND user_id=?",
+                           (tid,uid)).fetchone()
+            if row is None:
+                raise LookupError("member_not_in_tenant")
+            if not enabled and row["role"]=="tenant_admin" and not actor["platform_owner"]:
+                others=db.execute("""SELECT COUNT(*) FROM memberships
+                   WHERE tenant_id=? AND active=1 AND role='tenant_admin' AND user_id<>?""",
+                   (tid,uid)).fetchone()[0]
+                if others==0:
+                    raise ValueError("cannot_disable_last_tenant_admin")
+            db.execute("UPDATE memberships SET active=? WHERE tenant_id=? AND user_id=?",
+                       (int(enabled),tid,uid))
+            if not enabled:
+                db.execute("DELETE FROM sessions WHERE user_id=?",(uid,))
+        return {"member_id":uid,"enabled":enabled}
+
+    def change_password(self,uid,current_password,new_password):
+        if not isinstance(new_password,str) or not 14<=len(new_password)<=256:
+            raise ValueError("new_password_must_have_14_to_256_characters")
+        with self.connect() as db:
+            row=db.execute("SELECT salt,password_hash,disabled FROM users WHERE id=?",(uid,)).fetchone()
+            if row is None or row["disabled"]:
+                raise PermissionError("account_disabled")
+            if not isinstance(current_password,str) or not hmac.compare_digest(
+                row["password_hash"],digest_password(current_password,row["salt"])):
+                raise PermissionError("current_password_wrong")
+            if hmac.compare_digest(row["password_hash"],digest_password(new_password,row["salt"])):
+                raise ValueError("new_password_must_differ")
+            salt=secrets.token_hex(16)
+            db.execute("UPDATE users SET salt=?,password_hash=? WHERE id=?",
+                       (salt,digest_password(new_password,salt),uid))
+            db.execute("DELETE FROM sessions WHERE user_id=?",(uid,))
+        return True
 
     def tenant(self,tid):
         result=super().tenant(tid)
@@ -269,6 +372,14 @@ class EnterpriseStore(Store):
                 db.execute("UPDATE articles SET review_log=? WHERE tenant_id=? AND id=?",
                            (json.dumps(history,ensure_ascii=False),tid,aid))
 
-    def articles(self,tid,*,event_key=None,**filters):
+    def articles(self,tid,*,event_key=None,scan_id=None,image_state=None,source_id=None,**filters):
         rows=super().articles(tid,**filters)
-        return [r for r in rows if r["event_key"]==event_key] if event_key else rows
+        if event_key:
+            rows=[r for r in rows if r["event_key"]==event_key]
+        if scan_id:
+            rows=[r for r in rows if r["scan_id"]==scan_id]
+        if image_state:
+            rows=[r for r in rows if r["image_state"]==image_state]
+        if source_id:
+            rows=[r for r in rows if r["source_id"]==source_id]
+        return rows

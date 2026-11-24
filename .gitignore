@@ -9,12 +9,17 @@ htmlcov/
 
 # Local virtual environments and private configuration
 .venv/
+.venv-trial/
 venv/
 .env
 .env.*
 !.env.example
 *.pem
 *.key
+*.rasd.enc
+OWNER_LOGIN_LOCAL.txt
+owner-login.txt
+qa-customer-manager-credentials.txt
 
 # Generated ephemeral artifacts (not repository source)
 evidence/

@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'feature/rasd-enterprise-live-*'
+      - 'feature/rasd-enterprise-onboarding-*'
   workflow_dispatch:
 permissions:
   contents: read
