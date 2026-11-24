@@ -38,6 +38,15 @@ class IntervalSameFinalWordLayout(unittest.TestCase):
             self.assertEqual(len(hourly.inline_shapes), 2)
             self.assertEqual(len(final.inline_shapes), 2)
             self.assertEqual(len(hourly.tables), len(final.tables))
+            for doc in (hourly, final):
+                section = doc.sections[0]
+                printable = section.page_width - section.left_margin - section.right_margin
+                summary = doc.tables[1]
+                for row in summary.rows:
+                    self.assertLessEqual(sum(c.width for c in row.cells), printable)
+                    self.assertEqual([c.width for c in row.cells],
+                                     [c.width for c in summary.columns])
+
             self.assertTrue(word_images_match_capture_digests(interval_path, digests))
             text = "\n".join(p.text for p in hourly.paragraphs)
             self.assertIn("تحليل الرصد", text)

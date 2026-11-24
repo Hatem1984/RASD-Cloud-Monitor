@@ -264,13 +264,14 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
     summary.columns[1].width=Cm(3)
     summary.columns[2].width=Cm(5)
     for idx,label in enumerate(("الموقع", "الأخبار", "النسبة")):
-        c=summary.rows[0].cells[idx];_shade(c,NAVY)
+        c=summary.rows[0].cells[idx];c.width=summary.columns[idx].width;_shade(c,NAVY)
         p=c.paragraphs[0];_rtl(p);_run(p,label,size=10,bold=True,color=GOLD)
     total=len(report['articles'])
     for label,count in sorted(distribution.items(),key=lambda kv:(-kv[1],kv[0])):
         cells=summary.add_row().cells
         vals=(label,str(count),f"{(count/total)*100:.1f}%")
         for i,v in enumerate(vals):
+            cells[i].width=summary.columns[i].width
             if i==0:_shade(cells[i],CREAM)
             p=cells[i].paragraphs[0];_rtl(p);_run(p,v,size=9.5,bold=i==0)
     topic_counts=descriptive_topic_counts(report["articles"])
