@@ -237,8 +237,11 @@ def _read_original(page, url: str, keywords: list[str], target_day: date, image:
     if not original_headline_or_intro_matches(body, headline, keywords):
         return {"status": "HOLD", "reason": "saved_ministry_keywords_missing"}
     published = original_publication_date(body, headline)
-    if published is None or published != target_day:
-        return {"status": "HOLD", "reason": "publisher_date_mismatch_or_missing"}
+    if published is None:
+        return {"status": "HOLD", "reason": "publisher_date_missing"}
+    if published != target_day:
+        return {"status": "HOLD", "reason": "publisher_date_outside_target",
+                "published_date_cairo": published.isoformat()}
     image.parent.mkdir(parents=True, exist_ok=True)
     try:
         # The original Ministry page currently leaves its documented

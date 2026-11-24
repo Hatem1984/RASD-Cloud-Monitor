@@ -145,13 +145,21 @@ def build_official_daily(output: Path, *, target_date: date,
                 original = _read_original(
                     page, url, APPROVED_WORDS, target_date,
                     output / f"official-original-{index:02d}.jpg")
+                if (original.get("status") == "HOLD" and
+                        original.get("reason") == "publisher_date_outside_target"):
+                    try:
+                        published = date.fromisoformat(original["published_date_cairo"])
+                    except (KeyError, TypeError, ValueError):
+                        raise RuntimeError("official_original_hold_publisher_date_missing") from None
+                    if published >= target_date:
+                        raise RuntimeError("official_original_hold_publisher_date_inconsistent")
+                    continue  # Only proven older dates may be excluded.
                 if original.get("status") != "verified":
-                    if original.get("reason") == "publisher_date_mismatch_or_missing":
-                        continue  # Outside today's verified original publication window.
                     allowed_capture_holds = {
                         "publisher_page_unavailable",
                         "publisher_redirect_changed_identity",
                         "missing_original_headline",
+                        "publisher_date_missing",
                         "official_page_content_unavailable",
                         "saved_ministry_keywords_missing",
                         "original_headline_not_visible",
@@ -287,6 +295,8 @@ def main():
                 "publisher_page_unavailable",
                 "publisher_redirect_changed_identity",
                 "missing_original_headline",
+                "publisher_date_missing",
+                "publisher_date_inconsistent",
                 "official_page_content_unavailable",
                 "saved_ministry_keywords_missing",
                 "original_headline_not_visible",
