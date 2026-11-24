@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 from contextlib import closing
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -62,14 +63,18 @@ def create_backup(data_dir: str|Path,archive: str|Path) -> dict:
             "source_db_sha256":meta["entries"]["database.sqlite"]["sha256"]}
 
 
-def restore_backup(archive: str|Path,destination: str|Path) -> dict:
-    source=Path(archive).resolve()
+def restore_backup(archive: str|Path|bytes,destination: str|Path) -> dict:
+    """Restore from a disk ZIP or from authenticated decrypted ZIP bytes in RAM."""
+    memory_archive=isinstance(archive,(bytes,bytearray))
+    source=None if memory_archive else Path(archive).resolve()
     dest=Path(destination).resolve()
-    if not source.is_file():
+    if memory_archive and len(archive)>250_000_000:
+        raise ValueError("backup_memory_size_limit")
+    if source is not None and not source.is_file():
         raise ValueError("backup_file_not_found")
     if dest.exists() and any(dest.iterdir()):
         raise ValueError("restore_destination_must_be_empty")
-    with zipfile.ZipFile(source,"r") as z:
+    with zipfile.ZipFile(io.BytesIO(archive) if memory_archive else source,"r") as z:
         names=z.namelist()
         if len(names)>2000 or "manifest.json" not in names or len(names)!=len(set(names)):
             raise ValueError("archive_member_count_or_duplicate_invalid")
@@ -133,7 +138,7 @@ def restore_backup(archive: str|Path,destination: str|Path) -> dict:
             shutil.rmtree(dest,ignore_errors=True)
             raise
     return {"restored_path":str(dest),"files":len(expected),
-            "archive_sha256":sha(source.read_bytes()),
+            "archive_sha256":sha(archive if memory_archive else source.read_bytes()),
             "tenants":len(st.memberships({"id":"", "platform_owner":True}))}
 
 

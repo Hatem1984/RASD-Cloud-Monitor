@@ -139,6 +139,9 @@ class App:
                         tenant["role"]=app.store.role(user,tid)
                         return self.j(200,tenant)
                     action=parts[3]
+                    if action=="members" and len(parts)==4:
+                        self.guard(tid,"tenant_admin")
+                        return self.j(200,{"members":app.store.tenant_members(tid)})
                     if action=="sources" and len(parts)==4:
                         return self.j(200,{"sources":app.store.sources(tid)})
                     if action=="scans":
@@ -150,6 +153,18 @@ class App:
                             if not found:
                                 raise LookupError("scan_not_found")
                             found["source_checks"]=app.store.source_checks(tid,scan_id)
+                            articles=app.store.articles(tid,scan_id=scan_id)
+                            archived=set()
+                            for report in app.store.list_reports(tid):
+                                for item in json.loads(report["manifest"]):
+                                    archived.add(item["id"])
+                            found["metrics"]={
+                                "coverages":len(articles),
+                                "events":len({a["event_key"] for a in articles}),
+                                "images_verified":sum(a["image_state"]=="verified_original" for a in articles),
+                                "approved":sum(a["state"]=="approved" for a in articles),
+                                "pending":sum(a["state"]=="pending" for a in articles),
+                                "report_selected":sum(a["id"] in archived for a in articles)}
                             return self.j(200,found)
                     if action=="dashboard":
                         articles=app.store.articles(tid)
@@ -189,8 +204,17 @@ class App:
                             since=params.get("since",[None])[0]
                             until=params.get("until",[None])[0]
                             key=params.get("event_key",[None])[0]
-                            return self.j(200,{"articles":app.store.articles(
-                                tid,state=state,query=q,publisher=publisher,since=since,until=until,event_key=key)})
+                            scan_id=params.get("scan_id",[None])[0]
+                            image_state=params.get("image_state",[None])[0]
+                            source_id=params.get("source_id",[None])[0]
+                            rows=app.store.articles(
+                                tid,state=state,query=q,publisher=publisher,since=since,until=until,
+                                event_key=key,scan_id=scan_id,image_state=image_state,source_id=source_id)
+                            if params.get("reported",[""])[0]=="yes":
+                                report_ids={a["id"] for r in app.store.list_reports(tid)
+                                            for a in json.loads(r["manifest"])}
+                                rows=[a for a in rows if a["id"] in report_ids]
+                            return self.j(200,{"articles":rows})
                         if len(parts) in (5,6):
                             art=app.store.article(tid,parts[4])
                             if len(parts)==5:
@@ -244,6 +268,11 @@ class App:
                         return self.j(200,{"ok":True},
                                       {"Set-Cookie":"rasd_sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"})
                     data=self.input()
+                    if parts==["api","account","password"]:
+                        app.store.change_password(user["id"],
+                                data.get("current_password",""),data.get("new_password",""))
+                        return self.j(200,{"changed":True,"session_revoked":True},
+                           {"Set-Cookie":"rasd_sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"})
                     if parts==["api","tenants"]:
                         if not user["platform_owner"]:
                             raise PermissionError("platform_owner_only")
@@ -277,6 +306,10 @@ class App:
                         uid=app.store.add_member(tid,data.get("email",""),data.get("password",""),
                                                  data.get("role","reader"))
                         return self.j(201,{"id":uid})
+                    if action=="members" and len(parts)==6 and parts[5]=="status":
+                        self.guard(tid,"tenant_admin",True)
+                        return self.j(200,app.store.toggle_member(
+                            tid,parts[4],data.get("enabled"),user))
                     if action=="scan" and len(parts)==4:
                         self.guard(tid,"analyst",True)
                         sid,new=app.store.start_scan(tid,data.get("start"),data.get("end"))
@@ -361,9 +394,9 @@ def main():
             app.store.create_user(private_email,private_pass,owner=True)
             credential_file=Path(args.data)/"OWNER_LOGIN_LOCAL.txt"
             credential_file.write_text(
-                "RASD private manual owner\\nURL: http://127.0.0.1:"+
-                str(args.port)+"\\nAccount: "+private_email+
-                "\\nPassword: "+private_pass+"\\nNot for public use\\n",
+                "RASD private manual owner\nURL: http://127.0.0.1:"+
+                str(args.port)+"\nAccount: "+private_email+
+                "\nPassword: "+private_pass+"\nNot for public use\n",
                 encoding="utf-8")
             try: os.chmod(credential_file,0o600)
             except OSError: pass

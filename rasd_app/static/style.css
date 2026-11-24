@@ -4,3 +4,12 @@
 @media(max-width:1080px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.panels{grid-template-columns:1fr}.content{padding:26px}.login-bg{grid-template-columns:1fr 1fr}.login-card{padding:38px}.shell{grid-template-columns:225px minmax(0,1fr)}}
 @media(max-width:720px){.login-bg{display:block}.login-card{max-width:480px;min-height:100vh;margin:auto;padding:27px}.hero{display:none}.shell{display:block}.sidebar{position:fixed;right:-265px;width:250px;z-index:20;transition:right .2s}.sidebar.open{right:0}.menu{display:block}.top{padding:0 17px;height:72px}.user-chip #account-email{display:none}.content{padding:22px 15px}.content-header{display:block}.content-header .actions{margin-top:15px}.stats{gap:10px}.stat{padding:14px}.stat strong{font-size:23px}.filters,.form-grid,.form-grid.two{grid-template-columns:1fr 1fr}.modal{padding:22px}.bars .barrow{grid-template-columns:95px 1fr 25px}}
 @media(max-width:450px){.filters,.form-grid,.form-grid.two{grid-template-columns:1fr}.stat small{display:none}.content-header h1{font-size:23px}}
+
+/* Five-step customer onboarding stays readable at 390px, with no giant KPIs. */
+.onboarding-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.onboarding-step{min-width:0;background:#f8fafc;border:1px solid #e4eaf1;border-radius:12px;padding:13px 15px}
+.onboarding-step.complete{background:#f3faf5;border-color:#cce6d4}
+.onboarding-step strong{display:block;font-size:13px;font-weight:800;line-height:1.6;color:var(--navy)}
+.onboarding-step span{display:block;margin-top:5px;color:#677a8e;font-size:11px;line-height:1.65}
+@media(max-width:1080px){.onboarding-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.onboarding-steps{grid-template-columns:1fr}.onboarding-step{padding:10px 13px}}
