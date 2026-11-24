@@ -1074,6 +1074,15 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         raise RuntimeError("daily_image_hold_word_integrity_hold")
                     photo_hold = True
                 no_news = False
+            official_status, official_count = "NOT_ENABLED", 0
+            if (mode in ("rollup", "rollup_recovery")
+                    and os.environ.get("RASD_DAILY_OFFICIAL_APPEND_ENABLED") == "true"):
+                from daily_official_section import append_official_daily
+                try:
+                    doc, official_status, official_count = append_official_daily(
+                        doc, output, target_day=date.fromisoformat(day))
+                except Exception:
+                    official_status, official_count = "HOLD_BASE_REPORT_PRESERVED", 0
             reservation = ledger.reserve(rollup_key, recipient)
             if reservation != "reserved":
                 return {"status": "rollup_not_reserved", "smtp_accepted": False}
@@ -1091,7 +1100,14 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 "sender": sender, "recipient": recipient, "password": password,
                 "subject": title, "key": rollup_key,
             }
-            if status_notice:
+            if status_notice or official_status == "HOLD_BASE_REPORT_PRESERVED":
+                if description is None:
+                    description = ("????? ??? ???????? ????????. ?????? Word ???? ????? "
+                                   "???? ?????? ??????? ??????? ????????? ????????? ????????.\n")
+                if official_status == "HOLD_BASE_REPORT_PRESERVED":
+                    description += "???? ????? ??? ???????? ??????? (HOLD)? ?? ?????? ??? ??????? ?????? ??????.\n"
+                elif official_status != "NOT_ENABLED":
+                    description += "??? ???????? ??????? ????? ?? ????? ???????? ???? ???? ?????? ?? ??????.\n"
                 mail_args["body_text"] = description
             receipt = send_one_word(doc, **mail_args)
             ledger.mark_smtp_accepted(rollup_key, receipt)
@@ -1102,6 +1118,8 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                         "daily_image_hold_status_smtp_accepted_unconfirmed_inbox"
                         if photo_hold else "daily_smtp_accepted_unconfirmed_inbox")),
                 "items": len(stories),
+                "official_section_status": official_status,
+                "official_section_items": official_count,
                 "is_explicit_zero_accepted_news_notice": no_news,
                 "is_explicit_image_capture_hold_notice": (
                     not no_news and photo_hold),

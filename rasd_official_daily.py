@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import tempfile
+import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -107,7 +108,7 @@ def compact_official_word(word: Path) -> None:
 
 def build_official_daily(output: Path, *, target_date: date,
                          config_path: Path = Path("sources.json"),
-                         browser_factory=None) -> tuple[Path, list[dict]]:
+                         browser_factory=None, time_budget_seconds=None) -> tuple[Path, list[dict]]:
     """Scan publisher's *actual* NewsList page 1, capture every same-day item.
 
     This is an honest official-source-limited bulletin, not an exhaustive
@@ -116,6 +117,14 @@ def build_official_daily(output: Path, *, target_date: date,
     """
     if type(target_date) is not date:
         raise ValueError("official_invalid_cairo_date")
+    if time_budget_seconds is not None and (type(time_budget_seconds) is not int
+            or not 30 <= time_budget_seconds <= 120):
+        raise ValueError("official_invalid_time_budget")
+    deadline = (time.monotonic() + time_budget_seconds
+                if time_budget_seconds is not None else None)
+    def check_budget():
+        if deadline is not None and time.monotonic() >= deadline:
+            raise RuntimeError("official_time_budget_hold")
     cfg = json.loads(config_path.read_text(encoding="utf-8"))
     if cfg.get("keywords") != APPROVED_WORDS:
         raise ValueError("official_keywords_modified")
@@ -137,17 +146,22 @@ def build_official_daily(output: Path, *, target_date: date,
             context.route("**/*", lambda route: (
                 route.continue_() if allowed_official_resource(route.request.url)
                 else route.abort()))
+            check_budget()
             current = discover_official_newslist(context.request, max_articles=35)
+            check_budget()
             repeated = discover_official_newslist(context.request, max_articles=35)
+            check_budget()
             if not current or current != repeated:
                 raise RuntimeError("official_listing_changed_or_unavailable")
             page = context.new_page()
             for index, url in enumerate(current, 1):
+                check_budget()
                 if canonical_official_article(url) != url:
                     raise RuntimeError("official_untrusted_discovered_url")
                 original = _read_original(
                     page, url, APPROVED_WORDS, target_date,
                     output / f"official-original-{index:02d}.jpg")
+                check_budget()
                 if (original.get("status") == "HOLD" and
                         original.get("reason") == "publisher_date_outside_target"):
                     try:
