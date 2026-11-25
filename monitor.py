@@ -7,6 +7,8 @@ publisher headlines and links, not full scraped articles.
 from __future__ import annotations
 
 import hashlib
+import ssl
+import socket
 import html
 import re
 import json
@@ -68,7 +70,7 @@ def safe_source_failure_code(exc: Exception) -> str:
         return "rss_xml_malformed"
     if isinstance(exc, TimeoutError):
         return "network_timeout"
-    if isinstance(exc, URLError):
+    if isinstance(exc, (URLError, ConnectionError)):
         return "upstream_network_error"
     if type(exc) in (ValueError, RuntimeError):
         code = str(exc)
@@ -383,7 +385,9 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
                 # errors. HTTP 429 is an explicit publisher rate-limit: DO NOT
                 # retry and risk aggravating it. Respect 403, redirects, unsafe
                 # endpoint and invalid publisher data by holding the source.
-                transient = isinstance(exc, (ET.ParseError, TimeoutError, URLError))
+                transient = isinstance(exc, (ET.ParseError, TimeoutError, URLError, ConnectionError))
+                if isinstance(exc, URLError) and isinstance(exc.reason, ssl.SSLError):
+                    transient = False
                 if isinstance(exc, HTTPError):
                     transient = exc.code in {500, 502, 503, 504}
                 if not transient or attempt == 1:
@@ -395,6 +399,11 @@ def inspect(config: dict, fetch=read_feed, now=None, *, article_limit: int = 15,
                     # never repair publisher text, skip bad XML items, or
                     # claim the source healthy until a second FULL parse.
                     record["rss_parse_retry_delayed"] = True
+                    sleep(1.25)
+                else:
+                    # Avoid an immediate repeat of the same transient connection.
+                    # Same endpoint, bounded once; no fallback transport or bypass.
+                    record["network_retry_delayed"] = True
                     sleep(1.25)
         sources.append(record)
     if not sources or all(item["status"] == "failed" for item in sources):
