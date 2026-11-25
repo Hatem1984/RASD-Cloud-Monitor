@@ -6,7 +6,8 @@ from datetime import date
 from pathlib import Path
 from zipfile import ZipFile
 from docx import Document
-from docx.shared import Cm
+from docx.shared import Cm, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from PIL import Image
 from cloud_proof_report import word_images_match_capture_digests
 from daily_report import _word_hyperlink
@@ -32,7 +33,7 @@ def _proofs(word):
                 raise RuntimeError("daily_official_base_media_hold")
     return result
 
-def append_official_daily(base: Path, output: Path, *, target_day: date, builder=None):
+def append_official_daily(base: Path, output: Path, *, target_day: date, builder=None, preview=False):
     """Keep base report intact; append verified official originals or explicit HOLD.
 
     Date-only publisher evidence is a distinct section, not part of the
@@ -81,10 +82,23 @@ def append_official_daily(base: Path, output: Path, *, target_day: date, builder
             rows = []
         def render(selected, section_status):
             doc = Document(base)
+            # Only annotate the existing recognized ministry cover; never
+            # change press counts or the original evidence relationships.
+            if doc.tables:
+                cell=doc.tables[0].cell(0,0)
+                if any("التغطيات المصورة" in p.text or "التغطيات المصوّرة" in p.text or "التغطيات المصورة:" in p.text for p in cell.paragraphs):
+                    p=cell.add_paragraph();p.alignment=WD_ALIGN_PARAGRAPH.CENTER
+                    p.paragraph_format.space_before=Pt(8)
+                    label=("البيانات الرسمية الموثقة: "+str(len(selected)) if section_status=="VERIFIED_FIRST_PAGE"
+                           else "البيانات الرسمية: "+("لم يثبت تطابق التاريخ" if section_status=="NO_VERIFIED_DATE_MATCH_FIRST_PAGE" else "التحقق غير مكتمل"))
+                    _run(p,label,size=12,bold=True,color="D6B86B")
             doc.add_page_break()
             p=doc.add_paragraph(); _rtl(p); _run(p,"البيانات والأخبار الرسمية للوزارة",size=18,bold=True)
+            p.paragraph_format.keep_with_next=True
             p=doc.add_paragraph(); _rtl(p)
-            _run(p,"قسم مستقل عن حصيلة الرسائل الصحفية السابقة. نطاقه الصفحة الأولى من قائمة أخبار الوزارة؛ التاريخ المنشور: "+target_day.isoformat()+"، دون إسناد ساعة نشر غير موثقة. لا يثبت حصر جميع البيانات أو مطابقة نافذة 22:00 إلى 22:00.",size=10)
+            intro="قسم مستقل عن المعاينة الصحفية المحلية. " if preview else "قسم مستقل عن حصيلة الرسائل الصحفية السابقة. "
+            _run(p,intro+"نطاقه الصفحة الأولى من قائمة أخبار الوزارة؛ التاريخ المنشور: "+target_day.isoformat()+"، دون إسناد ساعة نشر غير موثقة. لا يثبت حصر جميع البيانات أو مطابقة نافذة 22:00 إلى 22:00.",size=10)
+            p.paragraph_format.keep_with_next=True
             p=doc.add_paragraph(); _rtl(p)
             if section_status=="VERIFIED_FIRST_PAGE":
                 _run(p,"عدد البيانات الرسمية الموثقة في هذا القسم: "+str(len(selected)),bold=True)
@@ -94,16 +108,20 @@ def append_official_daily(base: Path, output: Path, *, target_day: date, builder
                 _run(p,"حالة التغطية الرسمية: معلقة (HOLD) — تعذر إكمال التحقق من المصدر أو الصور أو التاريخ أو حجم المرفق؛ لا تُحتسب بيانات غير موثقة.",bold=True)
             section=doc.sections[-1]
             available=(section.page_width-section.left_margin-section.right_margin)/360000
-            for row in selected:
-                doc.add_page_break()
+            for index,row in enumerate(selected):
+                # The first official original follows its summary on the same
+                # page; keep later originals on individual pages.
+                if index:doc.add_page_break()
                 p=doc.add_paragraph(); _rtl(p); _run(p,row["headline"],size=13,bold=True)
                 p=doc.add_paragraph(); _rtl(p); _run(p,"تاريخ النشر الرسمي: "+row["published_date_cairo"]+" (دون ساعة موثقة)")
                 p=doc.add_paragraph(); _rtl(p); _word_hyperlink(p,row["url"],"رابط البيان الأصلي")
                 image=Path(row["image_path"])
                 with Image.open(image) as pic:
                     w,h=pic.size
-                width=min(available-0.4,16,19*w/h)
-                doc.add_paragraph().add_run().add_picture(str(image),width=Cm(width))
+                width=min(available-0.4,16, (14.8 if index==0 else 19)*w/h)
+                p=doc.add_paragraph();p.alignment=WD_ALIGN_PARAGRAPH.CENTER
+                p.paragraph_format.space_after=Pt(0)
+                p.add_run().add_picture(str(image),width=Cm(width))
             dest=work/"combined.docx"
             doc.save(dest)
             expected=base_proof+[{"status":"verified","sha256":r["sha256"]} for r in selected]
