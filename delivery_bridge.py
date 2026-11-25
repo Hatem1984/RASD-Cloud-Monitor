@@ -12,6 +12,7 @@ import json
 import re
 import smtplib
 import ssl
+import time
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
@@ -27,6 +28,8 @@ PRIVATE_FILE = "delivery-state.json"
 HEX_ID = re.compile(r"^[0-9a-f]{24}$")
 RECIPIENT_DIGEST = re.compile(r"^[0-9a-f]{64}$")
 MAX_LEDGER_ITEMS = 20000
+# Bounded read-only grace period for an acknowledged CAS write.
+LEDGER_READBACK_DELAYS = (0.5, 1.0, 2.0)
 
 
 def now_iso() -> str:
@@ -106,6 +109,8 @@ class PrivateGitHubLedger:
             "User-Agent": "RASD-Gate11-private-ledger",
             "Content-Type": "application/json",
         })
+        if method == "GET":
+            request.add_header("Cache-Control", "no-cache")
         # Never log requests, exception bodies, token, or private response data.
         try:
             opener = build_opener(NoGitHubRedirect(), HTTPSHandler(context=ssl.create_default_context()))
@@ -136,9 +141,19 @@ class PrivateGitHubLedger:
                 or not isinstance(response["commit"].get("sha"), str)
                 or not response["commit"]["sha"]):
             raise RuntimeError("private_ledger_commit_receipt_invalid")
-        actual, actual_sha = self.read()
-        if actual != state or not actual_sha or actual_sha == sha:
-            raise RuntimeError("private_ledger_commit_not_visible")
+        # A GET against a branch can briefly return its previous blob after
+        # an acknowledged PUT. Retry only that stale observation, never PUT
+        # or SMTP. A different, unexpected blob is a conflict, not a reason
+        # to accept a subset of the intended state.
+        for delay in (0.0, *LEDGER_READBACK_DELAYS):
+            if delay:
+                time.sleep(delay)
+            actual, actual_sha = self.read()
+            if actual == state and actual_sha and actual_sha != sha:
+                return
+            if not actual_sha or actual_sha != sha:
+                break
+        raise RuntimeError("private_ledger_commit_not_visible")
 
     def reserve(self, article_key: str, sender: str) -> str:
         state, sha = self.read()
