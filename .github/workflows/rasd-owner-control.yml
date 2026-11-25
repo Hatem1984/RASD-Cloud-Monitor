@@ -1,0 +1,74 @@
+name: RASD - owner control (current delivery only)
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Current interval or bounded daily recovery'
+        required: true
+        type: choice
+        options:
+          - interval
+          - rollup_recovery
+      requested_at:
+        description: 'Fresh UTC request timestamp'
+        required: true
+        type: string
+      confirmation:
+        description: 'CONFIRM_CURRENT_RASD_DELIVERY'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: rasd-scheduled-monitor-private-ledger
+  cancel-in-progress: false
+jobs:
+  protected-owner-control:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'Hatem1984' &&
+      github.run_attempt == 1 &&
+      vars.RASD_OWNER_CONTROL_ENABLED == 'true' &&
+      vars.RASD_AUTOMATION_PAUSED != 'true' &&
+      inputs.confirmation == 'CONFIRM_CURRENT_RASD_DELIVERY'
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    environment: rasd-production
+    env:
+      RASD_AUTOMATION_ENABLED: 'true'
+      RASD_OWNER_CONTROL_ENABLED: ${{ vars.RASD_OWNER_CONTROL_ENABLED }}
+      RASD_AUTOMATION_PAUSED: ${{ vars.RASD_AUTOMATION_PAUSED }}
+      RASD_OWNER_CONTROL_ACTION: ${{ inputs.action }}
+      RASD_OWNER_CONTROL_REQUESTED_AT: ${{ inputs.requested_at }}
+      RASD_OWNER_CONTROL_CONFIRM: ${{ inputs.confirmation }}
+      RASD_JOB_CRON: 'rasd-owner-control-v1'
+      RASD_SMART_NO_EMPTY_INTERVAL_EMAIL: 'true'
+      RASD_DAILY_OFFICIAL_APPEND_ENABLED: 'true'
+      RASD_DAILY_SENT_ARCHIVE_ENABLED: 'true'
+      RASD_GMAIL_SENDER: ${{ secrets.RASD_GMAIL_SENDER }}
+      RASD_REPORT_TO: ${{ secrets.RASD_REPORT_TO }}
+      RASD_REPORT_CC: ${{ vars.RASD_REPORT_CC }}
+      RASD_GMAIL_APP_PASSWORD: ${{ secrets.RASD_GMAIL_APP_PASSWORD }}
+      RASD_PRIVATE_LEDGER_TOKEN: ${{ secrets.RASD_PRIVATE_LEDGER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate request before source or private I/O
+        run: |
+          python -m pip install -r requirements-test.txt
+          python -c "from scheduled_rasd import require_owner_control; require_owner_control()"
+      - name: Install existing original-publisher browser
+        run: |
+          python -m pip install 'playwright>=1.50,<2'
+          python -m playwright install --only-shell chromium
+      - name: Execute existing protected CAS delivery only
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RASD_OWNER_CONTROL_ACTION" in
+            interval|rollup_recovery) python scheduled_rasd.py --mode "$RASD_OWNER_CONTROL_ACTION" ;;
+            *) exit 1 ;;
+          esac
