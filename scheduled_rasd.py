@@ -42,6 +42,47 @@ CLOUDFLARE_WORKFLOW = (
     "rasd-cloudflare-dispatch.yml@refs/heads/main"
 )
 DAILY_CRON = "0 19,20 * * *"
+OWNER_CONTROL_WORKFLOW = (
+    "Hatem1984/RASD-Cloud-Monitor/.github/workflows/"
+    "rasd-owner-control.yml@refs/heads/main"
+)
+OWNER_CONTROL_MARKER = "rasd-owner-control-v1"
+OWNER_CONTROL_ACTIONS = {"interval", "rollup_recovery"}
+
+
+def require_owner_control(now=None) -> str:
+    """Fresh explicit owner request, never a forged cron or historical replay."""
+    env = os.environ
+    expected = {
+        "GITHUB_REF": "refs/heads/main",
+        "GITHUB_REPOSITORY": "Hatem1984/RASD-Cloud-Monitor",
+        "GITHUB_RUN_ATTEMPT": "1",
+        "GITHUB_EVENT_NAME": "workflow_dispatch",
+        "GITHUB_WORKFLOW_REF": OWNER_CONTROL_WORKFLOW,
+        "GITHUB_ACTOR": "Hatem1984",
+        "RASD_AUTOMATION_ENABLED": "true",
+        "RASD_OWNER_CONTROL_ENABLED": "true",
+        "RASD_OWNER_CONTROL_CONFIRM": "CONFIRM_CURRENT_RASD_DELIVERY",
+        "RASD_JOB_CRON": OWNER_CONTROL_MARKER,
+    }
+    if any(env.get(k) != v for k, v in expected.items()):
+        raise RuntimeError("owner_control_not_authorized")
+    if env.get("RASD_AUTOMATION_PAUSED") == "true" or not env.get("GITHUB_RUN_ID", "").isdigit():
+        raise RuntimeError("owner_control_paused_or_invalid_run")
+    action = env.get("RASD_OWNER_CONTROL_ACTION")
+    if action not in OWNER_CONTROL_ACTIONS:
+        raise RuntimeError("owner_control_action_invalid")
+    try:
+        stamp = datetime.fromisoformat(env.get("RASD_OWNER_CONTROL_REQUESTED_AT", ""))
+    except (TypeError, ValueError):
+        raise RuntimeError("owner_control_timestamp_invalid") from None
+    if stamp.tzinfo is None or stamp.utcoffset() != timedelta(0):
+        raise RuntimeError("owner_control_timestamp_invalid")
+    checked = now or datetime.now(timezone.utc)
+    if not timedelta(seconds=-30) <= checked - stamp <= timedelta(minutes=15):
+        raise RuntimeError("owner_control_request_expired")
+    return action
+
 MAX_WORD_BYTES = 8_000_000
 MAX_BATCH = 15  # Existing production limit, unchanged.
 MAX_ROLLUP = 60
@@ -136,6 +177,9 @@ def require_github_scheduler() -> None:
              schedule_kind == BACKUP_HALF_HOUR_CRON)):
             return
         raise RuntimeError("unapproved_scheduled_workflow_or_cron")
+    if event == "workflow_dispatch" and workflow_ref == OWNER_CONTROL_WORKFLOW:
+        require_owner_control()
+        return
     if event == "workflow_dispatch":
         # The single allowlisted Cloudflare workflow can dispatch TWO kinds:
         # half-hour newsroom scan or exactly Cairo-22:00 daily rollup.
@@ -785,6 +829,13 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
     require_github_scheduler()
     now = datetime.now(timezone.utc) if clock is None else clock
     schedule_kind = os.environ.get("RASD_JOB_CRON", "")
+    owner_control = os.environ.get("GITHUB_WORKFLOW_REF") == OWNER_CONTROL_WORKFLOW
+    if owner_control:
+        if mode != require_owner_control():
+            raise RuntimeError("owner_control_mode_mismatch")
+        # Internal mapping only AFTER separate exact workflow and action validation.
+        # The normal current interval and bounded daily recovery share existing CAS.
+        schedule_kind = HALF_HOUR_CRON
     owner_oneoff = mode in {"rollup_owner_once", "interval_owner_once"}
     if mode == "interval_owner_once" and (
             os.environ.get("RASD_OWNER_PUSH_CONFIRM") !=
