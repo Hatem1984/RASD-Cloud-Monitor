@@ -7,7 +7,6 @@ All JPEG bytes are embedded unchanged and independently checked by the caller.
 from __future__ import annotations
 
 from collections import Counter
-from math import ceil
 import re
 from pathlib import Path
 
@@ -286,7 +285,7 @@ def _summary(doc, report: dict, distribution: Counter, timing=None) -> None:
              else "من روابط الناشرين الأصلية المستوفية في هذا الفحص، وقد يكون نشرها أسبق منه."
              if period == "interval" else "وفق سجل التسليم فقط.")
     _run(p, f"الملخص: إجمالي التغطيات الموثقة {len(report['articles'])}؛ "
-          f"عدد المواقع الممثلة {len(distribution)}، {basis}",
+          f"عدد المواقع الممثلة {len(distribution)}، {basis} العدد للتغطيات لا للأحداث المستقلة.",
           size=11, bold=True)
     if period == "interval" and report.get("report_kind") == "hourly":
         fresh, older = report.get("hourly_in_period"), report.get("hourly_recovered")
@@ -318,7 +317,7 @@ def _summary(doc, report: dict, distribution: Counter, timing=None) -> None:
     summary.columns[0].width=Cm(9)
     summary.columns[1].width=Cm(3)
     summary.columns[2].width=Cm(5)
-    for idx,label in enumerate(("الموقع", "الأخبار", "النسبة")):
+    for idx,label in enumerate(("الموقع", "التغطيات", "النسبة")):
         c=summary.rows[0].cells[idx];c.width=summary.columns[idx].width;_shade(c,NAVY)
         p=c.paragraphs[0];_rtl(p);_run(p,label,size=10,bold=True,color=GOLD)
     total=len(report['articles'])
@@ -351,10 +350,9 @@ def _summary(doc, report: dict, distribution: Counter, timing=None) -> None:
     _run(p,"بيان الوزارة: ",size=11,bold=True)
     _run(p,"غير محسوم من سجل البريد؛ يتطلب مطابقة المصدر الرسمي مباشرة.",size=10)
     p=doc.add_paragraph();_rtl(p)
-    if distribution:
-        site,count=max(distribution.items(),key=lambda x:x[1])
-        _run(p,f"أكثر المواقع حضورًا في النشرة: {site} ({count} تغطية).",size=11,bold=True)
-    p=doc.add_paragraph();_rtl(p)
+    # The sorted publisher table already shows the largest coverage count.
+    # Do not repeat it as a second paragraph.
+
     _run(p, ("تنبيه توثيق: صور هذه المتابعة ملتقطة من صفحات الناشرين الأصلية، "
              "ويُتحقق من بصمات JPEG داخل ملف Word قبل إرسال التقرير."
              if period == "interval" else
@@ -397,14 +395,14 @@ def _summary(doc, report: dict, distribution: Counter, timing=None) -> None:
     doc.add_page_break()
 
 
-def _card(cell, item: dict, index: int, *, wide: bool = False, timing=None) -> None:
+def _card(cell, item: dict, index: int, *, wide: bool = False, medium: bool = False, timing=None) -> None:
     source=SOURCE_NAMES.get(item["source"],item["source"])
     cell.vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.TOP
     _border(cell,"DFD0A9")
     p=cell.paragraphs[0];_rtl(p);_shade(cell,CREAM)
     _run(p,f"{index:02d}  |  {source}",size=11,bold=True)
     p=cell.add_paragraph();_rtl(p)
-    _run(p,item["headline"],size=8.5,bold=True)
+    _run(p,item["headline"],size=9.5,bold=True)
     if item.get("hourly_publication_bucket") == "recovered_older":
         p=cell.add_paragraph();_rtl(p)
         _run(p,"استدراك: نُشر قبل الساعة الحالية للرصد، ويُعرض بتاريخ نشره الأصلي.",
@@ -416,10 +414,11 @@ def _card(cell, item: dict, index: int, *, wide: bool = False, timing=None) -> N
             raise ValueError("rasd_visual_original_image_invalid")
     # A single original clipping should be readable, not half-width
     # beside a blank second column. Multi-clipping spreads stay 2-column.
-    max_w,max_h=(16.0,14.2) if wide else (7.65,7.2)
+    max_w,max_h=(16.0,14.2) if wide else (13.0,9.0) if medium else (8.05,7.2)
     fitted_w=min(max_w,max_h*width/height)
     fitted_h=fitted_w*height/width
     p=cell.add_paragraph();p.alignment=WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_after=Pt(3)
     p.add_run().add_picture(str(image_path),width=Cm(fitted_w),height=Cm(fitted_h))
     p=cell.add_paragraph();_rtl(p)
     _run(p,"النشر: "+(item.get("published_display_cairo") or item.get("published_at_cairo") or "غير محدد"),size=8)
@@ -547,20 +546,35 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
         _run(p,"المواقع الإلكترونية — صور صفحات الأخبار الأصلية",size=15,bold=True)
         p.paragraph_format.space_after=Pt(8)
         segment=articles[start:start+4]
-        if len(segment) == 1:
-            table = doc.add_table(rows=1, cols=1)
-            table.autofit = False
-            table.columns[0].width = Cm(18)
-            _card(table.rows[0].cells[0], segment[0], start + 1,
-                  wide=True,timing=timing[start] if timing is not None else None)
-        else:
-            table=doc.add_table(rows=ceil(len(segment)/2),cols=2)
+        # Preserve row-major order and one numbered card per physical cell.
+        # Never merge cells: the strict archive reader visits each cell once.
+        # The last two cards use stacked wider screenshots; the last three
+        # use a pair followed by one wider card. No empty grid placeholders.
+        def add_cards(offsets, columns, *, wide=False, medium=False):
+            table=doc.add_table(rows=(len(offsets)+columns-1)//columns,cols=columns)
             table.autofit=False
-            table.columns[0].width=Cm(9)
-            table.columns[1].width=Cm(9)
-            for offset,item in enumerate(segment):
-                cell=table.rows[offset//2].cells[offset%2]
-                _card(cell,item,start+offset+1,timing=timing[start+offset] if timing is not None else None)
+            for column in table.columns:column.width=Cm(18/columns)
+            for row in table.rows:
+                trpr=row._tr.get_or_add_trPr()
+                trpr.append(OxmlElement("w:cantSplit"))
+                for cell in row.cells:cell.width=Cm(18/columns)
+            for position,offset in enumerate(offsets):
+                _card(table.rows[position//columns].cells[position%columns],
+                      segment[offset],start+offset+1,wide=wide,medium=medium,
+                      timing=timing[start+offset] if timing is not None else None)
+        if len(segment)==1:
+            add_cards([0],1,wide=True)
+        elif len(segment)==2:
+            add_cards([0,1],1,medium=True)
+        elif len(segment)==3:
+            add_cards([0,1],2)
+            spacer=doc.add_paragraph()
+            spacer.paragraph_format.space_before=Pt(0)
+            spacer.paragraph_format.space_after=Pt(0)
+            spacer.paragraph_format.line_spacing=Pt(3)
+            add_cards([2],1,medium=True)
+        else:
+            add_cards([0,1,2,3],2)
         if start+4<len(articles):
             doc.add_page_break()
     doc.core_properties.title=(report["title"] if report.get("report_period") == "interval"
