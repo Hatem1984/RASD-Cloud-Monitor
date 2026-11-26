@@ -93,3 +93,20 @@ class HourlyWord(unittest.TestCase):
         self.assertEqual(r["fresh"],0)
         self.assertEqual(r["counts"],{"original_evidence_hold":1,"invalid_original_candidate":1})
         self.assertIn("مواد معلقة لعدم اكتمال الدليل: 2",full_text(d))
+
+    def test_healthy_shortfall_not_source_failure(self):
+        healthy=[{**x,"status":"ok"} for x in HEALTH]
+        with tempfile.TemporaryDirectory() as f:
+            dest=Path(f)/"one.docx"
+            r=build_hourly_word([row(0)],CFG,healthy,NOW,dest,capture=capture)
+            self.assertEqual(r["coverage"],"HEALTHY")
+            self.assertEqual(r["deficit"],9)
+    def test_retrospective_only_keeps_real_scan(self):
+        old_end=END-timedelta(hours=2)
+        r,d=self.build([row(0,old_end-timedelta(minutes=10))],qa_window_end=old_end)
+        self.assertEqual(r["fresh"],1)
+        self.assertEqual(r["scan_utc"],NOW.isoformat())
+        self.assertTrue(r["retrospective_qa"])
+        self.assertIn("اختبار استعادي",full_text(d))
+        with self.assertRaisesRegex(ValueError,"outside_scope"):
+            self.build([],qa_window_end=END+timedelta(hours=1))

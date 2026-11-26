@@ -7,7 +7,8 @@ import hashlib
 import re
 from tempfile import TemporaryDirectory
 
-from daily_report import CAIRO,cairo_display_time,render_docx
+from daily_report import CAIRO,cairo_display_time,render_docx,SOURCE_LABELS
+from monitor import SOURCE_FAILURE_CODES
 from gate11_runner import candidate_from_feed,SAFE_CAPTURE_FAILURE_CODES
 from cloud_proof_report import proof_capture,word_images_match_capture_digests
 from event_identity import same_event,related_event_pairs
@@ -25,13 +26,51 @@ def completed_hour(scan):
     return end-timedelta(hours=1),end
 
 
-def build_hourly_word(raw,config,source_records,scan,destination,*,capture=proof_capture,history=()):
+def _window_label(stamp):
+    # Zone abbreviation distinguishes repeated local clock hours at DST change.
+    return cairo_display_time(stamp)+" ("+stamp.astimezone(CAIRO).tzname()+")"
+
+
+def _source_failure_labels(config,source_records):
+    labels=[]
+    for feed,record in zip(config["feeds"],source_records):
+        if record["status"]!="failed":
+            continue
+        code=record.get("failure_code","other")
+        if code not in SOURCE_FAILURE_CODES:
+            code="other"
+        reason={
+            "rss_original_item_future_date":"تاريخ نشر مستقبلي غير موثوق",
+            "rss_original_publisher_date_conflict_hold":"قيد تعارض توقيت الناشر",
+            "rss_original_item_date_unverifiable":"تاريخ النشر غير قابل للتحقق",
+            "alborsa_listing_coverage_hold":"تعذر إثبات نطاق القائمة الأصلية",
+            "http_403":"رفض الوصول",
+            "http_429":"تقييد الطلبات",
+            "network_timeout":"انتهاء مهلة الاتصال",
+            "upstream_network_error":"تعذر الاتصال",
+        }.get(code,"تعذر التحقق من المصدر")
+        if feed.get("publication_date_conflict_hold") is True:
+            reason+="؛ قيد توقيت معتمد"
+        labels.append(SOURCE_LABELS.get(feed["name"],feed["name"])+" ("+feed["id"]+"): "+reason)
+    return labels
+
+
+def build_hourly_word(raw,config,source_records,scan,destination,*,capture=proof_capture,history=(),qa_window_end=None):
     """Current completed hour only; older candidates accounted separately.
     All input decisions returned, never considered delivered or reserved.
     Synthetic capture injection is for offline tests, not production authorization.
     """
     start,end=completed_hour(scan)
     scan=scan.astimezone(timezone.utc)
+    retrospective=qa_window_end is not None
+    if retrospective:
+        if (not isinstance(qa_window_end,datetime) or qa_window_end.tzinfo is None or qa_window_end.utcoffset() is None):
+            raise ValueError("hourly_qa_window_unzoned")
+        chosen_end=qa_window_end.astimezone(timezone.utc)
+        if (chosen_end> end or chosen_end<scan-timedelta(hours=71) or
+                (chosen_end.minute,chosen_end.second,chosen_end.microsecond)!=(0,0,0)):
+            raise ValueError("hourly_qa_window_outside_scope")
+        start,end=chosen_end-timedelta(hours=1),chosen_end
     if not isinstance(raw,list) or len(raw)>200:
         raise ValueError("hourly_inventory_hold")
     ids=[f["id"] for f in config["feeds"]]
@@ -107,15 +146,18 @@ def build_hourly_word(raw,config,source_records,scan,destination,*,capture=proof
         held=counts["original_evidence_hold"]+counts["invalid_original_candidate"]+counts["source_unavailable"]
         limitations=("المستهدف مشروط بتوفر الأخبار الموثقة؛ المواد الأقدم خارج المستهدف، "
                      "ولا تُعد المواد المؤجلة أو المعلقة أخبارًا مسلّمة. لا يثبت الفحص شمول كل المنشورات.")
+        if retrospective:
+            limitations+=" اختبار استعادي فقط ببيانات الفحص الحالية؛ لا يثبت الاكتشاف أو التغطية أو الإرسال وقت الساعة المختارة."
         if any(x.get("publication_date_status")==CONFLICT for x in selected):
             limitations+=DISCLOSURE
         report={"title":"رصد | تقرير المتابعة الساعية — نسخة اختبار غير مرسلة",
-            "display_window_start":cairo_display_time(start),"display_window_end":cairo_display_time(end),
+            "display_window_start":_window_label(start),"display_window_end":_window_label(end),
+            "hourly_retrospective_qa":retrospective,"hourly_source_failures_display":_source_failure_labels(config,source_records),
             "hourly_scan_display_cairo":cairo_display_time(scan),"hourly_word_contract":True,
             "ministry_media_grid":True,"report_period":"interval","report_kind":"hourly",
             "hourly_in_period":len(selected),"hourly_recovered":0,
             "hourly_recovery_pending":counts["recovery_separate"],"hourly_deferred":deferred,
-            "hourly_held":held,"coverage":"SOURCE_LIMITED" if held or deferred or len(selected)<TARGET or any(s["status"]!="ok" for s in source_records) else "HEALTHY",
+            "hourly_held":held,"coverage":"SOURCE_LIMITED" if held or deferred or any(s["status"]!="ok" for s in source_records) else "HEALTHY",
             "articles":selected,"sources":source_records,"held_candidates":holds,"verified_links":len(selected),
             "limitations":limitations}
         staged=root/"hourly.docx"
@@ -131,4 +173,5 @@ def build_hourly_word(raw,config,source_records,scan,destination,*,capture=proof
     return {"status":"READY_QA_ONLY","fresh":len(selected),"target":TARGET,"deficit":TARGET-len(selected),
             "publishers":len(publishers),"decisions":decisions,"counts":dict(counts),"coverage":report["coverage"],
             "source_failures":sum(s["status"]!="ok" for s in source_records),
+            "retrospective_qa":retrospective,"start_utc":start.isoformat(),"end_utc":end.isoformat(),"scan_utc":scan.isoformat(),
             "email_sent":False,"private_state_used":False,"schedule_changed":False}

@@ -453,10 +453,13 @@ def _hourly_contract_summary(doc, report):
     p=doc.add_paragraph();_rtl(p)
     _run(p,"الاختيار من ناشرين مختلفين مع استبعاد التشابه القوي في الحدث من المستهدف؛ "
          "لا يثبت هذا استقلال جميع الأحداث أو شمول كل المنشورات.",size=9)
-    failed=[x["feed_id"] for x in report["sources"] if x["status"]=="failed"]
+    failed=report["hourly_source_failures_display"]
     p=doc.add_paragraph();_rtl(p)
     _run(p,f"حالة المصادر: {len(report['sources'])-len(failed)}/{len(report['sources'])} متاح؛ "
          +("المصادر المتعذرة: "+"، ".join(failed) if failed else "لا مصدر متعذر في هذا الفحص."),size=9,bold=True)
+    if report.get("hourly_retrospective_qa"):
+        p=doc.add_paragraph();_rtl(p)
+        _run(p,"اختبار استعادي لساعة سابقة — حالة المصادر تخص وقت الفحص الفعلي، وليس وقت النشر أو الإرسال.",size=9,bold=True)
 
 
 def render_hourly_zero_word(report, destination):
