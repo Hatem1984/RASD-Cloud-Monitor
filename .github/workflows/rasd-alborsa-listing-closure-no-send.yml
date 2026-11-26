@@ -33,6 +33,22 @@ jobs:
           targets={"2008756","2009038","2009145"}
           result=inspect(cfg,now=now,article_limit=200,require_complete_items=True)
           print(json.dumps({"mode":"post_fix_independent_cloud_rss","at":now.isoformat(),"source_rows":[{k:s.get(k) for k in ("feed_id","status","verified_links","headline_matches","error_code")} for s in result["sources"]],"matches":result["planning_headline_matches"],"truncated":result["matched_article_pool_truncated"],"email_sent":False}))
+          from alborsa_original_listing import read_original,parse_listing,ROOT,identity
+          from collections import Counter
+          from monitor import _ministry_term_present
+          seen={}
+          page_rows=[]
+          for i in range(1,9):
+              u=ROOT if i==1 else ROOT+"/page/"+str(i)
+              rows,nav=parse_listing(read_original(u),u)
+              repeats=[{"id":identity(x["url"])[1],"earlier_page":seen[x["url"]][0],"same_card":seen[x["url"]][1]==x} for x in rows if x["url"] in seen]
+              page_rows.append((u,rows))
+              for x in rows: seen.setdefault(x["url"],(i,x))
+              hits=[{"id":identity(x["url"])[1],"title_matches":_ministry_term_present(x["headline"],cfg["keywords"]),"excerpt_matches":_ministry_term_present(x["excerpt"],cfg["keywords"])} for x in rows if identity(x["url"])[1] in targets]
+              print(json.dumps({"mode":"listing_card_diagnostics","page":i,"count":len(rows),"repeats":repeats,"target_cards":hits,"first_date":str(identity(rows[0]["url"])[0]),"last_date":str(identity(rows[-1]["url"])[0])}))
+              if str(identity(rows[-1]["url"])[0]) < str((now-__import__("datetime").timedelta(hours=72)).astimezone(__import__("zoneinfo").ZoneInfo("Africa/Cairo")).date()):break
+          repeated=[{"page":i+1,"same_cards":parse_listing(read_original(u),u)[0]==rows} for i,(u,rows) in enumerate(page_rows)]
+          print(json.dumps({"mode":"listing_snapshot_stability","pages":repeated}))
           try:
               a=audit_listing(cfg["keywords"],now)
               found={u.rstrip("/").split("/")[-1] for u in a["matched_urls"]}
