@@ -141,6 +141,42 @@ jobs:
                   print(json.dumps({"mode":"publisher_declared_feed","url":url,"items":len(nodes),"targets":{k:k in links for k in targets},"email_sent":False}))
               except Exception as e:
                   print(json.dumps({"mode":"publisher_declared_feed","url":url,"error_type":type(e).__name__,"email_sent":False}))
+          # Publisher's own latest-news pagination, independently observed in its public navigation.
+          # Bounded QA, no new production admission and no private delivery.
+          from collections import Counter
+          from monitor import _ministry_term_present
+          class Cards(Listing):
+              def __init__(self,base):
+                  super().__init__(base); self.anchor=None; self.text=[]; self.labels={}; self.pages=set(); self.classes=Counter()
+              def handle_starttag(self,tag,attrs):
+                  super().handle_starttag(tag,attrs)
+                  a=dict(attrs)
+                  if tag=="article": self.classes[(a.get("class") or "")[:100]]+=1
+                  if tag=="a":
+                      u=urljoin(self.base,a.get("href") or ""); p=urlsplit(u)
+                      self.anchor=p.path if p.scheme=="https" and p.hostname in feed["allowed_article_hosts"] and re.fullmatch(r"/20[0-9]{2}/[0-9]{2}/[0-9]{2}/[0-9]+/?",p.path) else None
+                      self.text=[]
+                      if p.scheme=="https" and p.hostname in feed["allowed_article_hosts"] and re.fullmatch(r"/latestnews/page/[2-9]/?",p.path):self.pages.add(u)
+              def handle_data(self,data):
+                  if self.anchor: self.text.append(data)
+              def handle_endtag(self,tag):
+                  if tag=="a" and self.anchor:
+                      t=" ".join(" ".join(self.text).split())
+                      if len(t)>len(self.labels.get(self.anchor,"")): self.labels[self.anchor]=t
+                      self.anchor=None;self.text=[]
+          found=set(); discovered_pages=set(); all_ids=set()
+          for page in range(1,6):
+              url="https://alborsaanews.com/latestnews"+("" if page==1 else "/page/"+str(page))
+              try:
+                  p=Cards(url);p.feed(get_public(url).decode("utf-8","strict"))
+                  hits={k:any(x.rstrip("/").endswith("/"+k) for x in p.links) for k in targets}
+                  found.update(k for k,v in hits.items() if v)
+                  overlap=len(all_ids & p.links);all_ids.update(p.links)
+                  print(json.dumps({"mode":"publisher_pagination","page":page,"links":len(p.links),"new_links":len(p.links)-overlap,"targets":hits,"min_path_date":min((x[1:11] for x in p.links),default=None),"max_path_date":max((x[1:11] for x in p.links),default=None),"navigation":sorted(p.pages)[:10],"article_classes":dict(p.classes),"keyword_headings":sum(_ministry_term_present(t,cfg["keywords"]) for t in p.labels.values()),"email_sent":False}))
+              except Exception as e:
+                  print(json.dumps({"mode":"publisher_pagination","page":page,"error_type":type(e).__name__,"email_sent":False}))
+                  break
+          print(json.dumps({"mode":"pagination_summary","unique_links":len(all_ids),"target_hits":sorted(found),"target_total":len(targets),"email_sent":False}))
           if not original or original > 500:
               raise RuntimeError("alborsa_native_xml_content_hold")
           print(json.dumps({"mode":"alborsa_first_party_original_RSS_QA",
