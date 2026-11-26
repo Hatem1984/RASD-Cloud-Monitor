@@ -37,6 +37,34 @@ jobs:
               a=audit_listing(cfg["keywords"],now)
               found={u.rstrip("/").split("/")[-1] for u in a["matched_urls"]}
               verified={x["url"].rstrip("/").split("/")[-1] for x in a["verified"]}
+              from alborsa_original_listing import read_original, Metadata, clean
+              from monitor import _ministry_term_present
+              from html.parser import HTMLParser
+              from datetime import timedelta
+              from collections import Counter
+              verified_urls={x["url"] for x in a["verified"]}
+              class Lead(HTMLParser):
+                  def __init__(self):
+                      super().__init__(convert_charrefs=True);self.depth=0;self.paragraph=False;self.parts=[];self.current=[];self.containers=Counter()
+                  def handle_starttag(self,tag,attrs):
+                      classes=set((dict(attrs).get("class") or "").split())
+                      if tag=="div":
+                          if self.depth:self.depth+=1
+                          elif classes & {"content-inner","entry-content"}:self.depth=1;self.containers[" ".join(sorted(classes))]+=1
+                      if tag=="p" and self.depth:self.paragraph=True;self.current=[]
+                  def handle_data(self,data):
+                      if self.paragraph:self.current.append(data)
+                  def handle_endtag(self,tag):
+                      if tag=="p" and self.paragraph:
+                          self.parts.append(clean(self.current));self.paragraph=False
+                      if tag=="div" and self.depth:self.depth-=1
+              for u in a["matched_urls"]:
+                  if u in verified_urls:continue
+                  try:
+                      raw=read_original(u);m=Metadata();m.feed(raw.decode("utf-8","strict"));p=Lead();p.feed(raw.decode("utf-8","strict"))
+                      vals=m.values.get("article:published_time",set());stamp=datetime.fromisoformat(next(iter(vals)).replace("Z","+00:00")) if len(vals)==1 else None
+                      print(json.dumps({"mode":"listing_unverified_article","id":u.rstrip("/").split("/")[-1],"within_72h":bool(stamp and now-timedelta(hours=72)<=stamp<=now),"original_headline_matches":_ministry_term_present(clean(m.h1),cfg["keywords"]),"original_meta_excerpt_matches":any(_ministry_term_present(v,cfg["keywords"]) for v in m.values.get("og:description",set())),"body_containers":dict(p.containers),"lead_paragraph_count":len(p.parts),"first_two_paragraphs_match":_ministry_term_present(" ".join(p.parts[:2])[:1600],cfg["keywords"]),"first_five_paragraphs_match":_ministry_term_present(" ".join(p.parts[:5])[:3500],cfg["keywords"]),"email_sent":False}))
+                  except Exception as e:print(json.dumps({"mode":"listing_unverified_article","id":u.rstrip("/").split("/")[-1],"error_type":type(e).__name__}))
               print(json.dumps({"mode":"alborsa_original_listing_qa","pages":a["pages"],"links":a["links"],"repeated_cards":a["repeated_cards"],"boundary":a["boundary"],"matched":a["matched"],"verified":len(a["verified"]),"known_targets_matched":sorted(found&targets),"known_targets_verified":sorted(verified&targets),"holds":a["holds"],"historical_candidates_forward_allowed":len(forward_only(a["verified"],now,now)),"email_sent":False}))
           except Exception as e:
               print(json.dumps({"mode":"alborsa_original_listing_qa","status":"HOLD","reason":str(e) if type(e) is ValueError and str(e).startswith("alborsa_") else type(e).__name__,"email_sent":False}))
