@@ -342,6 +342,8 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                "source": candidate["source"], "url": candidate["url"],
                "published_at_cairo": stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
                "published_display_cairo": cairo_display_time(stamp)}
+        if candidate["publisher"]=="elbalad.news":
+            row["published"]=candidate["published"]
         newest.setdefault(row["id"], (stamp, row))
     return [x[1] for x in sorted(newest.values(), key=lambda x: x[0], reverse=True)]
 
@@ -365,6 +367,8 @@ def prepare_word(items: list[dict], config: dict, output: Path,
             raise RuntimeError("publisher_screenshot_hold")
         copy = dict(item)
         copy["evidence_image_path"] = str(screenshot)
+        if result.get("publication_date_status"):
+            copy["publication_date_status"]=result["publication_date_status"]
         stories.append(copy)
         verified.append({"id": item["id"], "status": "verified", "sha256": result["sha256"]})
     report = {
@@ -377,6 +381,9 @@ def prepare_word(items: list[dict], config: dict, output: Path,
         " التكرار الدلالي للأحداث يحتاج مراجعة تحريرية؛ الرصد مقصور على"
         " مصادر RSS المعتمدة. لا اختلاق عند غياب الأخبار.",
     }
+    from elbalad_date_evidence import CONFLICT, DISCLOSURE
+    if any(x.get("publication_date_status")==CONFLICT for x in stories):
+        report["limitations"] += DISCLOSURE
     dest = output / "RASD-News-With-Original-Screenshots.docx"
     render_docx(report, dest)
     if not word_images_match_capture_digests(dest, verified):
@@ -460,7 +467,9 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
                 not screenshot.is_file() or
                 hashlib.sha256(screenshot.read_bytes()).hexdigest() != digest):
             raise RuntimeError("original_capture_digest_mismatch")
-        selected.append({**item, "evidence_image_path": str(screenshot)})
+        selected.append({**item, "evidence_image_path": str(screenshot),
+                         **({"publication_date_status":proof["publication_date_status"]}
+                            if proof.get("publication_date_status") else {})})
         verified.append({"id": item["id"], "status": "verified",
                          "sha256": digest})
     if not selected:
@@ -479,6 +488,11 @@ def prepare_source_limited_verified_word(items: list[dict], config: dict,
         " JPEG الموجودة فعليًا داخل ملف Word. المطابقة على مستوى"
         " الرابط المنشور، وليست تجميعًا تحريريًا للأحداث المستقلة."
     )
+    from elbalad_date_evidence import CONFLICT, DISCLOSURE
+    if any(x.get("publication_date_status")==CONFLICT for x in selected):
+        limitations += DISCLOSURE
+    if any(x.get("possible_related_coverage") for x in selected):
+        limitations += ' توجد تغطيات محتمل ارتباطها بحدث سابق؛ تم الاحتفاظ بالروابط المختلفة لتجنب إسقاط تحديث حقيقي.'
     if degraded:
         limitations += (
             f" تغطية جزئية معلنة: {rejected} روابط مطابقة تعذر إثبات صورها؛"
@@ -917,13 +931,19 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 available = [a for a in available
                              if a["published_at_cairo"].startswith("2026-10-23 ")]
             unsent = [a for a in available if a["id"] not in state["entries"]]
-            from event_identity import distinct_publisher_coverages
+            from event_identity import distinct_publisher_coverages, related_event_pairs
             history = [v["news"] for v in state["entries"].values()
                        if isinstance(v, dict)
                        and v.get("kind") == "interval_item"
                        and v.get("status") in ("reserved", "smtp_accepted")
                        and isinstance(v.get("news"), dict)]
             stories, repeated_events = distinct_publisher_coverages(unsent, history)
+            related=related_event_pairs(stories,history)
+            if related:
+                print("RASD_POSSIBLE_RELATED_COVERAGE_PAIRS="+str(len(related)),flush=True)
+                linked_ids={b for a,b in related}
+                stories=[{**item,"possible_related_coverage":True} if item["id"] in linked_ids
+                         else item for item in stories]
             if repeated_events:
                 print("RASD_SAME_EVENT_HELD_COUNT=" + str(len(repeated_events)),
                       flush=True)

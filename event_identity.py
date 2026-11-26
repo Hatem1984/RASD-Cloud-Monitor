@@ -64,6 +64,33 @@ def distinct_events(incoming,history=()):
             chosen.append(item)
     return chosen,duplicates
 
+def related_event_pairs(incoming, history=()):
+    """Review hints for same-publisher retitled coverage, not event counts.
+    A bounded intro cannot establish that a distinct article has no update.
+    """
+    def excerpt(item):
+        raw=item.get("publisher_excerpt","")
+        if not isinstance(raw,str): return ""
+        return re.sub(r"[^\w]+"," ",_matchable_arabic(raw).translate(_DIGITS)).strip()[:240]
+    prior=list(history)
+    pairs=[]
+    for item in incoming:
+        for other in prior:
+            if item.get("id")==other.get("id") or not item.get("source") or item.get("source")!=other.get("source"):
+                continue
+            t1,t2=timestamp(item),timestamp(other)
+            if not t1 or not t2 or abs(t1-t2)>timedelta(hours=36): continue
+            x,y=excerpt(item),excerpt(other)
+            if min(len(x),len(y))<100: continue
+            a,b=terms(item.get("headline")),terms(other.get("headline"))
+            an,bn={v for v in a if v.isdigit()},{v for v in b if v.isdigit()}
+            if an and bn and an!=bn: continue
+            if SequenceMatcher(None,x,y,autojunk=False).ratio()>=0.90:
+                pairs.append((other.get("id"),item.get("id")))
+        prior.append(item)
+    return pairs
+
+
 def distinct_publisher_coverages(incoming, history=()):
     """Preserve each publisher's separate clipping of a shared event.
 
@@ -86,6 +113,10 @@ def distinct_publisher_coverages(incoming, history=()):
                     not isinstance(second, str) or not second.strip()):
                 return same_event(item, prev)
             if first != second:
+                return False
+            # Preserve potentially substantive updates on distinct URLs.
+            # The native excerpt is bounded; similar wording is a review hint.
+            if item.get("publisher_excerpt") or prev.get("publisher_excerpt"):
                 return False
             return same_event(item, prev)
 
