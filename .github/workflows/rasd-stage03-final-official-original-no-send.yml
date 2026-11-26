@@ -1,0 +1,54 @@
+name: RASD stage03 final production official original page (NO SEND)
+on:
+  push:
+    branches: ['gate-rasd-stage03-final-official-original-20261126']
+permissions:
+  contents: read
+jobs:
+  official-original:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --only-shell chromium
+      - name: Direct official original from independently observed live NewsList
+        run: |
+          python - <<'PY'
+          import json,subprocess,tempfile
+          from pathlib import Path
+          from datetime import date
+          from playwright.sync_api import sync_playwright
+          from official_ministry_source import allowed_official_resource,_read_original
+          from rasd_official_daily import APPROVED_WORDS
+          from cloud_proof_report import word_images_match_capture_digests
+          from daily_report import render_docx
+          assert subprocess.check_output(["git","diff","--name-only","a42717579ca1e10fec0eacabcd8b83667f784ba8","HEAD"],text=True).splitlines()==[".github/workflows/rasd-stage03-final-official-original-no-send.yml"]
+          # This exact official original was observed in current live NewsList
+          # on owner PC and independently checked on the merged code.
+          # Direct article evidence only; not a test of cloud NewsList availability.
+          url="https://mped.gov.eg/singlenews?id=7332&lang=ar"
+          with tempfile.TemporaryDirectory(prefix="rasd-stage03-official-final-") as td:
+              out=Path(td)
+              with sync_playwright() as p:
+                  b=p.chromium.launch(headless=True,args=["--no-sandbox","--disable-dev-shm-usage"])
+                  try:
+                      ctx=b.new_context(viewport={"width":1200,"height":900},locale="ar-EG",ignore_https_errors=False,accept_downloads=False,service_workers="block")
+                      ctx.route("**/*",lambda r:r.continue_() if allowed_official_resource(r.request.url) else r.abort())
+                      row=_read_original(ctx.new_page(),url,APPROVED_WORDS,date(2026,11,26),out/"official.jpg")
+                  finally:b.close()
+              matched=False
+              if row["status"]=="verified":
+                  item={"headline":row["headline"],"source":"Official Ministry original","url":row["url"],"published_at_cairo":row["published_date_cairo"],"published_display_cairo":row["published_date_cairo"],"evidence_image_path":row["image_path"]}
+                  word=out/"official.docx"
+                  render_docx({"title":"RASD stage03 QA only","display_window_start":"QA sample","display_window_end":"QA sample","coverage":"OFFICIAL_SOURCE_ONLY","verified_links":1,"articles":[item],"sources":[],"limitations":"Date only, official original sample, no delivery"},word)
+                  matched=word_images_match_capture_digests(word,[row])
+              print(json.dumps({"mode":"exact_production_official_original_no_send","sha":"a42717579ca1e10fec0eacabcd8b83667f784ba8","original_id":7332,"status":row["status"],"reason":row.get("reason"),"date":row.get("published_date_cairo"),"ordered_image_digest_match":matched,"listing_tested":False,"email_sent":False,"private_state_used":False,"artifact_uploaded":False}))
+              assert row["status"]=="verified" and matched
+          PY
