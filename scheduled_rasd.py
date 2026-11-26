@@ -342,7 +342,7 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
                "source": candidate["source"], "url": candidate["url"],
                "published_at_cairo": stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
                "published_display_cairo": cairo_display_time(stamp)}
-        if candidate["publisher"]=="elbalad.news":
+        if candidate.get("publisher")=="elbalad.news":
             row["published"]=candidate["published"]
         newest.setdefault(row["id"], (stamp, row))
     return [x[1] for x in sorted(newest.values(), key=lambda x: x[0], reverse=True)]
