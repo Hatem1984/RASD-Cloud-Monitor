@@ -140,6 +140,11 @@ class Metadata(HTMLParser):
         self.h1 = []
         self.in_h1 = False
         self.h1_count = 0
+        self.lead_depth = 0
+        self.lead_containers = 0
+        self.in_paragraph = False
+        self.paragraph = []
+        self.lead = []
 
     def handle_starttag(self,tag,attrs):
         a = dict(attrs)
@@ -149,14 +154,33 @@ class Metadata(HTMLParser):
         if tag == "h1":
             self.h1_count += 1
             self.in_h1 = True
+        classes=set((a.get("class") or "").split())
+        if tag == "div":
+            if self.lead_depth:
+                self.lead_depth+=1
+            elif classes == {"entry-content","no-share"}:
+                self.lead_depth=1
+                self.lead_containers+=1
+        if tag=="p" and self.lead_depth and len(self.lead)<2:
+            self.in_paragraph=True
+            self.paragraph=[]
 
     def handle_data(self,data):
         if self.in_h1:
             self.h1.append(data)
+        if self.in_paragraph:
+            self.paragraph.append(data)
 
     def handle_endtag(self,tag):
         if tag == "h1":
             self.in_h1 = False
+        if tag=="p" and self.in_paragraph:
+            self.lead.append(clean(self.paragraph))
+            self.in_paragraph=False
+        if tag=="div" and self.lead_depth:
+            self.lead_depth-=1
+            if not self.lead_depth:
+                self.in_paragraph=False
 
 
 def original_article(raw,row,keywords,now):
@@ -181,12 +205,21 @@ def original_article(raw,row,keywords,now):
         raise ValueError("alborsa_original_date_hold")
     if stamp.astimezone(CAIRO).date()!=identity(url)[0]:
         raise ValueError("alborsa_original_date_hold")
-    excerpt=one("og:description")
-    if not (_ministry_term_present(headline,keywords) or _ministry_term_present(excerpt,keywords)):
-        raise ValueError("alborsa_original_relevance_hold")
+    excerpt=one("og:description")[:850]
+    if _ministry_term_present(headline,keywords):
+        origin="title"
+    elif _ministry_term_present(excerpt,keywords):
+        origin="publisher_description"
+    else:
+        # Real publisher template verified in QA. Only the first two original
+        # content paragraphs, never sidebar, related news, navigation or footer.
+        lead=clean(p.lead)[:850]
+        if p.lead_containers!=1 or not _ministry_term_present(lead,keywords):
+            raise ValueError("alborsa_original_relevance_hold")
+        excerpt,origin=lead,"publisher_original_lead"
     return {"id":article_id(url),"url":url,"headline":headline,
-            "published":format_datetime(stamp),"publisher_excerpt":excerpt[:850],
-            "match_origin":"title" if _ministry_term_present(headline,keywords) else "publisher_description"}
+            "published":format_datetime(stamp),"publisher_excerpt":excerpt,
+            "match_origin":origin}
 
 
 def audit_listing(keywords, now, *, fetch=read_original, hours=72):
@@ -260,3 +293,65 @@ def forward_only(verified, activation, now):
     if any(x.tzinfo is None or x.utcoffset() is None for x in (activation,now)):
         raise ValueError("alborsa_invalid_activation")
     return [a for a in verified if activation<=parsedate_to_datetime(a["published"])<=now]
+
+
+def apply_to_inspection(config, observed, now, *, auditor=audit_listing):
+    """Opt-in only; activation UTC must be set separately by the owner.
+    Preserve native RSS candidates; any unverified supplemental coverage is
+    explicit PARTIAL, with no supplemental candidates admitted on HOLD.
+    Never create a separate publisher, send, or touch private state.
+    """
+    from copy import deepcopy
+    from email.utils import parsedate_to_datetime
+    activation_raw=config.get("alborsa_listing_activation_utc")
+    if activation_raw is None:
+        return observed
+    if not isinstance(activation_raw,str) or not activation_raw.endswith("Z"):
+        raise ValueError("alborsa_invalid_activation")
+    activation=datetime.fromisoformat(activation_raw.replace("Z","+00:00"))
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("alborsa_invalid_activation")
+    if now<activation:
+        return observed
+    out=deepcopy(observed)
+    feeds=[f for f in config["feeds"] if f["id"]=="alborsa"]
+    records=[s for s in out["sources"] if s["feed_id"]=="alborsa"]
+    if len(feeds)!=1 or len(records)!=1:
+        raise ValueError("alborsa_listing_scope_hold")
+    feed,record=feeds[0],records[0]
+    # Native feed continues its existing safety rules; do not make failed
+    # native RSS appear healthy just because the supplementary listing works.
+    if record["status"]!="ok" or out.get("matched_article_pool_truncated"):
+        return out
+    try:
+        a=auditor(config["keywords"],now)
+        if a["holds"] or not a["boundary"] or a.get("email_sent") is not False:
+            raise ValueError("alborsa_listing_coverage_hold")
+        existing={}
+        for row in out["matched_public_articles"]:
+            if row["source"]==feed["name"]:
+                p=urlsplit(row["url"])
+                if p.hostname in {"alborsaanews.com","www.alborsaanews.com"} and ARTICLE.fullmatch(p.path.rstrip("/")):
+                    existing[p.path.rstrip("/")]=row
+        added=[]
+        for row in forward_only(a["verified"],activation,now):
+            key=urlsplit(row["url"]).path
+            identity(row["url"])
+            if row["id"]!=article_id(row["url"]):
+                raise ValueError("alborsa_listing_identity_hold")
+            if key in existing:
+                if parsedate_to_datetime(existing[key]["published"])!=parsedate_to_datetime(row["published"]):
+                    raise ValueError("alborsa_listing_date_conflict_hold")
+                continue
+            existing[key]=row
+            added.append({**row,"source":feed["name"]})
+        pool=out["matched_public_articles"]+added
+        out["matched_article_pool_truncated"]=len(pool)>200
+        out["matched_public_articles"]=pool[:200]
+        out["planning_headline_matches"]=len(pool)
+        record["supplement_verified_links"]=len(a["verified"])
+        record["supplement_new_candidates"]=len(added)
+    except Exception:
+        record.update(status="failed",error_code="alborsa_listing_coverage_hold")
+        record["supplement_new_candidates"]=0
+    return out

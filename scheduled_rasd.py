@@ -309,6 +309,11 @@ def discover_interval_news(config: dict, now: datetime, *, inspector=inspect,
     checked = now.astimezone(timezone.utc)
     observed = inspector(config, now=checked, article_limit=200,
                          require_complete_items=True)
+    # Optional, owner-controlled activation; absent in the production profile
+    # until the separate admission decision. No historical supplement delivery.
+    if config.get("alborsa_listing_activation_utc") is not None:
+        from alborsa_original_listing import apply_to_inspection
+        observed = apply_to_inspection(config, observed, checked)
     if observed.get("matched_article_pool_truncated") or len(observed["matched_public_articles"]) > 200:
         raise RuntimeError("news_inventory_silent_truncation_hold")
     if source_records is not None:

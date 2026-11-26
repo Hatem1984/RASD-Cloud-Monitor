@@ -70,3 +70,34 @@ class ListingQA(unittest.TestCase):
             return data[url]
         with self.assertRaisesRegex(ValueError,"changed_hold"):
             audit_listing(KEY,NOW,fetch=fetch)
+
+    def test_first_two_original_content_paragraphs_can_prove_relevance(self):
+        row=parse_listing(listing(card(title="Official",excerpt="Ministry of Planning")),ROOT)[0][0]
+        raw=article(title="Official")+b'<div class="entry-content no-share"><p>Official</p><p>Ministry of Planning</p></div>'
+        a=original_article(raw,row,KEY,NOW)
+        self.assertEqual(a["match_origin"],"publisher_original_lead")
+        for extra in (b'<div class="sidebar"><p>Ministry of Planning</p></div>',b'<div class="entry-content no-share"><p>One</p><p>Two</p><p>Ministry of Planning</p></div>',b'<div class="entry-content no-share"><p>Ministry of Planning</p></div><div class="entry-content no-share"><p>Repeated</p></div>'):
+            with self.assertRaisesRegex(ValueError,"relevance_hold"):
+                original_article(article(title="Official")+extra,row,KEY,NOW)
+    def test_activation_disabled_and_forward_only_integration(self):
+        from alborsa_original_listing import apply_to_inspection
+        cfg={"keywords":KEY,"feeds":[{"id":"alborsa","name":"Alborsa"}]}
+        base={"sources":[{"feed_id":"alborsa","status":"ok"}],"matched_public_articles":[],"matched_article_pool_truncated":False,"planning_headline_matches":0}
+        def no_network(*args):raise AssertionError("disabled must not read")
+        self.assertIs(apply_to_inspection(cfg,base,NOW,auditor=no_network),base)
+        self.assertIs(apply_to_inspection({**cfg,"alborsa_listing_activation_utc":"2026-11-26T14:00:00Z"},base,NOW,auditor=no_network),base)
+        row=parse_listing(listing(card()),ROOT)[0][0]
+        a=original_article(article(),row,KEY,NOW)
+        result={"verified":[a],"holds":[],"boundary":True,"email_sent":False}
+        def audit(*args):return result
+        # Same candidate is historical under the current activation, not sent.
+        future=apply_to_inspection({**cfg,"alborsa_listing_activation_utc":"2026-11-26T13:00:00Z"},base,NOW,auditor=audit)
+        self.assertEqual(future["matched_public_articles"],[])
+        active={**cfg,"alborsa_listing_activation_utc":"2026-11-26T11:00:00Z"}
+        out=apply_to_inspection(active,base,NOW,auditor=audit)
+        self.assertEqual(len(out["matched_public_articles"]),1)
+        self.assertEqual(out["matched_public_articles"][0]["source"],"Alborsa")
+        self.assertEqual(len(apply_to_inspection(active,out,NOW,auditor=audit)["matched_public_articles"]),1)
+        held=apply_to_inspection(active,base,NOW,auditor=lambda *x:{**result,"holds":["fixture"]})
+        self.assertEqual(held["sources"][0]["error_code"],"alborsa_listing_coverage_hold")
+        self.assertEqual(held["matched_public_articles"],[])
