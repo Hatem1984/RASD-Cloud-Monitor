@@ -1,0 +1,55 @@
+name: RASD stage 02 exact production config after activation (NO SEND)
+on:
+  push:
+    branches: ['gate-rasd-alborsa-direct-feed-20261126-prod-check']
+permissions:
+  contents: read
+jobs:
+  readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact deployed source files and active cutoff
+        run: |
+          python - <<'PY'
+          import subprocess,json,time
+          from pathlib import Path
+          from datetime import datetime,timezone
+          from email.utils import parsedate_to_datetime
+          from monitor import inspect
+          from alborsa_original_listing import audit_listing,apply_to_inspection
+          base="41ecbc3c8dfb486b133dc85b1f061362fd5b0f37"
+          diff=subprocess.check_output(["git","diff","--name-only",base,"HEAD"],text=True).splitlines()
+          assert diff==[".github/workflows/rasd-stage02-exact-production-readonly.yml"],diff
+          cfg=json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
+          activation=datetime.fromisoformat(cfg["alborsa_listing_activation_utc"].replace("Z","+00:00"))
+          delay=(activation-datetime.now(timezone.utc)).total_seconds()
+          if delay>60: raise SystemExit("activation_not_yet_reached")
+          if delay>0:time.sleep(delay+0.25)
+          now=datetime.now(timezone.utc)
+          assert now>=activation
+          native=inspect(cfg,now=now,article_limit=200,require_complete_items=True)
+          audit={}
+          def record(*args,**kwargs):
+              result=audit_listing(*args,**kwargs)
+              audit.update({k:result[k] for k in ("pages","links","repeated_cards","boundary","matched","holds")})
+              audit["verified"]=len(result["verified"])
+              audit["forward_lower_bound"]=kwargs["not_before"].isoformat()
+              return result
+          combined=apply_to_inspection(cfg,native,now,auditor=record)
+          before={x["id"] for x in native["matched_public_articles"]}
+          added=[x for x in combined["matched_public_articles"] if x["id"] not in before]
+          historical=sum(parsedate_to_datetime(x["published"])<activation for x in added)
+          known={"2008756","2009038","2009145"}
+          known_added=sum(x["url"].rstrip("/").split("/")[-1] in known for x in added)
+          print(json.dumps({"mode":"exact_production_after_activation_no_send","production_sha":base,"only_qa_workflow_diff":True,"now":now.isoformat(),"activation":activation.isoformat(),"native_sources":[{"id":s["feed_id"],"status":s["status"],"code":s.get("error_code")} for s in native["sources"]],"combined_sources":[{"id":s["feed_id"],"status":s["status"],"code":s.get("error_code")} for s in combined["sources"]],"alborsa_audit":audit,"native_candidates":len(before),"supplement_added":len(added),"historical_supplement_added":historical,"known_historical_added":known_added,"truncated":combined["matched_article_pool_truncated"],"email_sent":False,"private_state_used":False}))
+          assert historical==0 and known_added==0
+          assert audit and not audit["holds"] and audit["boundary"]
+          assert next(s for s in combined["sources"] if s["feed_id"]=="alborsa")["status"]=="ok"
+          PY
