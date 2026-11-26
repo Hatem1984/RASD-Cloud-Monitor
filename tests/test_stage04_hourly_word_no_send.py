@@ -62,7 +62,7 @@ class HourlyWord(unittest.TestCase):
         self.assertEqual(r["fresh"],2);self.assertEqual(r["counts"]["original_evidence_hold"],1)
         self.assertEqual(len(d.inline_shapes),2)
     def test_history_and_related_not_deleted(self):
-        a=row(0);b={**row(1),"headline":a["headline"]}
+        a={**row(0),"published_at_cairo":"2026-11-26 18:10 EET","headline":"وزارة التخطيط تعلن تفاصيل مشروع التنمية الاقتصادية والاجتماعية رقم 100"};b={**row(1),"headline":a["headline"]}
         r,_=self.build([a,b],history=[a])
         self.assertEqual(r["decisions"],["repeated_link","related_event_review_deferred"])
     def test_invalid_digest_aborts_without_output(self):
