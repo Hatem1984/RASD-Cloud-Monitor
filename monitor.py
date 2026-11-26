@@ -53,6 +53,7 @@ SOURCE_FAILURE_CODES = frozenset({
     "DTD_or_entity_forbidden", "not_rss",
     "rss_channel_unverifiable", "rss_original_item_identity_unverifiable",
     "rss_original_item_date_unverifiable", "rss_original_item_future_date",
+    "alborsa_listing_coverage_hold",
     "rss_original_duplicate_conflict",
     "rss_xml_malformed", "network_timeout", "upstream_network_error",
     "http_301", "http_302", "http_303", "http_307", "http_308",

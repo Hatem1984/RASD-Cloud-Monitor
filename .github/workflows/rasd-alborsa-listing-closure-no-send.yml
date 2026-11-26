@@ -1,0 +1,54 @@
+name: RASD Alborsa original-listing QA + independent source recheck (NO SEND)
+on:
+  push:
+    branches: ['gate-rasd-alborsa-direct-feed-20261126-candidate']
+permissions:
+  contents: read
+jobs:
+  audit-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline original listing invariants
+        run: python -m unittest discover -s tests -p test_alborsa_original_listing_no_send.py -v
+      - name: Original source and supplemental inventory only
+        env:
+          RASD_GMAIL_SENDER: ''
+          RASD_REPORT_TO: ''
+          RASD_REPORT_CC: ''
+          RASD_PRIVATE_LEDGER_TOKEN: ''
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime,timezone
+          from pathlib import Path
+          from monitor import inspect
+          from alborsa_original_listing import audit_listing,forward_only
+          cfg=json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
+          now=datetime.now(timezone.utc)
+          targets={"2008756","2009038","2009145"}
+          result=inspect(cfg,now=now,article_limit=200,require_complete_items=True)
+          print(json.dumps({"mode":"post_fix_independent_cloud_rss","at":now.isoformat(),"source_rows":[{k:s.get(k) for k in ("feed_id","status","verified_links","headline_matches","error_code")} for s in result["sources"]],"matches":result["planning_headline_matches"],"truncated":result["matched_article_pool_truncated"],"email_sent":False}))
+          try:
+              a=audit_listing(cfg["keywords"],now)
+              found={u.rstrip("/").split("/")[-1] for u in a["matched_urls"]}
+              verified={x["url"].rstrip("/").split("/")[-1] for x in a["verified"]}
+              print(json.dumps({"mode":"alborsa_original_listing_qa","pages":a["pages"],"links":a["links"],"repeated_cards":a["repeated_cards"],"boundary":a["boundary"],"matched":a["matched"],"verified":len(a["verified"]),"known_targets_matched":sorted(found&targets),"known_targets_verified":sorted(verified&targets),"holds":a["holds"],"historical_candidates_forward_allowed":len(forward_only(a["verified"],now,now)),"email_sent":False}))
+              from alborsa_original_listing import apply_to_inspection
+              activation={**cfg,"alborsa_listing_activation_utc":now.isoformat().replace("+00:00","Z")}
+              combined=apply_to_inspection(activation,result,now,auditor=lambda *args,**kwargs:a)
+              print(json.dumps({"mode":"alborsa_activation_boundary_qa","before":len(result["matched_public_articles"]),"after":len(combined["matched_public_articles"]),"configured_activation":cfg.get("alborsa_listing_activation_utc"),"email_sent":False}))
+              configured=datetime.fromisoformat(cfg["alborsa_listing_activation_utc"].replace("Z","+00:00"))
+              historical_admitted=forward_only(a["verified"],configured,now)
+              historical_ids={x["url"].rstrip("/").split("/")[-1] for x in historical_admitted}&targets
+              print(json.dumps({"mode":"configured_cutoff_qa","activation":configured.isoformat(),"now":now.isoformat(),"known_historical_admitted":len(historical_ids),"email_sent":False}))
+              if a["holds"] or not a["boundary"] or verified&targets!=targets or historical_ids or len(combined["matched_public_articles"])!=len(result["matched_public_articles"]):
+                  raise SystemExit(2)
+          except Exception as e:
+              print(json.dumps({"mode":"alborsa_original_listing_qa","status":"HOLD","reason":str(e) if type(e) is ValueError and str(e).startswith("alborsa_") else type(e).__name__,"email_sent":False}))
+              raise SystemExit(2)
+          PY

@@ -1,0 +1,154 @@
+"""Synthetic-only tests for the Alborsa original listing candidate."""
+import unittest
+from datetime import datetime, timezone, timedelta
+from alborsa_original_listing import ROOT, identity, parse_listing, original_article, audit_listing, forward_only
+
+NOW=datetime(2026,11,26,13,35,tzinfo=timezone.utc)
+KEY=["Ministry of Planning"]
+U="https://alborsaanews.com/2026/11/26/1"
+OLD="https://alborsaanews.com/2026/11/22/2"
+def card(url=U, title="Ministry of Planning", excerpt="Official news"):
+    return f'<article class="jeg_post jeg_pl_md_3"><h3 class="jeg_post_title"><a href="{url}">{title}</a></h3><div class="jeg_post_excerpt"><p>{excerpt}</p></div></article>'
+def listing(*cards,next_page=False):
+    return ("".join(cards)+(f'<a href="{ROOT}/page/2">Next</a>' if next_page else "")).encode()
+def article(url=U,title="Ministry of Planning",stamp="2026-11-26T12:00:00Z",description="Official news"):
+    return f'<meta property="og:url" content="{url}"><meta property="article:published_time" content="{stamp}"><meta property="og:description" content="{description}"><h1>{title}</h1>'.encode()
+class ListingQA(unittest.TestCase):
+    def test_card_extracts_title_and_excerpt(self):
+        rows,pages=parse_listing(listing(card(),next_page=True),ROOT)
+        self.assertEqual(rows,[{"url":U,"headline":"Ministry of Planning","excerpt":"Official news"}])
+        self.assertIn(ROOT+"/page/2",pages)
+    def test_sidebar_links_do_not_become_candidates(self):
+        rows,_=parse_listing(b'<a href="https://alborsaanews.com/2026/11/26/999">Unrelated</a>'+listing(card()),ROOT)
+        self.assertEqual(len(rows),1)
+    def test_identity_rejects_external_and_query(self):
+        for u in ("https://evil.com/2026/11/26/1",U+"?x=1",U+"#x"):
+            with self.assertRaises(ValueError): identity(u)
+    def test_incomplete_card_and_duplicate_hold(self):
+        for raw in (listing(card(excerpt="")),listing(card(),card())):
+            with self.assertRaises(ValueError):parse_listing(raw,ROOT)
+    def test_original_timestamp_and_identity(self):
+        row=parse_listing(listing(card()),ROOT)[0][0]
+        a=original_article(article(),row,KEY,NOW)
+        self.assertEqual(a["url"],U)
+        for raw in (article(url=OLD),article(title="Different"),article(stamp="2026-11-26T12:00:00"),article(stamp="2026-11-26T15:00:00Z")):
+            with self.assertRaises(ValueError): original_article(raw,row,KEY,NOW)
+    def test_relevant_description(self):
+        row=parse_listing(listing(card(title="Official",excerpt="Ministry of Planning")),ROOT)[0][0]
+        a=original_article(article(title="Official",description="Ministry of Planning"),row,KEY,NOW)
+        self.assertEqual(a["match_origin"],"publisher_description")
+    def test_pagination_audit_and_forward_cutoff(self):
+        data={ROOT:listing(card(),next_page=True),ROOT+"/page/2":listing(card(OLD,title="Unrelated")),U:article()}
+        result=audit_listing(KEY,NOW,fetch=data.__getitem__)
+        self.assertTrue(result["boundary"])
+        self.assertEqual(result["links"],2)
+        self.assertEqual(len(result["verified"]),1)
+        self.assertFalse(result["email_sent"])
+        self.assertEqual(result["holds"],[])
+        self.assertEqual(forward_only(result["verified"],NOW,NOW),[])
+        self.assertEqual(len(forward_only(result["verified"],NOW-timedelta(hours=2),NOW)),1)
+    def test_missing_navigation_holds(self):
+        with self.assertRaisesRegex(ValueError,"navigation_hold"):
+            audit_listing(KEY,NOW,fetch=lambda _:listing(card()))
+    def test_identical_overlap_is_deduplicated_only_in_stable_snapshot(self):
+        data={ROOT:listing(card(),next_page=True),ROOT+"/page/2":listing(card(),card(OLD,title="Unrelated")),U:article()}
+        result=audit_listing(KEY,NOW,fetch=data.__getitem__)
+        self.assertEqual((result["links"],result["repeated_cards"],len(result["verified"])),(2,1,1))
+    def test_conflicting_duplicate_holds(self):
+        data={ROOT:listing(card(),next_page=True),ROOT+"/page/2":listing(card(excerpt="Changed"),card(OLD,title="Unrelated"))}
+        with self.assertRaisesRegex(ValueError,"overlap_conflict_hold"):
+            audit_listing(KEY,NOW,fetch=data.__getitem__)
+    def test_later_page_drift_holds_even_when_top_page_unchanged(self):
+        data={ROOT:listing(card(),next_page=True),ROOT+"/page/2":listing(card(OLD,title="Unrelated"))}
+        count=0
+        def fetch(url):
+            nonlocal count
+            if url.endswith("/page/2"):
+                count+=1
+                if count==2:
+                    return listing(card(OLD,title="Updated"))
+            return data[url]
+        with self.assertRaisesRegex(ValueError,"changed_hold"):
+            audit_listing(KEY,NOW,fetch=fetch)
+
+    def test_first_two_original_content_paragraphs_can_prove_relevance(self):
+        row=parse_listing(listing(card(title="Official",excerpt="Ministry of Planning")),ROOT)[0][0]
+        raw=article(title="Official")+b'<div class="entry-content no-share"><p>Official</p><p>Ministry of Planning</p></div>'
+        a=original_article(raw,row,KEY,NOW)
+        self.assertEqual(a["match_origin"],"publisher_original_lead")
+        for extra in (b'<div class="sidebar"><p>Ministry of Planning</p></div>',b'<div class="entry-content no-share"><p>One</p><p>Two</p><p>Ministry of Planning</p></div>',b'<div class="entry-content no-share"><p>Ministry of Planning</p></div><div class="entry-content no-share"><p>Repeated</p></div>'):
+            with self.assertRaisesRegex(ValueError,"relevance_hold"):
+                original_article(article(title="Official")+extra,row,KEY,NOW)
+    def test_activation_disabled_and_forward_only_integration(self):
+        from alborsa_original_listing import apply_to_inspection
+        cfg={"keywords":KEY,"feeds":[{"id":"alborsa","name":"Alborsa"}]}
+        base={"sources":[{"feed_id":"alborsa","status":"ok"}],"matched_public_articles":[],"matched_article_pool_truncated":False,"planning_headline_matches":0}
+        def no_network(*args):raise AssertionError("disabled must not read")
+        self.assertIs(apply_to_inspection(cfg,base,NOW,auditor=no_network),base)
+        self.assertIs(apply_to_inspection({**cfg,"alborsa_listing_activation_utc":"2026-11-26T14:00:00Z"},base,NOW,auditor=no_network),base)
+        row=parse_listing(listing(card()),ROOT)[0][0]
+        a=original_article(article(),row,KEY,NOW)
+        result={"verified":[a],"holds":[],"boundary":True,"email_sent":False}
+        def audit(*args,**kwargs):return result
+        # Same candidate is historical under the current activation, not sent.
+        future=apply_to_inspection({**cfg,"alborsa_listing_activation_utc":"2026-11-26T13:00:00Z"},base,NOW,auditor=audit)
+        self.assertEqual(future["matched_public_articles"],[])
+        active={**cfg,"alborsa_listing_activation_utc":"2026-11-26T11:00:00Z"}
+        out=apply_to_inspection(active,base,NOW,auditor=audit)
+        self.assertEqual(len(out["matched_public_articles"]),1)
+        self.assertEqual(out["matched_public_articles"][0]["source"],"Alborsa")
+        self.assertEqual(len(apply_to_inspection(active,out,NOW,auditor=audit)["matched_public_articles"]),1)
+        held=apply_to_inspection(active,base,NOW,auditor=lambda *x,**kw:{**result,"holds":["fixture"]})
+        self.assertEqual(held["sources"][0]["error_code"],"alborsa_listing_coverage_hold")
+        self.assertEqual(held["matched_public_articles"],[])
+
+
+    def test_stop_after_publisher_rate_limit(self):
+        from urllib.error import HTTPError
+        second="https://alborsaanews.com/2026/11/26/3"
+        pages={ROOT:listing(card(),card(second),next_page=True),ROOT+"/page/2":listing(card(OLD,title="Unrelated"))}
+        calls=[]
+        def fetch(url):
+            calls.append(url)
+            if url==U:
+                raise HTTPError(url,429,"rate limited",{},None)
+            if url==second:
+                raise AssertionError("no more requests after rate limit")
+            return pages[url]
+        result=audit_listing(KEY,NOW,fetch=fetch)
+        self.assertTrue(result["holds"])
+        self.assertEqual(result["verified"],[])
+        self.assertNotIn(second,calls)
+    def test_activation_limits_pagination_and_excludes_old_material(self):
+        activation=NOW-timedelta(minutes=20)
+        data={ROOT:listing(card(),next_page=True),ROOT+"/page/2":listing(card(OLD,title="Unrelated")),U:article()}
+        result=audit_listing(KEY,NOW,fetch=data.__getitem__,not_before=activation)
+        self.assertTrue(result["boundary"])
+        self.assertEqual(result["verified"],[])
+        self.assertFalse(result["email_sent"])
+    def test_audit_budget_stops_before_next_request(self):
+        from unittest.mock import patch
+        calls=[]
+        def fetch(url):
+            calls.append(url)
+            return listing(card(),next_page=True)
+        with patch("alborsa_original_listing.monotonic",side_effect=[0,0,91]):
+            with self.assertRaisesRegex(ValueError,"time_budget_hold"):
+                audit_listing(KEY,NOW,fetch=fetch)
+        self.assertEqual(calls,[ROOT])
+
+
+    def test_identical_previous_day_overlap_preserves_new_card_order(self):
+        from alborsa_original_listing import audit_listing
+        mid="https://alborsaanews.com/2026/11/25/3"
+        data={ROOT:listing(card(),card(mid,title="Unrelated"),next_page=True),
+              ROOT+"/page/2":listing(card(),card(OLD,title="Unrelated")),U:article()}
+        result=audit_listing(KEY,NOW,fetch=data.__getitem__)
+        self.assertEqual((result["links"],result["repeated_cards"],len(result["verified"])),(3,1,1))
+    def test_genuinely_new_cross_page_inversion_holds(self):
+        mid="https://alborsaanews.com/2026/11/25/3"
+        new="https://alborsaanews.com/2026/11/26/4"
+        data={ROOT:listing(card(),card(mid,title="Unrelated"),next_page=True),
+              ROOT+"/page/2":listing(card(new),card(OLD,title="Unrelated"))}
+        with self.assertRaisesRegex(ValueError,"date_order_hold"):
+            audit_listing(KEY,NOW,fetch=data.__getitem__)

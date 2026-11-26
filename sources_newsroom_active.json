@@ -153,5 +153,6 @@
     }
   ],
   "max_feed_bytes": 1500000,
-  "recent_hours": 72
+  "recent_hours": 72,
+  "alborsa_listing_activation_utc": "2026-11-26T16:15:00Z"
 }
