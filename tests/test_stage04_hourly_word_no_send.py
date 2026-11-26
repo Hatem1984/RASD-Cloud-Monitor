@@ -77,3 +77,19 @@ class HourlyWord(unittest.TestCase):
         with self.assertRaises(ValueError):completed_hour(NOW.replace(tzinfo=None))
         for scan in (datetime(2026,4,23,22,7,tzinfo=timezone.utc),datetime(2026,10,29,21,7,tzinfo=timezone.utc)):
             a,b=completed_hour(scan);self.assertEqual(b-a,timedelta(hours=1))
+
+    def test_conflicting_same_link_fails(self):
+        a=row(0);b={**a,"published":format_datetime(START+timedelta(minutes=40))}
+        with self.assertRaisesRegex(ValueError,"conflicting_link"):
+            self.build([a,b])
+    def test_same_publisher_deferred_not_deleted(self):
+        a=row(0);b=row(1,feed=FEEDS[0])
+        r,_=self.build([a,b])
+        self.assertEqual(r["fresh"],1)
+        self.assertEqual(r["counts"]["publisher_diversity_deferred"],1)
+    def test_invalid_candidate_and_all_photo_holds(self):
+        a=row(0);b={**row(1),"published":"unknown"}
+        r,d=self.build([a,b],capture=lambda *args:{"status":"hold","reason":"publisher_access_refused"})
+        self.assertEqual(r["fresh"],0)
+        self.assertEqual(r["counts"],{"original_evidence_hold":1,"invalid_original_candidate":1})
+        self.assertIn("مواد معلقة لعدم اكتمال الدليل: 2",full_text(d))
