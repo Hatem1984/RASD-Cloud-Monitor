@@ -22,12 +22,13 @@ jobs:
       - name: Original Alborsa and institute screenshot sample, official original page
         run: |
           python - <<'PY'
-          import subprocess,json,tempfile
+          import subprocess,json,tempfile,shutil
           from datetime import datetime,timezone
           from pathlib import Path
           from monitor import inspect
           from alborsa_original_listing import audit_listing
           from cloud_proof_report import proof_capture,word_images_match_capture_digests
+          from capture_public import capture_publisher
           from gate11_runner import candidate_from_feed,SAFE_CAPTURE_FAILURE_CODES
           from daily_report import render_docx,CAIRO
           from official_ministry_source import discover_official_newslist,allowed_official_resource,original_publication_date,_read_original
@@ -60,9 +61,16 @@ jobs:
                   if candidate is None:
                       print(json.dumps({"mode":"original_image","source":source,"status":"HOLD","reason":"candidate_invalid"}));continue
                   path=out/f"original-{i}.jpg"
-                  proof=proof_capture(candidate,cfg["feeds"],path)
+                  raw_path=out/f"browser-{i}.jpg"
+                  raw=capture_publisher(candidate["url"],candidate["publisher"],raw_path)
+                  def same_capture(url,publisher,destination):
+                      if raw.get("ok"): shutil.copyfile(raw_path,destination)
+                      return raw
+                  proof=proof_capture(candidate,cfg["feeds"],path,capture=same_capture)
                   reason=proof.get("reason")
-                  print(json.dumps({"mode":"original_image","source":source,"status":proof["status"],"reason":reason if reason in SAFE_CAPTURE_FAILURE_CODES else ("other" if reason else None)}))
+                  allowed=set(SAFE_CAPTURE_FAILURE_CODES)|{"missing_original_headline","original_headline_out_of_frame","original_headline_not_in_article","visual_qa_suspicious_flat_original_lead_media","screenshot_digest_mismatch"}
+                  raw_reason=raw.get("reason")
+                  print(json.dumps({"mode":"original_image","source":source,"sample_id":candidate["url"].rsplit("/",1)[-1] if source=="alborsa" else None,"status":proof["status"],"reason":reason if reason in allowed else ("other" if reason else None),"browser_reason":raw_reason if raw_reason in allowed else ("accepted" if raw.get("ok") else "other")}))
                   if proof["status"]=="verified":
                       from email.utils import parsedate_to_datetime
                       dt=parsedate_to_datetime(candidate["published"]).astimezone(CAIRO)
@@ -70,7 +78,7 @@ jobs:
                       receipts.append(proof)
               if stories:
                   word=out/"qa.docx"
-                  render_docx({"title":"RASD Stage 03 QA ONLY","display_window_start":"QA sample","display_window_end":"QA sample","coverage":"SOURCE_LIMITED","verified_links":len(stories),"articles":stories,"sources":[],"ministry_media_grid":True,"limitations":"Read-only sample; no delivery"},word)
+                  render_docx({"title":"RASD Stage 03 QA ONLY","display_window_start":"QA sample","display_window_end":"QA sample","coverage":"SOURCE_LIMITED","verified_links":len(stories),"articles":stories,"sources":[],"limitations":"Read-only sample; no delivery"},word)
                   print(json.dumps({"mode":"sample_word","verified_images":len(receipts),"ordered_image_digests_match":word_images_match_capture_digests(word,receipts)}))
               with sync_playwright() as p:
                   b=p.chromium.launch(headless=True,args=["--no-sandbox","--disable-dev-shm-usage"])
