@@ -157,7 +157,7 @@ def _cover(doc, *, date_label: str, period_label: str, stories: int, sites: int,
     p.paragraph_format.space_before = Pt(16)
     _run(p, "بتاريخ " + date_label, size=11, color=GOLD)
     p = cell.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p, "فترة الرصد:", size=11, bold=True, color=GOLD)
+    _run(p, "نافذة الفحص:" if report_period == "interval" else "فترة التسليم:", size=11, bold=True, color=GOLD)
     # Split the 22:00 Cairo window into two short, readable lines rather
     # than one line of long mixed Arabic/Latin digits crossing cell edges.
     for endpoint in period_label.split(" إلى ", 1):
@@ -223,7 +223,54 @@ def descriptive_topic_counts(articles: list[dict]) -> Counter:
     return counts
 
 
-def _summary(doc, report: dict, distribution: Counter) -> None:
+def _publication_timing(report: dict) -> list[str]:
+    """Presentation only; preserve every item, including uncertain timestamps.
+
+    Compare displayed Cairo minutes, using the existing formatter contract.
+    Ambiguous/nonexistent local times (DST), missing dates or reversed bounds
+    are explicitly unknown. Never infer an actual first-discovery timestamp.
+    """
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    from daily_report import ARABIC_MONTHS
+    cairo = ZoneInfo("Africa/Cairo")
+    def instant(naive, zone_label=None):
+        options=set()
+        for fold in (0,1):
+            local=naive.replace(tzinfo=cairo,fold=fold)
+            utc=local.astimezone(timezone.utc)
+            if utc.astimezone(cairo).replace(tzinfo=None)==naive and (
+                    zone_label is None or local.tzname()==zone_label):
+                options.add(utc)
+        return next(iter(options)) if len(options)==1 else None
+    def window(value):
+        if not isinstance(value,str):return None
+        value=value.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩","0123456789"))
+        m=re.fullmatch(r"(\d{1,2}) ([^ ]+) (\d{4})(?:،)? الساعة (\d{2}):(\d{2})(?: بتوقيت القاهرة)?",value)
+        if not m:return None
+        try:
+            d,month,y,h,minute=m.groups()
+            return instant(datetime(int(y),ARABIC_MONTHS.index(month)+1,int(d),int(h),int(minute)))
+        except (ValueError,OverflowError):return None
+    def published(value):
+        if not isinstance(value,str):return None
+        m=re.fullmatch(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}) (EET|EEST)",value)
+        if not m:return None
+        try:return instant(datetime.strptime(m[1],"%Y-%m-%d %H:%M"),m[2])
+        except (ValueError,OverflowError):return None
+    start=window(report.get("display_window_start"))
+    end=window(report.get("display_window_end"))
+    result=[]
+    for item in report["articles"]:
+        stamp=published(item.get("published_at_cairo"))
+        if start is None or end is None or end<start or stamp is None or stamp>end:
+            result.append("unknown")
+        elif stamp<start:result.append("older")
+        else:result.append("within")
+    return result
+
+
+def _summary(doc, report: dict, distribution: Counter, timing=None) -> None:
     # The legacy SMTP subject is a transport label, NOT the Ministry Word
     # identity. Display the independent RASD brand within this report only;
     # never change the SMTP subject or recipient mailbox rules here.
@@ -236,7 +283,7 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
     p=doc.add_paragraph(); _rtl(p)
     basis = ("أخبار الساعة السابقة واستدراكات من ساعات أقدم، مع تاريخ النشر الحقيقي لكل مادة."
              if period == "interval" and report.get("report_kind") == "hourly"
-             else "من روابط الناشرين الأصلية المستوفية خلال فترة المتابعة."
+             else "من روابط الناشرين الأصلية المستوفية في هذا الفحص، وقد يكون نشرها أسبق منه."
              if period == "interval" else "وفق سجل التسليم فقط.")
     _run(p, f"الملخص: إجمالي التغطيات الموثقة {len(report['articles'])}؛ "
           f"عدد المواقع الممثلة {len(distribution)}، {basis}",
@@ -256,6 +303,14 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
               f"استدراك أخبار منشورة قبلها: {older}. "
               "لا تُحسب الاستدراكات ضمن مستهدف الأخبار الجديدة للساعة.",
               size=10.5,bold=True)
+    if timing is not None:
+        counts=Counter(timing)
+        p=doc.add_paragraph();_rtl(p)
+        _run(p,f"النشر ضمن نافذة الفحص: {counts['within']}؛ "
+              f"استدراك قبل النافذة: {counts['older']}؛ "
+              f"التوقيت غير محسوم: {counts['unknown']}. "
+              "النافذة تخص الفحص لا لحظة اكتشاف كل خبر؛ التصنيف بدقة الدقيقة المعروضة.",
+              size=9,bold=True)
     p=doc.add_paragraph(); _rtl(p)
     _run(p, "توزيع التغطيات على المواقع", size=14, bold=True)
     summary=doc.add_table(rows=1, cols=3)
@@ -342,7 +397,7 @@ def _summary(doc, report: dict, distribution: Counter) -> None:
     doc.add_page_break()
 
 
-def _card(cell, item: dict, index: int, *, wide: bool = False) -> None:
+def _card(cell, item: dict, index: int, *, wide: bool = False, timing=None) -> None:
     source=SOURCE_NAMES.get(item["source"],item["source"])
     cell.vertical_alignment=WD_CELL_VERTICAL_ALIGNMENT.TOP
     _border(cell,"DFD0A9")
@@ -367,7 +422,13 @@ def _card(cell, item: dict, index: int, *, wide: bool = False) -> None:
     p=cell.add_paragraph();p.alignment=WD_ALIGN_PARAGRAPH.CENTER
     p.add_run().add_picture(str(image_path),width=Cm(fitted_w),height=Cm(fitted_h))
     p=cell.add_paragraph();_rtl(p)
-    _run(p,"النشر: "+(item.get("published_display_cairo") or item.get("published_at_cairo", "غير محدد")),size=8)
+    _run(p,"النشر: "+(item.get("published_display_cairo") or item.get("published_at_cairo") or "غير محدد"),size=8)
+    if timing is not None:
+        labels={"older":"استدراك قبل نافذة الفحص","within":"نُشر ضمن نافذة الفحص","unknown":"توقيت النشر بالنسبة للنافذة غير محسوم"}
+        # Keep the original date paragraph exact for daily archive verification.
+        p.paragraph_format.space_after=Pt(0)
+        p=cell.add_paragraph();_rtl(p)
+        _run(p,labels[timing],size=8,bold=True)
     p=cell.add_paragraph();_rtl(p);_link(p,item["url"])
 
 
@@ -478,7 +539,9 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
            report_period=report.get("report_period", "daily"),
            report_kind=report.get("report_kind", ""),
            volume_label=volume_label)
-    _summary(doc,report,distribution)
+    timing=(_publication_timing(report) if report.get("report_period")=="interval"
+            and report.get("report_kind")=="half_hourly" else None)
+    _summary(doc,report,distribution,timing)
     for start in range(0,len(articles),4):
         p=doc.add_paragraph();_rtl(p)
         _run(p,"المواقع الإلكترونية — صور صفحات الأخبار الأصلية",size=15,bold=True)
@@ -489,7 +552,7 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
             table.autofit = False
             table.columns[0].width = Cm(18)
             _card(table.rows[0].cells[0], segment[0], start + 1,
-                  wide=True)
+                  wide=True,timing=timing[start] if timing is not None else None)
         else:
             table=doc.add_table(rows=ceil(len(segment)/2),cols=2)
             table.autofit=False
@@ -497,7 +560,7 @@ def render_ministry_visual_word(report: dict, destination: Path) -> None:
             table.columns[1].width=Cm(9)
             for offset,item in enumerate(segment):
                 cell=table.rows[offset//2].cells[offset%2]
-                _card(cell,item,start+offset+1)
+                _card(cell,item,start+offset+1,timing=timing[start+offset] if timing is not None else None)
         if start+4<len(articles):
             doc.add_page_break()
     doc.core_properties.title=(report["title"] if report.get("report_period") == "interval"
