@@ -50,7 +50,23 @@ class ListingQA(unittest.TestCase):
     def test_missing_navigation_holds(self):
         with self.assertRaisesRegex(ValueError,"navigation_hold"):
             audit_listing(KEY,NOW,fetch=lambda _:listing(card()))
-    def test_changed_or_overlapping_pages_hold(self):
-        data={ROOT:listing(card(),next_page=True),ROOT+"/page/2":listing(card())}
-        with self.assertRaisesRegex(ValueError,"overlap_hold"):
+    def test_identical_overlap_is_deduplicated_only_in_stable_snapshot(self):
+        data={ROOT:listing(card(),next_page=True),ROOT+"/page/2":listing(card(),card(OLD,title="Unrelated")),U:article()}
+        result=audit_listing(KEY,NOW,fetch=data.__getitem__)
+        self.assertEqual((result["links"],result["repeated_cards"],len(result["verified"])),(2,1,1))
+    def test_conflicting_duplicate_holds(self):
+        data={ROOT:listing(card(),next_page=True),ROOT+"/page/2":listing(card(excerpt="Changed"),card(OLD,title="Unrelated"))}
+        with self.assertRaisesRegex(ValueError,"overlap_conflict_hold"):
             audit_listing(KEY,NOW,fetch=data.__getitem__)
+    def test_later_page_drift_holds_even_when_top_page_unchanged(self):
+        data={ROOT:listing(card(),next_page=True),ROOT+"/page/2":listing(card(OLD,title="Unrelated"))}
+        count=0
+        def fetch(url):
+            nonlocal count
+            if url.endswith("/page/2"):
+                count+=1
+                if count==2:
+                    return listing(card(OLD,title="Updated"))
+            return data[url]
+        with self.assertRaisesRegex(ValueError,"changed_hold"):
+            audit_listing(KEY,NOW,fetch=fetch)

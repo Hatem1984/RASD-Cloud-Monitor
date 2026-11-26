@@ -196,30 +196,41 @@ def audit_listing(keywords, now, *, fetch=read_original, hours=72):
     lower=now-timedelta(hours=hours)
     low_day=lower.astimezone(CAIRO).date()
     cards=[]
-    seen=set()
+    seen={}
     pages=[]
+    snapshots=[]
     holds=[]
-    first=None
+    repeats=0
+    previous_last=None
     boundary=False
     for page in range(1,MAX_PAGES+1):
         url=ROOT if page==1 else ROOT+"/page/"+str(page)
         if page>1 and url not in next_pages:
             raise ValueError("alborsa_listing_navigation_hold")
         batch,next_pages=parse_listing(fetch(url),url)
-        if first is None:
-            first=batch
-        keys={r["url"] for r in batch}
-        if seen & keys:
-            raise ValueError("alborsa_listing_overlap_hold")
-        if cards and identity(batch[0]["url"])[0]>identity(cards[-1]["url"])[0]:
+        if previous_last is not None and identity(batch[0]["url"])[0]>previous_last:
             raise ValueError("alborsa_listing_date_order_hold")
-        cards.extend(batch);seen.update(keys);pages.append(len(batch))
+        previous_last=identity(batch[-1]["url"])[0]
+        snapshots.append((url,batch,next_pages))
+        pages.append(len(batch))
+        for row in batch:
+            key=row["url"]
+            if key in seen:
+                if seen[key]!=row:
+                    raise ValueError("alborsa_listing_overlap_conflict_hold")
+                repeats+=1
+            else:
+                seen[key]=row
+                cards.append(row)
         if identity(batch[-1]["url"])[0]<low_day:
             boundary=True
             break
-    # A changing top page invalidates offset-pagination proof.
-    if parse_listing(fetch(ROOT),ROOT)[0]!=first:
-        raise ValueError("alborsa_listing_changed_hold")
+    # The original publisher repeated identical cards across pages.
+    # A second bounded sweep must reproduce the complete listing and navigation;
+    # never suppress conflicting duplicates or accept a drifting snapshot.
+    for url,batch,nav in snapshots:
+        if parse_listing(fetch(url),url)!=(batch,nav):
+            raise ValueError("alborsa_listing_changed_hold")
     if not boundary:
         holds.append("alborsa_listing_window_cap_hold")
     matched=[r for r in cards if identity(r["url"])[0]>=low_day and
@@ -238,7 +249,7 @@ def audit_listing(keywords, now, *, fetch=read_original, hours=72):
             # Safe QA diagnostics; no content or private state.
             code=str(exc) if type(exc) is ValueError and str(exc).startswith("alborsa_") else "alborsa_original_read_hold"
             holds.append(code)
-    return {"pages":pages,"links":len(cards),"boundary":boundary,
+    return {"pages":pages,"links":len(cards),"repeated_cards":repeats,"boundary":boundary,
             "matched":len(matched),"matched_urls":[r["url"] for r in matched],
             "verified":verified,"holds":holds,"email_sent":False}
 
