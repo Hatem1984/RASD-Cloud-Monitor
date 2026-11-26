@@ -629,7 +629,7 @@ def send_one_word(word: Path, *, sender: str, recipient: str, password: str,
 
 
 def news_for_rollup(state: dict, day: str, config: dict) -> list[dict]:
-    """Roll up accepted mail in (prior 22:00 Cairo, today's 22:00 Cairo].
+    """Roll up accepted mail in [prior 22:00 Cairo, today's 22:00 Cairo).
 
     Calendar midnight is NOT the operational report cutoff. A news alert
     accepted at 22:30 cannot silently disappear from both daily reports.
@@ -1164,26 +1164,39 @@ def run_scheduled(mode: str, clock: datetime | None = None) -> dict:
                 return {"status": "rollup_not_reserved", "smtp_accepted": False}
             status_notice = no_news or (not no_news and photo_hold)
             description = (
-                "تقرير حالة تشغيل RASD مرفق في ملف Word. هذا المستند"
-                " ليس تقريرًا صحفيًا مصورًا. لا توجد أخبار مصوّرة مُسلّمة"
-                " ضمن النافذة، وقد تكون صفحات الناشرين معلّقة.\n"
+                "تقرير حالة الرصد مرفق في ملف Word. لم يُقبل إرسال أخبار "
+                "صحفية مصوّرة ضمن النافذة وفق سجل التسليم؛ لا يثبت ذلك "
+                "عدم نشر أخبار، وقد تكون بعض المصادر أو أدلة الصور معلقة.\n"
                 if no_news else (
-                    "تنبيه RASD: روابط وعناوين الأخبار التي سبق إرسالها"
-                    " موثقة في Word، لكن إعادة التقاط صور الناشرين"
-                    " تعذّرت. هذا تقرير حالة دون صور، وليس تقريرًا"
-                    " صحفيًا مصورًا نهائيًا.\n" if photo_hold else None))
+                    "تقرير حالة الرصد مرفق في ملف Word. العناوين والروابط "
+                    "لأخبار سبق قبول إرسالها موثقة، لكن تعذر إعادة التقاط "
+                    "صور الناشرين. هذا ليس تقريرًا صحفيًا مصورًا نهائيًا.\n"
+                    if photo_hold else None))
             mail_args = {
                 "sender": sender, "recipient": recipient, "password": password,
                 "subject": title, "key": rollup_key,
             }
             if status_notice or official_status == "HOLD_BASE_REPORT_PRESERVED":
                 if description is None:
-                    description = ("????? ??? ???????? ????????. ?????? Word ???? ????? "
-                                   "???? ?????? ??????? ??????? ????????? ????????? ????????.\n")
+                    description = (
+                        "التقرير الصحفي المجمع مرفق في ملف Word، وفق الأخبار "
+                        "التي سبق قبول إرسالها.\n")
                 if official_status == "HOLD_BASE_REPORT_PRESERVED":
-                    description += "???? ????? ??? ???????? ??????? (HOLD)? ?? ?????? ??? ??????? ?????? ??????.\n"
-                elif official_status != "NOT_ENABLED":
-                    description += "??? ???????? ??????? ????? ?? ????? ???????? ???? ???? ?????? ?? ??????.\n"
+                    description += (
+                        "تعذر استكمال القسم الرسمي للوزارة (HOLD)؛ "
+                        "حُفظ التقرير الصحفي الأساسي دون حذف محتواه.\n")
+                elif official_status == "VERIFIED_FIRST_PAGE":
+                    description += (
+                        "يتضمن المستند قسمًا مستقلًا للبيانات الرسمية الموثقة "
+                        "من الصفحة الأولى المفحوصة لقائمة أخبار الوزارة.\n")
+                elif official_status == "NO_VERIFIED_DATE_MATCH_FIRST_PAGE":
+                    description += (
+                        "لم يثبت تطابق تاريخ بيانات رسمية في الصفحة الأولى "
+                        "المفحوصة؛ لا يثبت ذلك عدم نشر بيانات أخرى.\n")
+                elif official_status == "HOLD":
+                    description += (
+                        "القسم الرسمي للوزارة معلق (HOLD)؛ "
+                        "لم يكتمل التحقق، ولا تُحتسب بيانات غير موثقة.\n")
                 mail_args["body_text"] = description
             receipt = send_one_word(doc, **mail_args)
             ledger.mark_smtp_accepted(rollup_key, receipt)

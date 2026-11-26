@@ -88,6 +88,10 @@ class OfficialSectionTests(unittest.TestCase):
         def send(word,**kw):
             self.assertEqual(len(_proofs(word)),1)
             self.assertEqual(kw["key"],worker.digest_key("rollup:2026-11-24"))
+            self.assertIn("لم يُقبل إرسال أخبار",kw["body_text"])
+            self.assertIn("قسمًا مستقلًا للبيانات الرسمية الموثقة",kw["body_text"])
+            self.assertNotIn("????",kw["body_text"])
+            self.assertNotIn("ليس تقريرًا صحفيًا مصورًا",kw["body_text"])
             return "<fixture>"
         with patch.dict(os.environ,{"GITHUB_EVENT_NAME":"schedule",
                 "RASD_JOB_CRON":worker.DAILY_CRON,
@@ -108,6 +112,31 @@ class OfficialSectionTests(unittest.TestCase):
         mail.assert_called_once()
         ledger.reserve.assert_called_once()
         ledger.mark_smtp_accepted.assert_called_once()
+
+    def test_daily_zero_with_official_hold_body_is_arabic_and_discloses_hold(self):
+        for status, phrase in [
+            ("HOLD_BASE_REPORT_PRESERVED", "حُفظ التقرير الصحفي الأساسي"),
+            ("HOLD", "القسم الرسمي للوزارة معلق"),
+            ("NO_VERIFIED_DATE_MATCH_FIRST_PAGE", "لا يثبت ذلك عدم نشر بيانات أخرى"),
+        ]:
+            with self.subTest(status=status):
+                ledger=MagicMock()
+                ledger.read.return_value=({"entries":{}}, "mock")
+                ledger.reserve.return_value="reserved"
+                with patch.dict(os.environ,{"GITHUB_EVENT_NAME":"schedule",
+                        "RASD_JOB_CRON":worker.DAILY_CRON,
+                        "RASD_DAILY_OFFICIAL_APPEND_ENABLED":"true"},clear=True), patch.object(
+                        worker,"require_github_scheduler"), patch.object(
+                        worker,"protected_credentials",return_value=("sender@example.invalid","recipient@example.invalid","offline-only",ledger)), patch.object(
+                        worker,"news_for_rollup",return_value=[]), patch(
+                        "daily_official_section.append_official_daily",side_effect=lambda doc,output,**kw:(doc,status,0)), patch.object(
+                        worker,"send_one_word",return_value="<fixture>") as mail:
+                    result=worker.run_scheduled("rollup",datetime(2026,11,24,20,4,tzinfo=timezone.utc))
+                self.assertEqual(result["official_section_status"],status)
+                body=mail.call_args.kwargs["body_text"]
+                self.assertIn(phrase,body)
+                self.assertNotIn("????",body)
+                self.assertIn("لا يثبت",body)
 
     def test_official_time_budget_stops_before_next_read(self):
         from rasd_official_daily import build_official_daily
