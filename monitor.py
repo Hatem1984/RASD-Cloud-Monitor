@@ -53,6 +53,7 @@ SOURCE_FAILURE_CODES = frozenset({
     "DTD_or_entity_forbidden", "not_rss",
     "rss_channel_unverifiable", "rss_original_item_identity_unverifiable",
     "rss_original_item_date_unverifiable", "rss_original_item_future_date",
+    "rss_original_publisher_date_conflict_hold",
     "alborsa_listing_coverage_hold",
     "rss_original_duplicate_conflict",
     "rss_xml_malformed", "network_timeout", "upstream_network_error",
@@ -267,6 +268,11 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
         # cannot establish healthy current coverage. Do not guess offsets.
         if items and future_count == len(items):
             raise ValueError("rss_original_item_future_date")
+    # Owner-approved documented external date conflict: keep fetching and
+    # validating the feed, but no admission or healthy claim until original
+    # publisher evidence resolves the conflict and the explicit hold is lifted.
+    if feed.get("publication_date_conflict_hold") is True:
+        raise ValueError("rss_original_publisher_date_conflict_hold")
     eligible, matched, ids = 0, [], set()
     for node in root.findall("./channel/item"):
         title = (node.findtext("title") or "").strip()[:300]

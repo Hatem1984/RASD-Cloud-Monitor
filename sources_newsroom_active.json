@@ -95,6 +95,7 @@
     },
     {
       "id": "vetogate",
+      "publication_date_conflict_hold": true,
       "name": "Veto native news RSS",
       "url": "https://www.vetogate.com/rss.aspx",
       "allowed_article_hosts": [
