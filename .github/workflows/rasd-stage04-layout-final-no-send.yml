@@ -1,0 +1,108 @@
+name: RASD Stage04 final pagination and original Word proof (NO SEND)
+on:
+  push:
+    branches: ['gate-rasd-stage04-layout-final-20261126']
+permissions:
+  contents: read
+jobs:
+  word-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Existing proof dependencies and Word renderer
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --only-shell chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libreoffice-writer poppler-utils fonts-dejavu-core
+      - name: Exact candidate synthetic render and live original proof
+        run: |
+          python - <<'PY'
+          import json,subprocess,tempfile,sys,os
+          from datetime import datetime,timezone,timedelta
+          from email.utils import parsedate_to_datetime
+          from pathlib import Path
+          from docx import Document
+          from monitor import inspect
+          from alborsa_original_listing import apply_to_inspection
+          from rasd_hourly_word import build_hourly_word,completed_hour
+          from gate11_runner import candidate_from_feed
+          sys.path.insert(0,"tests")
+          from test_stage04_hourly_word_no_send import CFG,HEALTH,NOW,row,capture
+          assert subprocess.check_output(["git","diff","--name-only","9ce076219325ac3c998175890912d144281ee07b","HEAD"],text=True).splitlines()==[".github/workflows/rasd-stage04-layout-final-no-send.yml"]
+          synthetic_dir=Path(os.environ["RUNNER_TEMP"])/"synthetic-layout-only"
+          synthetic_dir.mkdir()
+          def render(word,folder,profile,*,raster=False):
+              folder.mkdir(exist_ok=True)
+              subprocess.run(["libreoffice","-env:UserInstallation=file://"+str(profile),"--headless","--convert-to","pdf","--outdir",str(folder),str(word)],check=True,capture_output=True,timeout=60)
+              pdf=folder/(word.stem+".pdf")
+              info=subprocess.check_output(["pdfinfo",str(pdf)],text=True)
+              pages=int(next(x.split(":")[1].strip() for x in info.splitlines() if x.startswith("Pages:")))
+              assert pages>=2
+              for n in range(1,pages+1):
+                  txt=subprocess.check_output(["pdftotext","-f",str(n),"-l",str(n),str(pdf),"-"],text=True)
+                  assert len("".join(txt.split()))>35,(word.name,n,"nearly empty page")
+              if raster:
+                  subprocess.run(["pdftoppm","-scale-to","1300","-png",str(pdf),str(synthetic_dir/word.stem)],check=True,capture_output=True,timeout=60)
+              return pages
+          with tempfile.TemporaryDirectory(prefix="rasd-hourly-final-") as d:
+              out=Path(d)
+              for n in (0,1,3,10):
+                  # Only artificial QA headlines/rectangles go to the isolated synthetic render artifact.
+                  items=[{**row(i),"headline":"اختبار صناعي فقط — "+row(i)["headline"]} for i in range(n)]
+                  word=out/f"QA-SYNTHETIC-{n}.docx"
+                  result=build_hourly_word(items,CFG,HEALTH,NOW,word,capture=capture)
+                  assert result["fresh"]==n and len(Document(word).inline_shapes)==n
+                  pages=render(word,out/f"synthetic-render-{n}",out/f"profile-{n}",raster=True)
+                  assert pages=={0:2,1:3,3:3,10:5}[n],(n,pages,"orphan page or incorrect pagination")
+                  print(json.dumps({"mode":"synthetic_layout","fresh":n,"pages":pages,"images":len(Document(word).inline_shapes),"no_nearly_empty_page":True,"email_sent":False}),flush=True)
+              cfg=json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
+              scan=datetime.now(timezone.utc)
+              native=inspect(cfg,now=scan,article_limit=200,require_complete_items=True)
+              observed=apply_to_inspection(cfg,native,scan)
+              assert not observed["matched_article_pool_truncated"]
+              health=[{"feed_id":s["feed_id"],"status":s["status"],"verified_links":s.get("verified_links",0),"failure_code":s.get("error_code","other")} for s in observed["sources"]]
+              raw=observed["matched_public_articles"]
+              live=out/"live-current-hour.docx"
+              result=build_hourly_word(raw,cfg,health,scan,live)
+              pages=render(live,out/"live-render",out/"live-profile")
+              assert len(Document(live).inline_shapes)==result["fresh"]
+              print(json.dumps({"mode":"live_completed_hour","pages":pages,"sources_checked":len(health),"failed_sources":[s["feed_id"] for s in health if s["status"]=="failed"],**result}),flush=True)
+              # A real older original is independently proven inside the same
+              # builder using a historical hour and ACTUAL observation clock.
+              # This is never a claim that the historical hour was scanned then.
+              start,end=completed_hour(scan)
+              hours=[]
+              for x in raw:
+                  c=candidate_from_feed(x,cfg,scan)
+                  if c is None:continue
+                  dt=parsedate_to_datetime(c["published"]).astimezone(timezone.utc)
+                  h=dt.replace(minute=0,second=0,microsecond=0)+timedelta(hours=1)
+                  if h<=start and h>=scan-timedelta(hours=71) and h not in hours:hours.append(h)
+              proved=False
+              for i,h in enumerate(sorted(hours,reverse=True)[:3]):
+                  dest=out/f"retro-{i}.docx"
+                  proof=build_hourly_word(raw,cfg,health,scan,dest,qa_window_end=h)
+                  if proof["fresh"]:
+                      pages=render(dest,out/f"retro-render-{i}",out/f"retro-profile-{i}")
+                      assert proof["retrospective_qa"] and proof["scan_utc"]==scan.isoformat()
+                      assert len(Document(dest).inline_shapes)==proof["fresh"]
+                      print(json.dumps({"mode":"retrospective_original_hour","pages":pages,"original_images_verified":proof["fresh"],"word_digest_match":True,**proof}),flush=True)
+                      proved=True
+                      break
+              print(json.dumps({"mode":"final_hourly_proof","positive_real_original_hour":bool(proved or result["fresh"]),"live_positive":bool(result["fresh"]),"retrospective_only":bool(proved and not result["fresh"]),"live_private_artifacts_uploaded":False,"synthetic_raster_only":True,"email_sent":False}),flush=True)
+          PY
+      - name: Upload artificial layout raster only, no real source content
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage04-SYNTHETIC-ONLY-layout
+          path: ${{ runner.temp }}/synthetic-layout-only/*.png
+          retention-days: 1
+          if-no-files-found: error
