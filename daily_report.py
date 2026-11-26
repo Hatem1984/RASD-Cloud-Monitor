@@ -27,6 +27,7 @@ COVERAGE_LABELS = {
     "PREVIOUSLY_ACCEPTED_NEWS_IMAGE_HOLD": "أخبار سبق تسليمها؛ إعادة صورها متعذرة",
 }
 HOLD_REASON_LABELS = {
+    "original_publication_date_conflict_hold": "تعارض توقيت النشر بين قناة الناشر وصفحة الخبر",
     "publisher_access_refused": "صفحة الناشر ترفض الوصول الآلي",
     "not_a_planning_article": "لم يتأكد ارتباط صفحة الناشر بموضوع التخطيط",
     "page_content_unavailable": "محتوى صفحة الناشر غير متاح للتحقق",
@@ -169,6 +170,7 @@ def gather(config: dict, *, fetch=read_feed, now: datetime | None = None,
             "published_at_cairo": stamp.astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z"),
             "published_display_cairo": cairo_display_time(stamp),
             "_published_utc": stamp,
+            **({"published":article["published"]} if article["publisher"]=="elbalad.news" else {}),
         })
     articles.sort(key=lambda x: x["_published_utc"], reverse=True)
     unique = {}

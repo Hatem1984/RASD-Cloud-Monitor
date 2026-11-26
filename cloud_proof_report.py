@@ -91,23 +91,16 @@ def classify_failure(reason: str | None) -> str:
 
 
 def original_headline_in_page_title(headline: str, page_title: str) -> bool:
-    """Allow typography/Arabic alef variants, not a different publisher headline.
+    """Full original title, not a shared six-word prefix."""
+    from capture_public import full_headline_in_page_title
+    return full_headline_in_page_title(headline,page_title)
 
-    The same news title can use straight quotation marks in HTML <title> and
-    curly marks in publisher RSS. Compare six leading *words*, not raw bytes.
-    Never use a fuzzy model, translated substitute or unrelated page.
-    """
-    import re
-    from monitor import _matchable_arabic
-    if not isinstance(headline, str) or not isinstance(page_title, str):
-        return False
-    source = re.sub(r"[^\w]+", " ", _matchable_arabic(headline)).strip()
-    actual = re.sub(r"[^\w]+", " ", _matchable_arabic(page_title)).strip()
-    words = source.split()
-    if len(words) < 3 or len(source) < 14:
-        return False
-    prefix = " ".join(words[:min(6, len(words))])
-    return bool(re.search(r"(?<!\w)" + re.escape(prefix) + r"(?!\w)", actual))
+
+from elbalad_date_evidence import publication_evidence, DISCLOSURE, CONFLICT, AGREEMENT
+
+
+def original_publication_date_matches(article: dict, evidence) -> bool:
+    return publication_evidence(article,evidence) is not None
 
 
 def proof_capture(article: dict, feeds: list[dict], destination: Path,
@@ -129,8 +122,18 @@ def proof_capture(article: dict, feeds: list[dict], destination: Path,
     if (not result.get("actual_url") or
             canonical_url(result["actual_url"]) != canonical_url(article["url"])):
         return {"status": "hold", "reason": "url_mismatch"}
-    if not original_headline_in_page_title(article["headline"], result.get("title", "")):
+    from capture_public import original_headline_matches
+    original_match=original_headline_matches(article["headline"],result.get("original_headline"))
+    structured_basis=(publisher=="alborsaanews.com" and original_match and
+                      result.get("heading_basis")=="alborsa_original_h1_newsarticle_og_url")
+    if ((not original_headline_in_page_title(article["headline"], result.get("title", "")) and not structured_basis)
+            or ("original_headline" in result and not original_match)):
         return {"status": "hold", "reason": "title_mismatch"}
+    date_status = None
+    if feed.get("id")=="elbalad":
+        date_status=publication_evidence(article,result.get("publication_date_evidence"))
+        if not date_status or not original_headline_matches(article["headline"],result.get("original_headline")):
+            return {"status":"hold","reason":"original_publication_date_conflict_hold"}
     if not destination.is_file() or destination.stat().st_size < 3000:
         return {"status": "hold", "reason": "screenshot_too_small"}
     quality = image_quality(destination)
@@ -142,7 +145,8 @@ def proof_capture(article: dict, feeds: list[dict], destination: Path,
     digest = hashlib.sha256(raw).hexdigest()
     if result.get("sha256") and digest != result["sha256"]:
         return {"status": "hold", "reason": "screenshot_digest_mismatch"}
-    return {"status": "verified", "sha256": digest, "bytes": len(raw)}
+    return {"status": "verified", "sha256": digest, "bytes": len(raw),
+            **({"publication_date_status":date_status} if date_status else {})}
 
 
 def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
@@ -173,6 +177,8 @@ def build_proof_report(config_path: Path, output_dir: Path, *, fetch=read_feed,
             rows.append({"id": article["id"], "source": article["source"], **result})
             if result["status"] == "verified":
                 article["evidence_image_path"] = str(destination)
+                if result.get("publication_date_status")==CONFLICT:
+                    report["limitations"] += DISCLOSURE
         verified = sum(row["status"] == "verified" for row in rows)
         ready = (bool(rows) and verified == len(rows)
                  and report["coverage"] == "HEALTHY")

@@ -33,6 +33,10 @@ SAFE_CAPTURE_FAILURE_CODES = frozenset({
     "visual_qa_invalid_image",
     "visual_qa_unloaded_massa_article_lead_media", "invalid_jpeg_signature",
     "TimeoutError", "Error", "url_mismatch", "title_mismatch",
+    "original_publication_date_conflict_hold",
+    "missing_original_headline", "original_headline_out_of_frame",
+    "original_headline_not_in_article", "visual_qa_suspicious_flat_original_lead_media",
+    "source_identity_mismatch", "screenshot_digest_mismatch",
 })
 
 
@@ -192,9 +196,18 @@ def run(mode: str, *, config_path: Path = Path("sources.json"),
                 continue
             # The original publisher headline must agree with browser title.
             # A false negative is safer than attaching a different article.
-            if article["headline"].strip()[:12] not in capture_result.get("title", ""):
+            from capture_public import full_headline_in_page_title, original_headline_matches
+            if (not full_headline_in_page_title(article["headline"],capture_result.get("title",""))
+                    or ("original_headline" in capture_result and
+                        not original_headline_matches(article["headline"],capture_result["original_headline"]))):
                 record_capture_rejection(results, "title_mismatch", row)
                 continue
+            if article.get("publisher")=="elbalad.news":
+                from elbalad_date_evidence import publication_evidence, AGREEMENT
+                if (publication_evidence(article,capture_result.get("publication_date_evidence"))!=AGREEMENT
+                        or not original_headline_matches(article["headline"],capture_result.get("original_headline"))):
+                    record_capture_rejection(results,"original_publication_date_conflict_hold",row)
+                    continue
             results["captured"] += 1
             row["captured"] += 1
             if mode == "send":

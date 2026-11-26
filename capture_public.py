@@ -202,12 +202,33 @@ def accept_staged_image(staged: Path, destination: Path, *,
             "sha256": hashlib.sha256(raw).hexdigest(), "quality": quality}
 
 
+def normalized_headline(value: str) -> str:
+    """Typography only; never truncate or discard substantive words or digits."""
+    import re
+    from monitor import _matchable_arabic
+    if not isinstance(value,str):
+        return ""
+    return " ".join(re.sub(r"[^\w]+", " ", _matchable_arabic(value)).split())
+
+
+def original_headline_matches(expected, actual):
+    first, second = normalized_headline(expected), normalized_headline(actual)
+    return len(first.split()) >= 3 and len(first) >= 14 and first == second
+
+
+def full_headline_in_page_title(expected, actual):
+    import re
+    first, second = normalized_headline(expected), normalized_headline(actual)
+    return (len(first.split()) >= 3 and len(first) >= 14 and
+            bool(re.search(r"(?<!\w)" + re.escape(first) + r"(?!\w)", second)))
+
+
 def original_headline_h1_index(page_title: str, page_body: str,
                                headings: list[str]) -> int | None:
     """Locate the one publisher H1 that belongs to the actual article.
 
     Some newspaper layouts put an unrelated sidebar H1 before the story.
-    Require a substantive heading whose leading words occur in BOTH the
+    Require a substantive heading whose full words occur in BOTH the
     unmodified original page title and body. Ambiguous/missing = HOLD.
     """
     import re
@@ -230,11 +251,27 @@ def original_headline_h1_index(page_title: str, page_body: str,
         words = normalized_words(heading)
         if len(words) < 4:
             continue
-        leading = " ".join(words[:min(6, len(words))])
-        pattern = r"(?<!\w)" + re.escape(leading) + r"(?!\w)"
+        full = " ".join(words)
+        pattern = r"(?<!\w)" + re.escape(full) + r"(?!\w)"
         if re.search(pattern, title) and re.search(pattern, body):
             matches.append(index)
     return matches[0] if len(matches) == 1 else None
+
+
+def alborsa_original_heading_index(url, body, headings, evidence):
+    """The publisher's SEO title can differ from its full visible article H1.
+    Require exactly one H1, one NewsArticle headline, exact original OG URL
+    and the full heading inside the unchanged original page body.
+    """
+    if (not isinstance(evidence,dict) or evidence.get("og_urls") != [url]
+            or not isinstance(headings,list) or len(headings)!=1
+            or not isinstance(evidence.get("headlines"),list)
+            or len(evidence["headlines"])!=1):
+        return None
+    if (original_headline_matches(headings[0],evidence["headlines"][0])
+            and full_headline_in_page_title(headings[0],body)):
+        return 0
+    return None
 
 
 def headline_visible_in_viewport(box: dict | None, viewport: dict | None) -> bool:
@@ -377,8 +414,23 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                 headings = page.locator("h1")
                 if not headings.count():
                     return {"ok": False, "reason": "missing_original_headline"}
-                matched_index = original_headline_h1_index(
-                    title, body, headings.all_inner_texts())
+                all_headings = headings.all_inner_texts()
+                matched_index = original_headline_h1_index(title, body, all_headings)
+                heading_basis = "browser_title"
+                if matched_index is None and publisher=="alborsaanews.com":
+                    evidence = page.evaluate("""() => {
+                        const og_urls=[...document.querySelectorAll('meta[property="og:url"]')].map(e=>e.content);
+                        const headlines=[];
+                        for (const e of document.querySelectorAll('script[type="application/ld+json"]')) {
+                            try {
+                                const x=JSON.parse(e.textContent);
+                                if (x && x['@type']==='NewsArticle') headlines.push(x.headline || '');
+                            } catch (_) {}
+                        }
+                        return {og_urls,headlines};
+                    }""")
+                    matched_index=alborsa_original_heading_index(url,body,all_headings,evidence)
+                    heading_basis="alborsa_original_h1_newsarticle_og_url"
                 if matched_index is None:
                     return {"ok": False, "reason": "original_headline_not_in_article"}
                 headline = headings.nth(matched_index)
@@ -403,13 +455,37 @@ def capture_publisher(url: str, publisher: str, destination: Path,
                     return {"ok": False, "reason": "original_headline_out_of_frame"}
                 if not original_article_images_loaded(page):
                     return {"ok": False, "reason": "original_article_image_not_loaded"}
+                original_heading = headline.inner_text(timeout=4000).strip()
                 accepted = capture_verified_original_frame(
                     page,publisher,destination,
                     requested_url=url,headline=headline)
                 if not accepted["ok"]:
                     return accepted
+                if not original_headline_matches(original_heading, headline.inner_text(timeout=4000)):
+                    return {"ok": False, "reason": "title_mismatch"}
+                date_evidence = None
+                if publisher == "elbalad.news":
+                    # Scoped to the observed publisher template. Collect only
+                    # original explicit fields, never a guessed offset.
+                    date_evidence = page.evaluate("""() => {
+                        const meta = Array.from(document.querySelectorAll(
+                            'meta[property="article:published_time"]')).map(e => e.content);
+                        const ld = [];
+                        for (const e of document.querySelectorAll('script[type="application/ld+json"]')) {
+                            try {
+                                const x = JSON.parse(e.textContent);
+                                if (x && x['@type'] === 'NewsArticle') ld.push(x.datePublished || '');
+                            } catch (_) {}
+                        }
+                        return {meta, ld,
+                            canonical: [...document.querySelectorAll('link[rel="canonical"]')].map(e => e.href),
+                            visible: [...document.querySelectorAll('time')].filter(e => e.getClientRects().length && getComputedStyle(e).visibility === 'visible').map(e => e.innerText.trim())};
+                    }""")
                 return {**accepted, "actual_url": page.url,
-                        "title": title[:300], "http_status": response.status}
+                        "title": title[:600], "original_headline": original_heading,
+                        "heading_basis":heading_basis,
+                        "publication_date_evidence": date_evidence,
+                        "http_status": response.status}
             finally:
                 browser.close()
     except Exception as exc:
