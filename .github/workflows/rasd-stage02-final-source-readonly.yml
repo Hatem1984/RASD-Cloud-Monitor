@@ -1,0 +1,59 @@
+name: RASD stage 02 final source acceptance (NO SEND)
+on:
+  push:
+    branches: ['gate-rasd-stage02-final-source-readonly-20261126']
+permissions:
+  contents: read
+jobs:
+  readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exact production source policy, live read-only
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          from datetime import datetime,timezone
+          from email.utils import parsedate_to_datetime
+          from pathlib import Path
+          from monitor import inspect, read_feed, parse_rss, safe_source_failure_code
+          from alborsa_original_listing import apply_to_inspection,audit_listing
+          base="49315ff28b325c33ec729b79593d51f494fbcf44"
+          assert subprocess.check_output(["git","diff","--name-only",base,"HEAD"],text=True).splitlines()==[".github/workflows/rasd-stage02-final-source-readonly.yml"]
+          cfg=json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
+          now=datetime.now(timezone.utc)
+          assert len(cfg["feeds"])==14
+          assert [f["id"] for f in cfg["feeds"] if f.get("publication_date_conflict_hold") is True]==["vetogate"]
+          activation=datetime.fromisoformat(cfg["alborsa_listing_activation_utc"].replace("Z","+00:00"))
+          assert now>=activation
+          calls=[]
+          def tracked(url,limit):
+              calls.append(url)
+              return read_feed(url,limit)
+          native=inspect(cfg,fetch=tracked,now=now,article_limit=200,require_complete_items=True)
+          audit={}
+          def record(*args,**kwargs):
+              result=audit_listing(*args,**kwargs)
+              audit.update({k:result[k] for k in ("pages","links","repeated_cards","boundary","matched","holds")})
+              audit["verified"]=len(result["verified"])
+              return result
+          combined=apply_to_inspection(cfg,native,now,auditor=record)
+          before={x["id"] for x in native["matched_public_articles"]}
+          added=[x for x in combined["matched_public_articles"] if x["id"] not in before]
+          historical=sum(parsedate_to_datetime(x["published"])<activation for x in added)
+          veto=next(f for f in cfg["feeds"] if f["id"]=="vetogate")
+          veto_candidates=sum(x["source"]==veto["name"] for x in combined["matched_public_articles"])
+          failures=[{"id":s["feed_id"],"code":s.get("error_code")} for s in combined["sources"] if s["status"]!="ok"]
+          print(json.dumps({"mode":"stage02_final_exact_production_no_send","sha":base,"at":now.isoformat(),"activation":activation.isoformat(),"sources_checked":len(combined["sources"]),"sources_healthy":sum(s["status"]=="ok" for s in combined["sources"]),"failed":failures,"veto_fetch_attempts":calls.count(veto["url"]),"veto_candidates":veto_candidates,"alborsa_audit":audit,"supplement_added":len(added),"historical_supplement_added":historical,"truncated":combined["matched_article_pool_truncated"],"email_sent":False,"private_state_used":False}))
+          assert historical==0 and veto_candidates==0 and calls.count(veto["url"])>=1
+          assert failures==[{"id":"vetogate","code":failures[0]["code"]}]
+          assert failures[0]["code"] in {"rss_original_item_future_date","rss_original_publisher_date_conflict_hold"}
+          assert audit and not audit["holds"] and audit["boundary"]
+          assert not combined["matched_article_pool_truncated"]
+          PY
