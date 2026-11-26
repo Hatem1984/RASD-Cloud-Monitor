@@ -70,6 +70,53 @@ class DurableReceiptReconciliation(unittest.TestCase):
                                         "smtp_receipt_persistence_uncertain_manual_reconcile"):
                 self.ledger.mark_smtp_accepted_many([KEY], RECEIPT)
 
+    def test_single_exact_durable_receipt_reconciles_without_second_write(self):
+        with (
+            patch.object(self.ledger, "read", side_effect=[
+                (self.initial, "old"), (self.final, "new")]) as reads,
+            patch.object(self.ledger, "write",
+                         side_effect=RuntimeError("private_ledger_request_failed")) as writes,
+            patch("delivery_bridge.now_iso", return_value=STAMP),
+        ):
+            self.ledger.mark_smtp_accepted(KEY, RECEIPT)
+        self.assertEqual(reads.call_count, 2)
+        self.assertEqual(writes.call_count, 1)
+
+    def test_single_missing_or_conflicting_receipt_remains_hold(self):
+        for later, sha in [
+            (self.initial, "new"),
+            (state("smtp_accepted", "<rasd-" + "c" * 24 + "@gmail.com>"), "new"),
+            (self.final, "old"),
+            (self.final, ""),
+        ]:
+            with (
+                self.subTest(sha=sha, later=later),
+                patch.object(self.ledger, "read", side_effect=[
+                    (self.initial, "old"), (later, sha)]) as reads,
+                patch.object(self.ledger, "write",
+                             side_effect=RuntimeError("private_ledger_commit_not_visible")) as writes,
+                patch("delivery_bridge.now_iso", return_value=STAMP),
+            ):
+                with self.assertRaisesRegex(RuntimeError,
+                                            "smtp_receipt_persistence_uncertain_manual_reconcile"):
+                    self.ledger.mark_smtp_accepted(KEY, RECEIPT)
+                self.assertEqual(reads.call_count, 2)
+                self.assertEqual(writes.call_count, 1)
+
+    def test_single_unavailable_reconciliation_read_stays_hold(self):
+        with (
+            patch.object(self.ledger, "read", side_effect=[
+                (self.initial, "old"), RuntimeError("offline")]) as reads,
+            patch.object(self.ledger, "write",
+                         side_effect=RuntimeError("private_ledger_request_failed")) as writes,
+            patch("delivery_bridge.now_iso", return_value=STAMP),
+        ):
+            with self.assertRaisesRegex(RuntimeError,
+                                        "smtp_receipt_persistence_uncertain_manual_reconcile"):
+                self.ledger.mark_smtp_accepted(KEY, RECEIPT)
+        self.assertEqual(reads.call_count, 2)
+        self.assertEqual(writes.call_count, 1)
+
     def test_sanitized_public_failure_code_never_reflects_sensitive_exceptions(self):
         self.assertEqual(
             safe_scheduled_hold_reason(RuntimeError("private_ledger_commit_not_visible")),

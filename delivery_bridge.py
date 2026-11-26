@@ -167,8 +167,23 @@ class PrivateGitHubLedger:
         return action
 
     def mark_smtp_accepted(self, article_key: str, message_id: str) -> None:
+        """Persist one accepted SMTP receipt; never retry the write or SMTP."""
         state, sha = self.read()
-        self.write(complete_entry(state, article_key, now_iso(), message_id), sha)
+        final = complete_entry(state, article_key, now_iso(), message_id)
+        try:
+            self.write(final, sha)
+        except RuntimeError:
+            # The write may have committed despite a failed API response or
+            # stale readback. Only the exact durable receipt resolves it.
+            try:
+                current, current_sha = self.read()
+            except (RuntimeError, ValueError):
+                raise RuntimeError(
+                    "smtp_receipt_persistence_uncertain_manual_reconcile") from None
+            if (not current_sha or current_sha == sha or
+                    current["entries"].get(article_key) != final["entries"][article_key]):
+                raise RuntimeError(
+                    "smtp_receipt_persistence_uncertain_manual_reconcile") from None
 
     def mark_smtp_accepted_many(self, article_keys: list[str],
                                 message_id: str) -> None:
