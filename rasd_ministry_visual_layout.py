@@ -387,13 +387,17 @@ def _summary(doc, report: dict, distribution: Counter, timing=None) -> None:
         p=doc.add_paragraph();_rtl(p);_run(p,"حدود التقرير: "+report["limitations"],size=8.5)
     # Editorial index also makes the original publisher titles selectable and
     # searchable in Word; the picture pages remain the primary visual record.
-    p=doc.add_paragraph();_rtl(p);_run(p,"عناوين التغطيات الموثقة",size=12,bold=True)
-    for index,item in enumerate(report["articles"][:12],1):
+    if report.get("hourly_word_contract") is True:
         p=doc.add_paragraph();_rtl(p)
-        _run(p,f"{index:02d} — {item['headline']}",size=8)
-    if len(report["articles"])>12:
-        p=doc.add_paragraph();_rtl(p)
-        _run(p,f"باقي العناوين ({len(report['articles'])-12}) موضحة داخل البطاقات المصوّرة.",size=8)
+        _run(p,"العناوين الكاملة وروابط الناشرين معروضة داخل البطاقات المصورة التالية.",size=9,bold=True)
+    else:
+        p=doc.add_paragraph();_rtl(p);_run(p,"عناوين التغطيات الموثقة",size=12,bold=True)
+        for index,item in enumerate(report["articles"][:12],1):
+            p=doc.add_paragraph();_rtl(p)
+            _run(p,f"{index:02d} — {item['headline']}",size=8)
+        if len(report["articles"])>12:
+            p=doc.add_paragraph();_rtl(p)
+            _run(p,f"باقي العناوين ({len(report['articles'])-12}) موضحة داخل البطاقات المصوّرة.",size=8)
     doc.add_page_break()
 
 
@@ -480,6 +484,8 @@ def render_hourly_zero_word(report, destination):
            stories=0,sites=0,report_period="interval",report_kind="hourly")
     p=doc.add_paragraph();_rtl(p)
     _run(p,"تقرير حالة الساعة — لا أخبار جديدة مكتملة التوثيق",size=18,bold=True)
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,report["title"],size=9,color="777777")
     _hourly_contract_summary(doc,report)
     p=doc.add_paragraph();_rtl(p)
     _run(p,"الصفر نتيجة التحقق في هذا الفحص فقط؛ لا يثبت عدم نشر أخبار. "+report["limitations"],size=11)

@@ -110,3 +110,13 @@ class HourlyWord(unittest.TestCase):
         self.assertIn("اختبار استعادي",full_text(d))
         with self.assertRaisesRegex(ValueError,"outside_scope"):
             self.build([],qa_window_end=END+timedelta(hours=1))
+
+    def test_hourly_no_duplicate_index_and_visible_zero_qa_label(self):
+        r,d=self.build([row(i) for i in range(10)])
+        self.assertEqual(r["fresh"],10)
+        self.assertNotIn("عناوين التغطيات الموثقة",full_text(d))
+        self.assertIn("العناوين الكاملة وروابط الناشرين",full_text(d))
+        for i in range(10):
+            self.assertIn(row(i)["headline"],full_text(d))
+        _,zero=self.build([])
+        self.assertIn("نسخة اختبار غير مرسلة",full_text(zero))
