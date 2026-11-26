@@ -98,7 +98,7 @@ class DurableReceiptReconciliation(unittest.TestCase):
                 patch("delivery_bridge.now_iso", return_value=STAMP),
             ):
                 with self.assertRaisesRegex(RuntimeError,
-                                            "smtp_receipt_persistence_uncertain_manual_reconcile"):
+                                            "private_ledger_commit_not_visible"):
                     self.ledger.mark_smtp_accepted(KEY, RECEIPT)
                 self.assertEqual(reads.call_count, 2)
                 self.assertEqual(writes.call_count, 1)
@@ -112,7 +112,7 @@ class DurableReceiptReconciliation(unittest.TestCase):
             patch("delivery_bridge.now_iso", return_value=STAMP),
         ):
             with self.assertRaisesRegex(RuntimeError,
-                                        "smtp_receipt_persistence_uncertain_manual_reconcile"):
+                                        "private_ledger_request_failed"):
                 self.ledger.mark_smtp_accepted(KEY, RECEIPT)
         self.assertEqual(reads.call_count, 2)
         self.assertEqual(writes.call_count, 1)
