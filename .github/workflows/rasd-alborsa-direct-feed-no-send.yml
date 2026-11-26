@@ -34,6 +34,62 @@ jobs:
           original, matches = parse_rss(raw, feed, cfg["keywords"],
                                         datetime.now(timezone.utc),
                                         cfg["recent_hours"], require_complete_items=True)
+          from xml.etree import ElementTree as ET
+          from email.utils import parsedate_to_datetime
+          from urllib.parse import urlsplit
+          from urllib.request import Request, build_opener
+          from html.parser import HTMLParser
+          from monitor import RejectRedirect
+          rows = ET.fromstring(raw).findall("./channel/item")
+          def identity(url):
+              p = urlsplit(url)
+              if p.scheme != "https" or p.hostname not in feed["allowed_article_hosts"]:
+                  return None
+              return p.path.rstrip("/").split("/")[-1]
+          targets = {
+              "2008756":"https://alborsaanews.com/2026/11/24/2008756",
+              "2009038":"https://alborsaanews.com/2026/11/25/2009038",
+              "2009145":"https://alborsaanews.com/2026/11/25/2009145",
+          }
+          ids = {identity((n.findtext("link") or "").strip()) for n in rows}
+          matched_ids = {identity(x["url"]) for x in matches}
+          stamps = []
+          for n in rows:
+              try:
+                  d = parsedate_to_datetime(n.findtext("pubDate"))
+                  if d.tzinfo is not None:
+                      stamps.append(d.astimezone(timezone.utc))
+              except (ValueError, TypeError, AttributeError):
+                  pass
+          print(json.dumps({"mode":"bounded_original_inventory", "links":len(rows),
+                            "oldest":min(stamps).isoformat() if stamps else None,
+                            "newest":max(stamps).isoformat() if stamps else None,
+                            "targets":{k:{"in_feed":k in ids,"matched":k in matched_ids} for k in targets},
+                            "email_sent":False}))
+          class Metadata(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.values={}
+              def handle_starttag(self,tag,attrs):
+                  a=dict(attrs)
+                  if tag=="meta" and a.get("property") in ("og:url","og:title","article:published_time"):
+                      self.values[a["property"]]=a.get("content")
+          for k,url in targets.items():
+              try:
+                  with build_opener(RejectRedirect()).open(Request(url,headers={"User-Agent":"RASD-Cloud-Public-Monitor/0.1"}), timeout=12) as response:
+                      if response.status!=200 or response.geturl()!=url:
+                          raise RuntimeError("identity_or_http")
+                      data=response.read(2000001)
+                      if len(data)>2000000:
+                          raise RuntimeError("size")
+                  p=Metadata(); p.feed(data.decode("utf-8","strict"))
+                  print(json.dumps({"mode":"original_article_metadata","id":k,
+                                    "http_ok":True,"canonical_matches":identity(p.values.get("og:url") or "")==k,
+                                    "publisher_date":p.values.get("article:published_time"),
+                                    "title_present":bool(p.values.get("og:title")),"email_sent":False}))
+              except Exception as e:
+                  print(json.dumps({"mode":"original_article_metadata","id":k,"http_ok":False,
+                                    "error_type":type(e).__name__,"email_sent":False}))
           if not original or original > 500:
               raise RuntimeError("alborsa_native_xml_content_hold")
           print(json.dumps({"mode":"alborsa_first_party_original_RSS_QA",
