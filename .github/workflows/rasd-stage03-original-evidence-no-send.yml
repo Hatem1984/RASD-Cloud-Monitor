@@ -61,6 +61,17 @@ jobs:
                   if candidate is None:
                       print(json.dumps({"mode":"original_image","source":source,"status":"HOLD","reason":"candidate_invalid"}));continue
                   path=out/f"original-{i}.jpg"
+                  if source=="alborsa" and candidate["url"].endswith("/2009038"):
+                      with sync_playwright() as p:
+                          b=p.chromium.launch(headless=True,args=["--no-sandbox","--disable-dev-shm-usage"])
+                          try:
+                              ctx=b.new_context(locale="ar-EG",ignore_https_errors=False,service_workers="block")
+                              from capture_public import allowed_url
+                              ctx.route("**/*",lambda r:r.continue_() if allowed_url(r.request.url,candidate["publisher"],asset=True) else r.abort())
+                              pg=ctx.new_page();response=pg.goto(candidate["url"],wait_until="domcontentloaded",timeout=26000)
+                              d=pg.evaluate("""() => ({title:document.title,h1:[...document.querySelectorAll('h1')].map(e=>e.innerText),canonical:document.querySelector('link[rel=canonical]')?.href,og:document.querySelector('meta[property="og:title"]')?.content,ld:[...document.querySelectorAll('script[type="application/ld+json"]')].map(e=>{try{return JSON.parse(e.textContent)}catch{return null}})})""")
+                              print(json.dumps({"mode":"alborsa_heading_diagnostic","http":response.status,"canonical":d["canonical"],"title":d["title"],"h1":d["h1"],"og":d["og"],"expected":candidate["headline"],"ld_headlines":[x.get("headline") for x in d["ld"] if isinstance(x,dict) and x.get("headline")],"body_has_h1":any(h in pg.locator("body").inner_text() for h in d["h1"])} ,ensure_ascii=False))
+                          finally:b.close()
                   raw_path=out/f"browser-{i}.jpg"
                   raw=capture_publisher(candidate["url"],candidate["publisher"],raw_path)
                   def same_capture(url,publisher,destination):
