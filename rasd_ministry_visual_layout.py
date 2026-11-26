@@ -156,7 +156,7 @@ def _cover(doc, *, date_label: str, period_label: str, stories: int, sites: int,
     p.paragraph_format.space_before = Pt(16)
     _run(p, "بتاريخ " + date_label, size=11, color=GOLD)
     p = cell.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p, "نافذة الفحص:" if report_period == "interval" else "فترة التسليم:", size=11, bold=True, color=GOLD)
+    _run(p, ("الساعة المكتملة:" if report_kind=="hourly" else "نافذة الفحص:") if report_period == "interval" else "فترة التسليم:", size=11, bold=True, color=GOLD)
     # Split the 22:00 Cairo window into two short, readable lines rather
     # than one line of long mixed Arabic/Latin digits crossing cell edges.
     for endpoint in period_label.split(" إلى ", 1):
@@ -302,6 +302,8 @@ def _summary(doc, report: dict, distribution: Counter, timing=None) -> None:
               f"استدراك أخبار منشورة قبلها: {older}. "
               "لا تُحسب الاستدراكات ضمن مستهدف الأخبار الجديدة للساعة.",
               size=10.5,bold=True)
+    if report.get("hourly_word_contract") is True:
+        _hourly_contract_summary(doc,report)
     if timing is not None:
         counts=Counter(timing)
         p=doc.add_paragraph();_rtl(p)
@@ -422,6 +424,9 @@ def _card(cell, item: dict, index: int, *, wide: bool = False, medium: bool = Fa
     p.add_run().add_picture(str(image_path),width=Cm(fitted_w),height=Cm(fitted_h))
     p=cell.add_paragraph();_rtl(p)
     _run(p,"النشر: "+(item.get("published_display_cairo") or item.get("published_at_cairo") or "غير محدد"),size=8)
+    if item.get("hourly_scan_display_cairo"):
+        p=cell.add_paragraph();_rtl(p)
+        _run(p,"وقت فحص الرصد: "+item["hourly_scan_display_cairo"],size=8)
     if timing is not None:
         labels={"older":"استدراك قبل نافذة الفحص","within":"نُشر ضمن نافذة الفحص","unknown":"توقيت النشر بالنسبة للنافذة غير محسوم"}
         # Keep the original date paragraph exact for daily archive verification.
@@ -430,6 +435,55 @@ def _card(cell, item: dict, index: int, *, wide: bool = False, medium: bool = Fa
         _run(p,labels[timing],size=8,bold=True)
     p=cell.add_paragraph();_rtl(p);_link(p,item["url"])
 
+
+
+def _hourly_contract_summary(doc, report):
+    fresh=report["hourly_in_period"]
+    target=10
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,f"{fresh} أخبار موثقة من أصل {target} مستهدفة — النقص {target-fresh}.",size=12,bold=True)
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,"وقت فحص الرصد: "+report["hourly_scan_display_cairo"]+
+         "؛ ليس وقت أول اكتشاف لكل خبر. فترة الساعة تستند إلى وقت نشر الناشر.",size=9)
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,f"مواد أقدم خارج المستهدف الساعي: {report['hourly_recovery_pending']}؛ "
+         f"مواد مؤجلة للتنوع أو السعة أو مراجعة الحدث: {report['hourly_deferred']}؛ "
+         f"مواد معلقة لعدم اكتمال الدليل: {report['hourly_held']}. "
+         "لم يُحذف أي رابط مختلف من مسار الاسترداد المعتمد.",size=9)
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,"الاختيار من ناشرين مختلفين مع استبعاد التشابه القوي في الحدث من المستهدف؛ "
+         "لا يثبت هذا استقلال جميع الأحداث أو شمول كل المنشورات.",size=9)
+    failed=[x["feed_id"] for x in report["sources"] if x["status"]=="failed"]
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,f"حالة المصادر: {len(report['sources'])-len(failed)}/{len(report['sources'])} متاح؛ "
+         +("المصادر المتعذرة: "+"، ".join(failed) if failed else "لا مصدر متعذر في هذا الفحص."),size=9,bold=True)
+
+
+def render_hourly_zero_word(report, destination):
+    """Only the detached hourly document contract; never a delivery action."""
+    if report.get("hourly_word_contract") is not True or report.get("articles")!=[] or report.get("hourly_in_period")!=0:
+        raise ValueError("hourly_zero_invalid")
+    doc=Document()
+    section=doc.sections[0]
+    section.page_height=Cm(29.7);section.page_width=Cm(21)
+    section.top_margin=Cm(1.35);section.bottom_margin=Cm(1.35)
+    section.left_margin=Cm(1.4);section.right_margin=Cm(1.4)
+    section.header_distance=Cm(.65);section.footer_distance=Cm(.7)
+    section.different_first_page_header_footer=True
+    _section_header(section)
+    doc.styles["Normal"].font.name="DejaVu Sans"
+    _cover(doc,date_label=report["display_window_end"],
+           period_label=report["display_window_start"]+" إلى "+report["display_window_end"],
+           stories=0,sites=0,report_period="interval",report_kind="hourly")
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,"تقرير حالة الساعة — لا أخبار جديدة مكتملة التوثيق",size=18,bold=True)
+    _hourly_contract_summary(doc,report)
+    p=doc.add_paragraph();_rtl(p)
+    _run(p,"الصفر نتيجة التحقق في هذا الفحص فقط؛ لا يثبت عدم نشر أخبار. "+report["limitations"],size=11)
+    doc.core_properties.title=report["title"]
+    doc.core_properties.author="RASD"
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    doc.save(destination)
 
 
 def render_ministry_no_accepted_word(report: dict, destination: Path) -> None:
