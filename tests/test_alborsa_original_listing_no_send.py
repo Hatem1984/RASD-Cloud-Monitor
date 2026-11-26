@@ -136,3 +136,19 @@ class ListingQA(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"time_budget_hold"):
                 audit_listing(KEY,NOW,fetch=fetch)
         self.assertEqual(calls,[ROOT])
+
+
+    def test_identical_previous_day_overlap_preserves_new_card_order(self):
+        from alborsa_original_listing import audit_listing
+        mid="https://alborsaanews.com/2026/11/25/3"
+        data={ROOT:listing(card(),card(mid,title="Unrelated"),next_page=True),
+              ROOT+"/page/2":listing(card(),card(OLD,title="Unrelated")),U:article()}
+        result=audit_listing(KEY,NOW,fetch=data.__getitem__)
+        self.assertEqual((result["links"],result["repeated_cards"],len(result["verified"])),(3,1,1))
+    def test_genuinely_new_cross_page_inversion_holds(self):
+        mid="https://alborsaanews.com/2026/11/25/3"
+        new="https://alborsaanews.com/2026/11/26/4"
+        data={ROOT:listing(card(),card(mid,title="Unrelated"),next_page=True),
+              ROOT+"/page/2":listing(card(new),card(OLD,title="Unrelated"))}
+        with self.assertRaisesRegex(ValueError,"date_order_hold"):
+            audit_listing(KEY,NOW,fetch=data.__getitem__)

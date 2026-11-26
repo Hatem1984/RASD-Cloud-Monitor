@@ -33,21 +33,6 @@ jobs:
           targets={"2008756","2009038","2009145"}
           result=inspect(cfg,now=now,article_limit=200,require_complete_items=True)
           print(json.dumps({"mode":"post_fix_independent_cloud_rss","at":now.isoformat(),"source_rows":[{k:s.get(k) for k in ("feed_id","status","verified_links","headline_matches","error_code")} for s in result["sources"]],"matches":result["planning_headline_matches"],"truncated":result["matched_article_pool_truncated"],"email_sent":False}))
-          # Original publisher pagination order: inspect exact cards without
-          # relaxing any production admission guard.
-          from alborsa_original_listing import Listing, ROOT, read_original, identity
-          from collections import Counter
-          for idx in range(1,9):
-              url=ROOT if idx==1 else ROOT+"/page/"+str(idx)
-              try:
-                  p=Listing(url);p.feed(read_original(url).decode("utf-8","strict"));p.close()
-                  days=[str(identity(x["url"])[0]) for x in p.cards]
-                  inversions=[{"previous_id":identity(p.cards[i-1]["url"])[1],"previous_day":days[i-1],"next_id":identity(p.cards[i]["url"])[1],"next_day":days[i]} for i in range(1,len(days)) if days[i]>days[i-1]]
-                  print(json.dumps({"mode":"original_listing_order_diagnostic","page":idx,"count":len(days),"dates":dict(Counter(days)),"first":days[0] if days else None,"last":days[-1] if days else None,"inversions":inversions[:8],"next_exists":ROOT+"/page/"+str(idx+1) in p.pages}))
-                  if len(days)!=50:break
-              except Exception as e:
-                  print(json.dumps({"mode":"original_listing_order_diagnostic","page":idx,"error_type":type(e).__name__}))
-                  break
           try:
               a=audit_listing(cfg["keywords"],now)
               found={u.rstrip("/").split("/")[-1] for u in a["matched_urls"]}

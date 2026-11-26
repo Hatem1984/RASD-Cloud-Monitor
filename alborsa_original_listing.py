@@ -253,11 +253,13 @@ def audit_listing(keywords, now, *, fetch=read_original, hours=72, not_before=No
         if page>1 and url not in next_pages:
             raise ValueError("alborsa_listing_navigation_hold")
         batch,next_pages=parse_listing(bounded_fetch(url),url)
-        if previous_last is not None and identity(batch[0]["url"])[0]>previous_last:
-            raise ValueError("alborsa_listing_date_order_hold")
-        previous_last=identity(batch[-1]["url"])[0]
         snapshots.append((url,batch,next_pages))
         pages.append(len(batch))
+        # Across page boundaries the publisher can repeat identical older
+        # cards, including from the previous calendar day. Only exact
+        # previously observed duplicates are exempt from the ordering guard.
+        # Every genuinely new card must still extend the ordered inventory.
+        new_cards=[]
         for row in batch:
             key=row["url"]
             if key in seen:
@@ -265,9 +267,16 @@ def audit_listing(keywords, now, *, fetch=read_original, hours=72, not_before=No
                     raise ValueError("alborsa_listing_overlap_conflict_hold")
                 repeats+=1
             else:
+                day=identity(key)[0]
+                if previous_last is not None and day>previous_last:
+                    raise ValueError("alborsa_listing_date_order_hold")
+                previous_last=day
                 seen[key]=row
                 cards.append(row)
-        if identity(batch[-1]["url"])[0]<low_day:
+                new_cards.append(row)
+        if not new_cards:
+            raise ValueError("alborsa_listing_no_progress_hold")
+        if previous_last<low_day:
             boundary=True
             break
     # The original publisher repeated identical cards across pages.
