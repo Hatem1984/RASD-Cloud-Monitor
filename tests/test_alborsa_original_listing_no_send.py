@@ -89,7 +89,7 @@ class ListingQA(unittest.TestCase):
         row=parse_listing(listing(card()),ROOT)[0][0]
         a=original_article(article(),row,KEY,NOW)
         result={"verified":[a],"holds":[],"boundary":True,"email_sent":False}
-        def audit(*args):return result
+        def audit(*args,**kwargs):return result
         # Same candidate is historical under the current activation, not sent.
         future=apply_to_inspection({**cfg,"alborsa_listing_activation_utc":"2026-11-26T13:00:00Z"},base,NOW,auditor=audit)
         self.assertEqual(future["matched_public_articles"],[])
@@ -98,6 +98,41 @@ class ListingQA(unittest.TestCase):
         self.assertEqual(len(out["matched_public_articles"]),1)
         self.assertEqual(out["matched_public_articles"][0]["source"],"Alborsa")
         self.assertEqual(len(apply_to_inspection(active,out,NOW,auditor=audit)["matched_public_articles"]),1)
-        held=apply_to_inspection(active,base,NOW,auditor=lambda *x:{**result,"holds":["fixture"]})
+        held=apply_to_inspection(active,base,NOW,auditor=lambda *x,**kw:{**result,"holds":["fixture"]})
         self.assertEqual(held["sources"][0]["error_code"],"alborsa_listing_coverage_hold")
         self.assertEqual(held["matched_public_articles"],[])
+
+
+    def test_stop_after_publisher_rate_limit(self):
+        from urllib.error import HTTPError
+        second="https://alborsaanews.com/2026/11/26/3"
+        pages={ROOT:listing(card(),card(second),next_page=True),ROOT+"/page/2":listing(card(OLD,title="Unrelated"))}
+        calls=[]
+        def fetch(url):
+            calls.append(url)
+            if url==U:
+                raise HTTPError(url,429,"rate limited",{},None)
+            if url==second:
+                raise AssertionError("no more requests after rate limit")
+            return pages[url]
+        result=audit_listing(KEY,NOW,fetch=fetch)
+        self.assertTrue(result["holds"])
+        self.assertEqual(result["verified"],[])
+        self.assertNotIn(second,calls)
+    def test_activation_limits_pagination_and_excludes_old_material(self):
+        activation=NOW-timedelta(minutes=20)
+        data={ROOT:listing(card(),next_page=True),ROOT+"/page/2":listing(card(OLD,title="Unrelated")),U:article()}
+        result=audit_listing(KEY,NOW,fetch=data.__getitem__,not_before=activation)
+        self.assertTrue(result["boundary"])
+        self.assertEqual(result["verified"],[])
+        self.assertFalse(result["email_sent"])
+    def test_audit_budget_stops_before_next_request(self):
+        from unittest.mock import patch
+        calls=[]
+        def fetch(url):
+            calls.append(url)
+            return listing(card(),next_page=True)
+        with patch("alborsa_original_listing.monotonic",side_effect=[0,0,91]):
+            with self.assertRaisesRegex(ValueError,"time_budget_hold"):
+                audit_listing(KEY,NOW,fetch=fetch)
+        self.assertEqual(calls,[ROOT])

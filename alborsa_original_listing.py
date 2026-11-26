@@ -11,6 +11,8 @@ from email.utils import format_datetime
 from html.parser import HTMLParser
 from urllib.parse import urlsplit, urljoin
 from urllib.request import Request, build_opener
+from urllib.error import HTTPError
+from time import monotonic
 from zoneinfo import ZoneInfo
 import re
 from monitor import RejectRedirect, _ministry_term_present, article_id
@@ -20,6 +22,7 @@ ROOT = "https://alborsaanews.com/latestnews"
 MAX_PAGES = 8
 MAX_CANDIDATES = 25
 MAX_BYTES = 3_000_000
+MAX_AUDIT_SECONDS = 90
 CAIRO = ZoneInfo("Africa/Cairo")
 ARTICLE = re.compile(r"/(20[0-9]{2})/([0-9]{2})/([0-9]{2})/([0-9]+)")
 
@@ -222,12 +225,21 @@ def original_article(raw,row,keywords,now):
             "match_origin":origin}
 
 
-def audit_listing(keywords, now, *, fetch=read_original, hours=72):
+def audit_listing(keywords, now, *, fetch=read_original, hours=72, not_before=None):
     """Read-only audit; no delivery even for historical candidates."""
     if now.tzinfo is None or now.utcoffset() is None or hours not in {24,72}:
         raise ValueError("alborsa_invalid_window")
     lower=now-timedelta(hours=hours)
+    if not_before is not None:
+        if not_before.tzinfo is None or not_before.utcoffset() is None or not_before>now:
+            raise ValueError("alborsa_invalid_activation")
+        lower=max(lower,not_before)
     low_day=lower.astimezone(CAIRO).date()
+    started=monotonic()
+    def bounded_fetch(url):
+        if monotonic()-started>=MAX_AUDIT_SECONDS:
+            raise ValueError("alborsa_listing_time_budget_hold")
+        return fetch(url)
     cards=[]
     seen={}
     pages=[]
@@ -240,7 +252,7 @@ def audit_listing(keywords, now, *, fetch=read_original, hours=72):
         url=ROOT if page==1 else ROOT+"/page/"+str(page)
         if page>1 and url not in next_pages:
             raise ValueError("alborsa_listing_navigation_hold")
-        batch,next_pages=parse_listing(fetch(url),url)
+        batch,next_pages=parse_listing(bounded_fetch(url),url)
         if previous_last is not None and identity(batch[0]["url"])[0]>previous_last:
             raise ValueError("alborsa_listing_date_order_hold")
         previous_last=identity(batch[-1]["url"])[0]
@@ -262,7 +274,7 @@ def audit_listing(keywords, now, *, fetch=read_original, hours=72):
     # A second bounded sweep must reproduce the complete listing and navigation;
     # never suppress conflicting duplicates or accept a drifting snapshot.
     for url,batch,nav in snapshots:
-        if parse_listing(fetch(url),url)!=(batch,nav):
+        if parse_listing(bounded_fetch(url),url)!=(batch,nav):
             raise ValueError("alborsa_listing_changed_hold")
     if not boundary:
         holds.append("alborsa_listing_window_cap_hold")
@@ -274,7 +286,7 @@ def audit_listing(keywords, now, *, fetch=read_original, hours=72):
     verified=[]
     for row in matched:
         try:
-            a=original_article(fetch(row["url"]),row,keywords,now)
+            a=original_article(bounded_fetch(row["url"]),row,keywords,now)
             stamp=datetime.strptime(a["published"],"%a, %d %b %Y %H:%M:%S %z")
             if lower<=stamp<=now:
                 verified.append(a)
@@ -282,13 +294,19 @@ def audit_listing(keywords, now, *, fetch=read_original, hours=72):
             # Safe QA diagnostics; no content or private state.
             code=str(exc) if type(exc) is ValueError and str(exc).startswith("alborsa_") else "alborsa_original_read_hold"
             holds.append(code)
+            # No further publisher requests after explicit refusal/rate limit
+            # or exhausted time budget. All supplements stay on HOLD.
+            if isinstance(exc,HTTPError) and exc.code in {401,403,429}:
+                break
+            if code=="alborsa_listing_time_budget_hold":
+                break
     return {"pages":pages,"links":len(cards),"repeated_cards":repeats,"boundary":boundary,
             "matched":len(matched),"matched_urls":[r["url"] for r in matched],
             "verified":verified,"holds":holds,"email_sent":False}
 
 
 def forward_only(verified, activation, now):
-    """Explicit future activation boundary. Not called by production."""
+    """Admit only original publication timestamps at or after activation."""
     from email.utils import parsedate_to_datetime
     if any(x.tzinfo is None or x.utcoffset() is None for x in (activation,now)):
         raise ValueError("alborsa_invalid_activation")
@@ -324,7 +342,7 @@ def apply_to_inspection(config, observed, now, *, auditor=audit_listing):
     if record["status"]!="ok" or out.get("matched_article_pool_truncated"):
         return out
     try:
-        a=auditor(config["keywords"],now)
+        a=auditor(config["keywords"],now,not_before=activation)
         if a["holds"] or not a["boundary"] or a.get("email_sent") is not False:
             raise ValueError("alborsa_listing_coverage_hold")
         existing={}
