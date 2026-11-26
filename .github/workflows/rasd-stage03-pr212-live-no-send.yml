@@ -1,0 +1,129 @@
+name: RASD PR212 exact candidate live proof (NO SEND)
+on:
+  push:
+    branches: ['gate-rasd-stage03-pr212-live-20261126']
+permissions:
+  contents: read
+jobs:
+  evidence-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install existing QA dependencies
+        run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --only-shell chromium
+      - name: Original Alborsa and institute screenshot sample, official original page
+        run: |
+          python - <<'PY'
+          import subprocess,json,tempfile,shutil
+          from datetime import datetime,timezone
+          from pathlib import Path
+          from monitor import inspect
+          from alborsa_original_listing import audit_listing
+          from cloud_proof_report import proof_capture,word_images_match_capture_digests
+          from capture_public import capture_publisher
+          from gate11_runner import candidate_from_feed,SAFE_CAPTURE_FAILURE_CODES
+          from daily_report import render_docx,CAIRO
+          from official_ministry_source import discover_official_newslist,allowed_official_resource,original_publication_date,_read_original
+          from rasd_official_daily import APPROVED_WORDS
+          from playwright.sync_api import sync_playwright
+          base="e9264f8fc211bb737b902850c9071b84dd2a69c5"
+          assert subprocess.check_output(["git","diff","--name-only",base,"HEAD"],text=True).splitlines()==[".github/workflows/rasd-stage03-pr212-live-no-send.yml"]
+          cfg=json.loads(Path("sources_newsroom_active.json").read_text(encoding="utf-8"))
+          now=datetime.now(timezone.utc)
+          native=inspect(cfg,now=now,article_limit=200,require_complete_items=True)
+          feeds={f["id"]:f for f in cfg["feeds"]}
+          targets={"2008756","2009038","2009145"}
+          articles=[]
+          try:
+              a=audit_listing(cfg["keywords"],now)
+              print(json.dumps({"mode":"alborsa_original_inventory","links":a["links"],"holds":a["holds"],"verified":len(a["verified"]),"boundary":a["boundary"]}))
+              for row in a["verified"]:
+                  if row["url"].rsplit("/",1)[-1] in targets:
+                      articles.append(("alborsa",{**row,"source":feeds["alborsa"]["name"]}))
+          except Exception as e:
+              print(json.dumps({"mode":"alborsa_original_inventory","status":"HOLD","error_type":type(e).__name__}))
+          for row in native["matched_public_articles"]:
+              if row["source"]==feeds["inp_official"]["name"]:
+                  articles.append(("inp_official",row));break
+          # Independently sample three real native RSS dates and exact original page identities.
+          from xml.etree import ElementTree as ET
+          from monitor import read_feed
+          from email.utils import parsedate_to_datetime
+          from elbalad_date_evidence import publication_evidence
+          from capture_public import allowed_url,original_headline_matches
+          feed=feeds["elbalad"]
+          nodes=ET.fromstring(read_feed(feed["url"],cfg["max_feed_bytes"])).findall("./channel/item")
+          date_results=[]
+          with sync_playwright() as p:
+              browser=p.chromium.launch(headless=True,args=["--no-sandbox","--disable-dev-shm-usage"])
+              try:
+                  ctx=browser.new_context(locale="ar-EG",ignore_https_errors=False,service_workers="block")
+                  ctx.route("**/*",lambda r:r.continue_() if allowed_url(r.request.url,"elbalad.news",asset=True) else r.abort())
+                  page=ctx.new_page()
+                  for node in (nodes[0],nodes[len(nodes)//2],nodes[-1]):
+                      url=node.findtext("link");raw=node.findtext("pubDate")
+                      if not allowed_url(url,"elbalad.news"): raise RuntimeError("unapproved_sample_url")
+                      article={"url":url,"published":raw,"published_at_cairo":parsedate_to_datetime(raw).astimezone(CAIRO).strftime("%Y-%m-%d %H:%M %Z")}
+                      resp=page.goto(url,wait_until="domcontentloaded",timeout=24000)
+                      d=page.evaluate("""() => {const meta=[...document.querySelectorAll('meta[property="article:published_time"]')].map(e=>e.content);const ld=[];for(const e of document.querySelectorAll('script[type="application/ld+json"]')){try{const x=JSON.parse(e.textContent);if(x&&x['@type']==='NewsArticle')ld.push(x.datePublished||'')}catch(_){}}return {meta,ld,canonical:[...document.querySelectorAll('link[rel="canonical"]')].map(e=>e.href),visible:[...document.querySelectorAll('time')].filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility==='visible').map(e=>e.innerText.trim()),headings:[...document.querySelectorAll('h1')].map(e=>e.innerText)}}""")
+                      status=publication_evidence(article,d)
+                      exact=resp.status==200 and page.url==url and len(d["headings"])==1 and original_headline_matches(node.findtext("title"),d["headings"][0])
+                      wrong=publication_evidence({**article,"published":"Thu, 26 Nov 2026 00:00:00 GMT"},d) is None
+                      date_results.append(bool(status and exact and wrong))
+                      print(json.dumps({"mode":"elbalad_original_date","sample_id":url.rsplit("/",1)[-1],"exact_identity":exact,"status":status,"wrong_date_rejected":wrong}))
+              finally:browser.close()
+          assert len(date_results)==3 and all(date_results)
+          receipts=[];stories=[]
+          with tempfile.TemporaryDirectory(prefix="rasd-stage03-") as d:
+              out=Path(d)
+              for i,(source,row) in enumerate(articles):
+                  candidate=candidate_from_feed(row,cfg,now)
+                  if candidate is None:
+                      print(json.dumps({"mode":"original_image","source":source,"status":"HOLD","reason":"candidate_invalid"}));continue
+                  path=out/f"original-{i}.jpg"
+                  raw_path=out/f"browser-{i}.jpg"
+                  raw=capture_publisher(candidate["url"],candidate["publisher"],raw_path)
+                  def same_capture(url,publisher,destination):
+                      if raw.get("ok"): shutil.copyfile(raw_path,destination)
+                      return raw
+                  proof=proof_capture(candidate,cfg["feeds"],path,capture=same_capture)
+                  reason=proof.get("reason")
+                  allowed=set(SAFE_CAPTURE_FAILURE_CODES)|{"missing_original_headline","original_headline_out_of_frame","original_headline_not_in_article","visual_qa_suspicious_flat_original_lead_media","screenshot_digest_mismatch"}
+                  raw_reason=raw.get("reason")
+                  print(json.dumps({"mode":"original_image","source":source,"sample_id":candidate["url"].rsplit("/",1)[-1] if source=="alborsa" else None,"status":proof["status"],"reason":reason if reason in allowed else ("other" if reason else None),"browser_reason":raw_reason if raw_reason in allowed else ("accepted" if raw.get("ok") else "other")}))
+                  if proof["status"]=="verified":
+                      from email.utils import parsedate_to_datetime
+                      dt=parsedate_to_datetime(candidate["published"]).astimezone(CAIRO)
+                      stories.append({**candidate,"published_at_cairo":dt.strftime("%Y-%m-%d %H:%M %Z"),"published_display_cairo":dt.isoformat(),"evidence_image_path":str(path)})
+                      receipts.append(proof)
+              if stories:
+                  word=out/"qa.docx"
+                  render_docx({"title":"RASD Stage 03 QA ONLY","display_window_start":"QA sample","display_window_end":"QA sample","coverage":"SOURCE_LIMITED","verified_links":len(stories),"articles":stories,"sources":[],"limitations":"Read-only sample; no delivery"},word)
+                  print(json.dumps({"mode":"sample_word","verified_images":len(receipts),"ordered_image_digests_match":word_images_match_capture_digests(word,receipts)}))
+              with sync_playwright() as p:
+                  b=p.chromium.launch(headless=True,args=["--no-sandbox","--disable-dev-shm-usage"])
+                  try:
+                      ctx=b.new_context(viewport={"width":1200,"height":900},locale="ar-EG",ignore_https_errors=False,accept_downloads=False,service_workers="block")
+                      ctx.route("**/*",lambda r:r.continue_() if allowed_official_resource(r.request.url) else r.abort())
+                      urls=discover_official_newslist(ctx.request,max_articles=35)
+                      page=ctx.new_page()
+                      url=urls[0]
+                      resp=page.goto(url,wait_until="domcontentloaded",timeout=24000)
+                      h=" ".join(page.locator("h1").first.inner_text(timeout=8000).split())
+                      dt=original_publication_date(page.locator("body").inner_text(timeout=8000),h)
+                      if dt is None:
+                          print(json.dumps({"mode":"official_original","status":"HOLD","reason":"publisher_date_missing"}))
+                      else:
+                          q=_read_original(page,url,APPROVED_WORDS,dt,out/"official.jpg")
+                          print(json.dumps({"mode":"official_original","status":q["status"],"published_date":dt.isoformat(),"reason":q.get("reason"),"listing_links":len(urls)}))
+                  finally:b.close()
+          print(json.dumps({"mode":"stage03_sample_summary","attempted":len(articles),"verified":len(receipts),"email_sent":False,"private_state_used":False,"artifact_uploaded":False}))
+          PY
