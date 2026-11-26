@@ -1,0 +1,29 @@
+name: RASD — daily recovery stale-age regression — NO SEND
+
+on:
+  push:
+    branches: ['fix-rasd-daily-recovery-expiry-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  independent-protected-schedule-logic-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RASD_AUTOMATION_ENABLED: 'false'
+      RASD_GMAIL_APP_PASSWORD: ''
+      RASD_PRIVATE_LEDGER_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline-only dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Test actual simulated Nov 23 publication time and full main regressions
+        run: python -m unittest discover -s tests -q
+      - name: Confirm worker dry run has no SMTP or private CAS
+        run: python scheduled_rasd.py --mode dry_run
