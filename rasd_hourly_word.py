@@ -39,19 +39,26 @@ def build_hourly_word(raw,config,source_records,scan,destination,*,capture=proof
             any(s.get("status") not in {"ok","failed"} for s in source_records)):
         raise ValueError("hourly_source_health_hold")
     history=list(history)
-    prior={x["id"] for x in history if x.get("id")}
+    if len(history)>5000 or any(not isinstance(x,dict) or not x.get("id") or
+            not x.get("published_at_cairo") for x in history):
+        raise ValueError("hourly_history_untrusted")
+    prior={x["id"] for x in history}
     decisions=[None]*len(raw)
     eligible=[]
-    seen=set()
+    seen={}
     for index,row in enumerate(raw):
         candidate=candidate_from_feed(row,config,scan)
         if candidate is None:
             decisions[index]="invalid_original_candidate";continue
         stamp=parsedate_to_datetime(candidate["published"]).astimezone(timezone.utc)
         key=candidate["id"]
-        if key in prior or key in seen:
+        if key in prior:
             decisions[index]="repeated_link";continue
-        seen.add(key)
+        identity=(candidate["url"],candidate["headline"],candidate["source"],stamp)
+        if key in seen:
+            if seen[key]!=identity:raise ValueError("hourly_conflicting_link_evidence_hold")
+            decisions[index]="repeated_link";continue
+        seen[key]=identity
         if stamp>=end:
             decisions[index]="outside_completed_hour";continue
         if stamp<start:
