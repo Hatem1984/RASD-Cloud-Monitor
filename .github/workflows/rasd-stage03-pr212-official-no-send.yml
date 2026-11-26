@@ -1,0 +1,62 @@
+name: RASD PR212 official original evidence (NO SEND)
+on:
+  push:
+    branches: ['gate-rasd-stage03-pr212-official-20261126']
+permissions:
+  contents: read
+jobs:
+  official-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: |
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
+          python -m playwright install --only-shell chromium
+      - name: Original official source only, no delivery
+        run: |
+          python - <<'PY'
+          import json,subprocess,tempfile
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+          from official_ministry_source import discover_official_newslist,allowed_official_resource,original_publication_date,_read_original
+          from rasd_official_daily import APPROVED_WORDS
+          from cloud_proof_report import word_images_match_capture_digests
+          from daily_report import render_docx
+          assert subprocess.check_output(["git","diff","--name-only","e9264f8fc211bb737b902850c9071b84dd2a69c5","HEAD"],text=True).splitlines()==[".github/workflows/rasd-stage03-pr212-official-no-send.yml"]
+          rows=[]
+          with tempfile.TemporaryDirectory(prefix="rasd-official-stage03-") as td:
+              out=Path(td)
+              with sync_playwright() as p:
+                  b=p.chromium.launch(headless=True,args=["--no-sandbox","--disable-dev-shm-usage"])
+                  try:
+                      ctx=b.new_context(viewport={"width":1200,"height":900},locale="ar-EG",ignore_https_errors=False,accept_downloads=False,service_workers="block")
+                      ctx.route("**/*",lambda r:r.continue_() if allowed_official_resource(r.request.url) else r.abort())
+                      urls=discover_official_newslist(ctx.request,max_articles=35)
+                      page=ctx.new_page()
+                      for index,url in enumerate(urls[:2]):
+                          resp=page.goto(url,wait_until="domcontentloaded",timeout=24000)
+                          if not resp or resp.status!=200:
+                              print(json.dumps({"mode":"official_original","index":index,"status":"HOLD","http":resp.status if resp else None}));continue
+                          h=" ".join(page.locator("h1").first.inner_text(timeout=8000).split())
+                          dt=original_publication_date(page.locator("body").inner_text(timeout=8000),h)
+                          if dt is None:
+                              print(json.dumps({"mode":"official_original","index":index,"status":"HOLD","reason":"publisher_date_missing"}));continue
+                          q=_read_original(page,url,APPROVED_WORDS,dt,out/f"official-{index}.jpg")
+                          print(json.dumps({"mode":"official_original","index":index,"status":q["status"],"published_date":dt.isoformat(),"reason":q.get("reason")}))
+                          if q["status"]=="verified":rows.append(q)
+                  finally:b.close()
+              if rows:
+                  stories=[{"headline":r["headline"],"source":"Official Ministry original","url":r["url"],"published_at_cairo":r["published_date_cairo"],"published_display_cairo":r["published_date_cairo"],"evidence_image_path":r["image_path"]} for r in rows]
+                  word=out/"official-sample.docx"
+                  render_docx({"title":"RASD Stage03 QA only","display_window_start":"QA sample","display_window_end":"QA sample","coverage":"OFFICIAL_SOURCE_ONLY","verified_links":len(stories),"articles":stories,"sources":[],"limitations":"Date only, original official samples, no mail"},word)
+                  verified=word_images_match_capture_digests(word,rows)
+              else:verified=False
+              print(json.dumps({"mode":"official_sample_summary","attempted":min(2,len(urls)),"verified":len(rows),"ordered_image_digests_match":verified,"email_sent":False,"private_state_used":False,"artifact_uploaded":False}))
+              assert rows and verified
+          PY
