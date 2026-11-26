@@ -52,7 +52,8 @@ SOURCE_FAILURE_CODES = frozenset({
     "feed_http_or_redirect_error", "rss_size_limit_exceeded",
     "DTD_or_entity_forbidden", "not_rss",
     "rss_channel_unverifiable", "rss_original_item_identity_unverifiable",
-    "rss_original_item_date_unverifiable", "rss_original_duplicate_conflict",
+    "rss_original_item_date_unverifiable", "rss_original_item_future_date",
+    "rss_original_duplicate_conflict",
     "rss_xml_malformed", "network_timeout", "upstream_network_error",
     "http_301", "http_302", "http_303", "http_307", "http_308",
     "http_400", "http_401", "http_403", "http_404", "http_408",
@@ -201,11 +202,17 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
     # The Stage2 ORIGINAL Word must not silently lose publisher entries
     # merely because a syntactically valid RSS feed contains an incomplete
     # item. The older public headline preview retains its filter semantics.
+    now = datetime.now(timezone.utc) if now is None else now
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("naive_monitor_clock_forbidden")
+    now = now.astimezone(timezone.utc)
     if require_complete_items:
         if root.find("channel") is None:
             raise ValueError("rss_channel_unverifiable")
         identities = {}
-        for item in root.findall("./channel/item"):
+        items = root.findall("./channel/item")
+        future_count = 0
+        for item in items:
             title = (item.findtext("title") or "").strip()
             link = (item.findtext("link") or "").strip()
             if not title or not is_publisher_link(link, feed["allowed_article_hosts"]):
@@ -219,11 +226,13 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
                 (item.findtext("description") or "")[:3500])[:850]
             relevant = (_ministry_term_present(title[:300], keywords)
                         or _ministry_term_present(description, keywords))
+            timestamp_for_check = None
             if feed.get("id") == "masrawy" and not relevant:
                 verified = _publisher_timestamp(item)
                 if verified is not None:
                     # A future valid timezone-aware RSS date is itself proof.
                     date_identity = verified[1]
+                    timestamp_for_check = verified[0]
                 else:
                     # Syntax check only. No timezone is inferred, no original
                     # page is fetched, and this item CANNOT enter a report.
@@ -239,6 +248,13 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
                 if dated is None:
                     raise ValueError("rss_original_item_date_unverifiable")
                 date_identity = dated[1]
+                timestamp_for_check = dated[0]
+            if (timestamp_for_check is not None
+                    and timestamp_for_check.astimezone(timezone.utc)
+                    > now + timedelta(minutes=30)):
+                future_count += 1
+                if relevant:
+                    raise ValueError("rss_original_item_future_date")
             # Conflicting duplicate URLs cannot be silently resolved by
             # relevance filtering or first-wins deduplication.
             key = canonical_url(link)
@@ -246,10 +262,10 @@ def parse_rss(data: bytes, feed: dict, keywords: list[str], now=None, recent_hou
             if key in identities and identities[key] != signature:
                 raise ValueError("rss_original_duplicate_conflict")
             identities[key] = signature
-    now = datetime.now(timezone.utc) if now is None else now
-    if now.tzinfo is None or now.utcoffset() is None:
-        raise ValueError("naive_monitor_clock_forbidden")
-    now = now.astimezone(timezone.utc)
+        # A nonempty feed consisting entirely of future-dated entries
+        # cannot establish healthy current coverage. Do not guess offsets.
+        if items and future_count == len(items):
+            raise ValueError("rss_original_item_future_date")
     eligible, matched, ids = 0, [], set()
     for node in root.findall("./channel/item"):
         title = (node.findtext("title") or "").strip()[:300]
