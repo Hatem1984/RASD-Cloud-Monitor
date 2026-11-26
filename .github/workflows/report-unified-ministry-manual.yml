@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install -r requirements-test.txt "playwright>=1.50,<2" "cryptography>=42,<50"
+          python -m pip install -r requirements-test.txt "playwright>=1.50,<2"
           python -m playwright install --with-deps chromium
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
